@@ -1,9 +1,4 @@
-"""
-meditation_config.py
-
-This file contains configuration data for the Vipassana Entropy meditation simulation,
-using dataclasses for improved type safety and maintainability.
-"""
+"""Configuration for the Vipassana Entropy meditation simulation."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Union
@@ -13,11 +8,7 @@ import os
 
 # Helper: attempt to load a JSON config from the same `config/` directory (package)
 def _load_config_json(name: str) -> Optional[Dict]:
-    """Load optional JSON `<config_dir>/<name>`; return dict or None.
-
-    JSON overrides are optional; defaults live in the Python code.
-    Consider storing profiles under `config/profiles/`.
-    """
+    """Load optional JSON config from `config/` and return a dict or None."""
     base_dir = os.path.dirname(__file__)
     # First check current config directory, then `config/profiles/` for overrides.
     candidates = [
@@ -117,10 +108,7 @@ class StateTargetActivations:
 
 
 def load_actinf_params_from_json(path: Optional[str], experience_level: str = 'novice') -> 'ActInfParams':
-    """Load ActInfParams from JSON file. If file missing or key absent, fall back to defaults.
-
-    Expects JSON with top-level keys `novice` and `expert` mapping to param dicts, or a flat dict.
-    """
+    """Load `ActInfParams` from JSON; fall back to defaults if missing/invalid."""
     if not path:
         return ActInfParams.expert() if experience_level == 'expert' else ActInfParams.novice()
 
@@ -258,7 +246,7 @@ class ActInfParams:
             hysteresis_strength=0.1,
             anticorrelation_force=0.25,
             van_spike=0.5,
-            # surface/modulation defaults (will migrate next)
+            # surface/modulation defaults
             dmn_pending_value=0.15,
             dmn_reflection_value=0.05,
             dmn_breath_value=0.2,
@@ -310,7 +298,7 @@ class ActInfParams:
             hysteresis_strength=0.2,
             anticorrelation_force=0.25,
             van_spike=0.5,
-            # surface/modulation defaults (will migrate next)
+            # surface/modulation defaults
             dmn_pending_value=0.15,
             dmn_reflection_value=0.05,
             dmn_breath_value=0.2,
@@ -327,10 +315,7 @@ class ActInfParams:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Union[float, Dict]], experience_level: str = 'novice') -> 'ActInfParams':
-        """Create ActInfParams from a flat dictionary (with nested transition_thresholds dict).
-
-        Missing keys are filled from the corresponding `novice()`/`expert()` defaults.
-        """
+        """Create `ActInfParams` from a dict; fill missing keys from defaults."""
         base = cls.expert() if experience_level == 'expert' else cls.novice()
         base_dict = base.as_dict()
 
@@ -412,20 +397,22 @@ class ActInfParams:
 
 # Create the base configurations as module-level constants
 STATE_DWELL_TIMES = {
+    # Per-experience-level dwell time ranges (min, max) for each state
     'novice': DwellTimeConfig.novice().__dict__,
     'expert': DwellTimeConfig.expert().__dict__
 }
 
 # Project-wide numeric defaults to avoid magic numbers
 DEFAULTS = {
-    'TARGET_CLIP_MIN': 0.05,
-    'TARGET_CLIP_MAX': 1.0,
+    # Numeric clamps and thresholds used across the simulation
+    'TARGET_CLIP_MIN': 0.05,  # lower bound for thoughtseed target activations
+    'TARGET_CLIP_MAX': 1.0,   # upper bound for thoughtseed target activations
     'ACTIVATION_CLIP_MIN': 0.01,
     'ACTIVATION_CLIP_MAX': 0.99,
-    'NETWORK_CLIP_MIN': 0.05,
-    'NETWORK_CLIP_MAX': 0.9,
-    'VAN_TRIGGER': 0.7,
-    'VAN_MAX': 0.85,
+    'NETWORK_CLIP_MIN': 0.05,  # network activation lower bound
+    'NETWORK_CLIP_MAX': 0.9,   # network activation upper bound
+    'VAN_TRIGGER': 0.7,        # VAN accumulator threshold for salience spike
+    'VAN_MAX': 0.85,           # physiological cap for VAN
     'DEFAULT_DT': 1.0,
     'MIN_HISTORY_FOR_LEARNING': 10
 }
@@ -451,6 +438,7 @@ NETWORK_PROFILES = {
     },
     
     # State profiles differentiated by experience level
+    # Expected network activations per high-level state and experience level
     "state_expected_profiles": {
         # BREATH CONTROL: Experts have lower DMN, higher DAN/FPN
         "breath_control": {
@@ -637,9 +625,7 @@ class MetacognitionParams:
     
     @staticmethod
     def calculate_meta_awareness(state, thoughtseed_activations, experience_level='novice'):
-        """
-        Calculate meta-awareness based on state, thoughtseed activations, and experience.
-        """
+        """Compute meta-awareness from state and thoughtseed activations."""
         # Get base awareness for this state
         base_awareness = MetacognitionParams.BASE_AWARENESS[state]
         

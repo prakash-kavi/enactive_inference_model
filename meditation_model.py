@@ -1,10 +1,4 @@
-"""
-meditation_model.py
-
-Implements core meditation models:
-1. `AgentConfig`: Foundation class providing stochastic thoughtseed dynamics and state transitions.
-2. `ActInfAgent`: Active Inference extension implementing the three-level framework.
-"""
+"""Core meditation models: AgentConfig and ActInfAgent."""
 
 import numpy as np
 import os
@@ -21,10 +15,7 @@ from config.meditation_config import (
 from meditation_utils import ensure_directories, _save_json_outputs, ou_update, clip_array
 
 class AgentConfig:
-    """
-    Foundation class for thoughtseed dynamics.
-    Provides core methods for behavior, meta-awareness, and state transitions.
-    """
+    """Base class for thoughtseed dynamics and state handling."""
     
     def __init__(self, experience_level='novice', timesteps_per_cycle=200):
         self.experience_level = experience_level
@@ -46,12 +37,13 @@ class AgentConfig:
         self.dominant_ts_history = []
         self.state_history_over_time = []
         
-        # Instantiate typed per-agent params once and expose as `self.params`.
-        # Prefer a JSON-backed profile if available for easier experiment management.
-        # Prefer JSON profiles under `config/profiles/` if present (loader supports both locations).
+        # Load per-agent params (JSON-backed profiles preferred).
         config_path = os.path.join(os.path.dirname(__file__), 'config', 'profiles', 'actinf_defaults.json')
         self.params = load_actinf_params_from_json(config_path, experience_level=experience_level)
-        self.noise_level = self.params.noise_level
+        # Copy params into explicit agent attributes (preserve `self.params`).
+        for k, v in vars(self.params).items():
+            if not hasattr(self, k):
+                setattr(self, k, v)
         
         # Track activation patterns at transition points
         self.transition_activations = {state: [] for state in self.states}
@@ -102,49 +94,29 @@ class AgentConfig:
             experience_level=self.experience_level
         )
 
-    def __getattr__(self, name):
-        """Fallback attribute lookup: delegate to `self.params` when present.
-
-        This provides a safe compatibility layer so callers can access
-        per-agent parameters either via `agent.<attr>` or `agent.params.<attr>`.
-        """
-        params = self.__dict__.get('params')
-        if params is not None and hasattr(params, name):
-            return getattr(params, name)
-        raise AttributeError(f"{self.__class__.__name__} object has no attribute '{name}'")
 
 class ActInfAgent(AgentConfig):
-    """
-    Active Inference extension implementing the three-level Thoughtseeds Framework:
-    1. Attentional Network Ensembles (DMN, VAN, DAN, FPN)
-    2. Thoughtseed Dynamics
-    3. Metacognitive Regulation
-    
-    Models the Vipassana cycle by minimizing variational free energy.
-    """
+    """Active Inference agent: networks, thoughtseeds, metacognition."""
     def __init__(self, experience_level='novice', timesteps_per_cycle=200):
         super().__init__(experience_level, timesteps_per_cycle)
         
         self.networks = ['DMN', 'VAN', 'DAN', 'FPN']
-        # Initialize prev_network_acts to a zeroed dict so downstream methods
-        # can rely on the attribute existing and check truthiness.
+        # previous network activations
         self.prev_network_acts = {net: 0.0 for net in self.networks}
         self.network_activations_history = []
         self.free_energy_history = []
         self.prediction_error_history = []
         self.precision_history = []
         
-        # Per-agent parameters live on `self.params` and are accessible
-        # directly (e.g. `self.params.precision_weight`) or via the
-        # `__getattr__` fallback implemented on `AgentConfig`.
-        
         # Track learned network profiles
+        # Learned profiles store two things per agent:
+        # - `thoughtseed_contributions`: per-thoughtseed weights mapping to network contributions
+        # - `state_network_expectations`: expected network activations for each high-level state
+        # These are initialized from `NETWORK_PROFILES` and adapted online during training.
         self.learned_network_profiles = {
             "thoughtseed_contributions": {ts: {} for ts in self.thoughtseeds},
             "state_network_expectations": {state: {} for state in self.states}
         }
-        
-        # Initialize tracking variables (already defined on AgentConfig)
         
         self.in_transition = False
         self.transition_counter = 0
@@ -159,35 +131,27 @@ class ActInfAgent(AgentConfig):
             self.learned_network_profiles["state_network_expectations"][state] = NETWORK_PROFILES["state_expected_profiles"][state][self.experience_level].copy()
             
     def compute_network_activations(self, thoughtseed_activations, current_state, meta_awareness, dt=1.0):
-        # Compute attentional network activations from thoughtseed activations and state
-        # Get thoughtseed-to-network contribution matrix
+        # Bottom-up and top-down contributions
         ts_to_network = self.learned_network_profiles["thoughtseed_contributions"]
-        
-        # 1. Calculate Base Targets (per-agent values from ActInfParams)
         target_acts = {net: self.network_base for net in self.networks}
-        
-        # Bottom-up: Thoughtseeds -> Networks
         for i, ts in enumerate(self.thoughtseeds):
             ts_act = thoughtseed_activations[i]
             for net in self.networks:
                 target_acts[net] += ts_act * ts_to_network[ts][net]
     
-        # Top-down: State Expectations -> Networks
         state_expect = self.learned_network_profiles["state_network_expectations"][current_state]
         for net in self.networks:
-            # Meta-awareness amplifies top-down control
-            # Experts maintain control with less effort (Neural Efficiency)
+            # Meta-awareness scales state influence
             meta_factor = meta_awareness * (1.05 if self.experience_level == 'expert' else 1.0)
             state_influence = state_expect[net] * meta_factor
             target_acts[net] = 0.5 * target_acts[net] + 0.5 * state_influence
 
-        # 2. Apply Coupled Dynamics        
+        # 2. Apply coupled dynamics
         if self.prev_network_acts:
             current_dan = self.prev_network_acts['DAN']
             current_fpn = self.prev_network_acts['FPN']
             
-            # A. Neural Efficiency (FPN Regulation)
-            # Models "effortless focus": If DAN is high (stable), FPN relaxes.
+            # A. Neural efficiency (FPN regulation)
             if current_state in ['breath_control', 'redirect_breath']:
                 focus_error = max(0, 0.9 - current_dan)
                 fpn_demand = self.fpn_base_demand + (self.fpn_focus_mult * focus_error)
@@ -196,8 +160,7 @@ class ActInfAgent(AgentConfig):
                 efficiency_weight = self.efficiency_weight
                 target_acts['FPN'] = (1 - efficiency_weight) * target_acts['FPN'] + efficiency_weight * fpn_demand
 
-            # B. FPN Drives DAN + DAN Hysteresis
-            # FPN Drive: Top-down recruitment with saturation kinetics
+            # B. FPN drives DAN; apply hysteresis
             target_acts['DAN'] += self.fpn_to_dan_gain * current_fpn * (1.0 - current_dan)
             
             # DAN Hysteresis: Momentum of sustained attention; disrupted by DMN
@@ -205,13 +168,13 @@ class ActInfAgent(AgentConfig):
             hysteresis_strength = self.hysteresis_strength
             target_acts['DAN'] += hysteresis_strength * current_dan * (1.0 - current_dmn)
 
-        # C. Mutual Inhibition (Task-Positive vs Task-Negative)
+        # C. Mutual inhibition
         anticorrelation_force = self.anticorrelation_force
         if self.prev_network_acts:
             target_acts['DAN'] -= anticorrelation_force * self.prev_network_acts['DMN'] * target_acts['DAN']
             target_acts['DMN'] -= anticorrelation_force * self.prev_network_acts['DAN'] * target_acts['DMN']
         
-        # VAN Leaky Integrator (The Detector)
+        # VAN accumulator
         if self.prev_network_acts:
             current_dmn = self.prev_network_acts['DMN']
             self.dmn_accumulator = 0.9 * self.dmn_accumulator + 0.1 * current_dmn
@@ -221,7 +184,7 @@ class ActInfAgent(AgentConfig):
                 target_acts['VAN'] += self.van_spike  # Salience spike
                 self.dmn_accumulator = 0.0 # Reset
 
-        # D. FPN Accumulator (Cognitive Fatigue)
+        # FPN accumulator
         if self.prev_network_acts:
             current_fpn = self.prev_network_acts['FPN']
             
@@ -234,11 +197,10 @@ class ActInfAgent(AgentConfig):
                 target_acts['DMN'] += self.fpn_collapse_dmn_inc
                 self.fpn_accumulator = self.fatigue_reset
 
-        # 3. Ornstein-Uhlenbeck Process (Smoothing & Stability)
+        # OU update
         current_acts = {}
         
         if self.prev_network_acts:
-            # Theta (θ): Mean reversion rate. Derived from memory_factor.
             theta = 1.0 - self.memory_factor
             sigma = self.noise_level
             
@@ -251,7 +213,7 @@ class ActInfAgent(AgentConfig):
             # First step initialization
             current_acts = target_acts
             
-        # Normalize
+        # Clip to valid network range
         from meditation_utils import clip_array
 
         for net in self.networks:
@@ -265,7 +227,7 @@ class ActInfAgent(AgentConfig):
         return current_acts
     
     def get_sensory_inference(self, network_acts):
-        # Infer thoughtseed beliefs from network activations using learned profiles
+        # Infer thoughtseed beliefs from network activations
         ts_contribs = self.learned_network_profiles["thoughtseed_contributions"]
         inferred = np.zeros(self.num_thoughtseeds)
         
@@ -274,10 +236,7 @@ class ActInfAgent(AgentConfig):
             total_weight = 0.0
             
             for net in self.networks:
-                # The weight represents P(network | thoughtseed)
                 weight = ts_contribs[ts][net]
-                
-                # We want to know P(thoughtseed | network)
                 match_score += network_acts[net] * weight
                 total_weight += weight
             
@@ -289,29 +248,26 @@ class ActInfAgent(AgentConfig):
         return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
 
     def calculate_vfe(self, current_seeds, prior_seeds, sensory_inference, meta_awareness, vfe_trend=0.0):
-        # Compute variational free energy and components (sensory/prior NLL)
-        # 1. Accuracy (Sensory NLL): Divergence between Beliefs and Reality
-        # NLL(o|s) ~ KL(o||s)
+        # Compute variational free energy (sensory + prior NLL)
         sensory_nll = np.sum(
             sensory_inference * np.log(sensory_inference / (current_seeds + 1e-9)) + 
             (1 - sensory_inference) * np.log((1 - sensory_inference) / (1 - current_seeds + 1e-9))
         )
         
-        # 2. Complexity (Prior NLL): Divergence between Beliefs and Policy
+        # Prior NLL (complexity)
         prior_nll = np.sum(
             current_seeds * np.log(current_seeds / (prior_seeds + 1e-9)) + 
             (1 - current_seeds) * np.log((1 - current_seeds) / (1 - prior_seeds + 1e-9))
         )
         
-        # 3. Precisions
-        # Dynamic Precision Modulation: If VFE is dropping, increase precision (Confidence)
+        # Precision modulation
         precision_mod = np.clip(-1.0 * vfe_trend, -0.3, 0.3)
 
-        # Lucidity (Sensory Precision): Increases with VAN (Insight)
+        # Sensory precision scales with VAN proxy
         van_proxy = sensory_inference[self.thoughtseeds.index('self_reflection')]
         pi_sensory = (0.1 + (5.0 * van_proxy)) * (1.0 + precision_mod) * self.precision_weight
         
-        # Attention (Prior Precision): Modulated by Meta-Awareness
+        # Prior precision scales with meta-awareness
         pi_prior = (1.0 + (3.0 * meta_awareness)) * (1.0 + precision_mod) * self.complexity_penalty
         
         # Total VFE
@@ -320,8 +276,7 @@ class ActInfAgent(AgentConfig):
         return vfe, sensory_nll, prior_nll
    
     def update_network_profiles(self, thoughtseed_activations, network_activations, current_state, prediction_errors):
-        # Update learned mapping from thoughtseeds -> networks using prediction errors
-        # Only update after some initial observations
+        # Update learned mapping using prediction errors
         if len(self.network_activations_history) < 10:
             return
         
@@ -332,10 +287,10 @@ class ActInfAgent(AgentConfig):
                 for net in self.networks:
                     current_error = prediction_errors[net] # δ_k(t)
                     
-                    # Calculate precision (confidence)
+                    # Precision (confidence) and signed Bayesian-like update
                     precision = 1.0 + (5.0 if self.experience_level == 'expert' else 2.0) * len(self.network_activations_history)/self.timesteps
                     
-                    # Bayesian-inspired update (Eq 3)
+                    # Signed update scaled by learning_rate and ts activation
                     error_sign = 1 if network_activations[net] < self.learned_network_profiles["state_network_expectations"][current_state][net] else -1
                     update = self.learning_rate * (error_sign * current_error) * ts_act / precision
                     
@@ -346,7 +301,7 @@ class ActInfAgent(AgentConfig):
                     self.learned_network_profiles["thoughtseed_contributions"][ts][net] = np.clip(
                         self.learned_network_profiles["thoughtseed_contributions"][ts][net], 0.1, 0.9)
         
-        # Update state network expectations (slower learning rate)
+        # Update state expectations (slower rate)
         slow_rate = self.learning_rate * 0.3
         for net in self.networks:
             current_expect = self.learned_network_profiles["state_network_expectations"][current_state][net]
@@ -389,7 +344,7 @@ class ActInfAgent(AgentConfig):
         return modulations
 
     def get_transition_probabilities(self, activations, network_acts):
-                # Score and normalize possible next states by similarity to learned profiles
+        # Score and normalize possible next states by similarity to learned profiles
         scores = {}
         temp = max(1e-6, self.softmax_temperature)
 
@@ -484,4 +439,3 @@ class ActInfAgent(AgentConfig):
             
         from meditation_utils import clip_array
         return clip_array(updated_activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
-
