@@ -4,12 +4,12 @@ Note: external JSON-based config loading (e.g. `config/config.json`) is
 possible for experiment workflows but is not enabled in this file.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional, Union
 import numpy as np
 
 # Core thoughtseed and mediative state definitions
-THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'self_reflection', 'equanimity']
+THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'equanimity']
 STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
 
 @dataclass
@@ -75,7 +75,7 @@ class StateTargetActivations:
     equanimity: float
     pain_discomfort: float
     pending_tasks: float
-    self_reflection: float
+    # self_reflection removed; reflection is derived in MetacognitionParams
     
     # Instances can be converted to dicts via `dataclasses.asdict` where needed.
 
@@ -87,7 +87,6 @@ class ActInfParams:
     noise_level: float
     memory_factor: float
     fpn_enhancement: float
-    fpn_reflection_value: float
     fpn_equanimity_value: float
     distraction_pressure: float
     fatigue_rate: float
@@ -107,10 +106,8 @@ class ActInfParams:
     van_spike: float
     # Surface / modulation defaults (DMN/VAN/DAN effects)
     dmn_pending_value: float
-    dmn_reflection_value: float
     dmn_breath_value: float
     van_pain_value: float
-    van_reflection_value: float
     dan_breath_value: float
     dan_pending_value: float
     dan_pain_value: float
@@ -155,7 +152,6 @@ class ActInfParams:
             noise_level=0.04,
             memory_factor=0.85, 
             fpn_enhancement=1.0,
-            fpn_reflection_value=0.15,
             fpn_equanimity_value=0.2,
             distraction_pressure=1.30,
             fatigue_rate=0.30,
@@ -185,10 +181,8 @@ class ActInfParams:
             van_spike=0.5,
             # surface/modulation defaults
             dmn_pending_value=0.15,
-            dmn_reflection_value=0.05,
             dmn_breath_value=0.2,
             van_pain_value=0.15,
-            van_reflection_value=0.2,
             dan_breath_value=0.2,
             dan_pending_value=0.15,
             dan_pain_value=0.1,
@@ -216,7 +210,6 @@ class ActInfParams:
             noise_level=0.03,  
             memory_factor=0.75,  
             fpn_enhancement=1.1, 
-            fpn_reflection_value=0.2,
             fpn_equanimity_value=0.25,
             distraction_pressure=0.62,
             fatigue_rate=0.15,         
@@ -246,10 +239,8 @@ class ActInfParams:
             van_spike=0.5,
             # surface/modulation defaults
             dmn_pending_value=0.15,
-            dmn_reflection_value=0.05,
             dmn_breath_value=0.2,
             van_pain_value=0.15,
-            van_reflection_value=0.2,
             dan_breath_value=0.2,
             dan_pending_value=0.15,
             dan_pain_value=0.1,
@@ -302,7 +293,6 @@ NETWORK_PROFILES = {
         "attend_breath": NetworkProfile(DMN=0.2, VAN=0.3, DAN=0.65, FPN=0.6).__dict__,
         "pain_discomfort": NetworkProfile(DMN=0.5, VAN=0.7, DAN=0.3, FPN=0.4).__dict__,
         "pending_tasks": NetworkProfile(DMN=0.8, VAN=0.5, DAN=0.2, FPN=0.4).__dict__,
-        "self_reflection": NetworkProfile(DMN=0.6, VAN=0.4, DAN=0.3, FPN=0.8).__dict__,
         "equanimity": NetworkProfile(DMN=0.3, VAN=0.3, DAN=0.5, FPN=0.9).__dict__
     },
     
@@ -344,29 +334,25 @@ class ThoughtseedParams:
             attend_breath=0.7,
             equanimity=0.3,
             pain_discomfort=0.15,
-            pending_tasks=0.1,
-            self_reflection=0.2
+            pending_tasks=0.1
         )),
         "mind_wandering": asdict(StateTargetActivations(
             attend_breath=0.1,
             equanimity=0.1,
             pain_discomfort=0.6,
-            pending_tasks=0.7,
-            self_reflection=0.1
+            pending_tasks=0.7
         )),
         "meta_awareness": asdict(StateTargetActivations(
             attend_breath=0.2,
             equanimity=0.3,
             pain_discomfort=0.15,
-            pending_tasks=0.15,
-            self_reflection=0.8
+            pending_tasks=0.15
         )),
         "redirect_breath": asdict(StateTargetActivations(
             attend_breath=0.6,
             equanimity=0.7,
             pain_discomfort=0.2,
-            pending_tasks=0.1,
-            self_reflection=0.4
+            pending_tasks=0.1
         ))
     }
     
@@ -376,29 +362,25 @@ class ThoughtseedParams:
             "attend_breath": 0.1,
             "equanimity": 0.25,
             "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "self_reflection": 0.1
+            "pending_tasks": 0.0
         },
         "mind_wandering": {
             "attend_breath": 0.0,
             "equanimity": -0.05,
             "pain_discomfort": -0.1,
-            "pending_tasks": -0.1,
-            "self_reflection": 0.3
+            "pending_tasks": -0.1
         },
         "meta_awareness": {
             "attend_breath": 0.1,
             "equanimity": 0.1,
             "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "self_reflection": 0.1
+            "pending_tasks": 0.0
         },
         "redirect_breath": {
             "attend_breath": 0.2,
             "equanimity": 0.25,
             "pain_discomfort": -0.1,
-            "pending_tasks": 0.0,
-            "self_reflection": 0.1
+            "pending_tasks": 0.0
         }
     }
     
@@ -408,29 +390,25 @@ class ThoughtseedParams:
             "attend_breath": 0.1,
             "equanimity": 0.2,
             "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "self_reflection": 0.0
+            "pending_tasks": 0.0
         },
         "mind_wandering": {
             "attend_breath": 0.0,
             "equanimity": 0.05,
             "pain_discomfort": 0.4,
-            "pending_tasks": 0.4,
-            "self_reflection": 0.0
+            "pending_tasks": 0.4
         },
         "meta_awareness": {
             "attend_breath": 0.0,
             "equanimity": 0.1,
             "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "self_reflection": 0.1
+            "pending_tasks": 0.0
         },
         "redirect_breath": {
             "attend_breath": 0.0,
             "equanimity": 0.2,
             "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "self_reflection": 0.0
+            "pending_tasks": 0.0
         }
     }
     
@@ -463,25 +441,39 @@ class MetacognitionParams:
         "redirect_breath": 0.5
     }
     
-    # How thoughtseeds influence meta-awareness
-    THOUGHTSEED_INFLUENCES = {
-        "self_reflection": 0.1,  # Self-reflection strongly enhances meta-awareness
-        "equanimity": 0.1        # Equanimity provides a stronger regulation boost for experts
+    # Derived reflection signal weights (fixed for Phase 1)
+    REFLECTION_WEIGHTS = {
+        "equanimity": 0.8,
+        "fpn": 0.4,
+        "dmn": 0.4,
+        "bias": -0.2
     }
+    REFLECTION_SCALE = 0.1
+
+    @staticmethod
+    def _sigmoid(x: float) -> float:
+        return float(1.0 / (1.0 + np.exp(-x)))
+
+    @staticmethod
+    def calculate_reflection_score(thoughtseed_activations: Dict[str, float], network_acts: Optional[Dict[str, float]] = None) -> float:
+        """Compute a compact reflection score from equanimity and network balance."""
+        eq = float(thoughtseed_activations.get("equanimity", 0.0))
+        dmn = float((network_acts or {}).get("DMN", 0.0))
+        fpn = float((network_acts or {}).get("FPN", 0.0))
+
+        w = MetacognitionParams.REFLECTION_WEIGHTS
+        raw = (w["equanimity"] * eq) + (w["fpn"] * fpn) - (w["dmn"] * dmn) + w["bias"]
+        return MetacognitionParams._sigmoid(raw)
     
     @staticmethod
-    def calculate_meta_awareness(state, thoughtseed_activations, experience_level='novice'):
-        """Compute meta-awareness from mediative state and thoughtseed activations."""
+    def calculate_meta_awareness(state, thoughtseed_activations, experience_level='novice', network_acts: Optional[Dict[str, float]] = None):
+        """Compute meta-awareness from mediative state and derived reflection score."""
         # Get base awareness for this mediative state
         base_awareness = MetacognitionParams.BASE_AWARENESS[state]
-        
-        # Calculate thoughtseed influence
-        awareness_boost = 0
-        for ts, influence in MetacognitionParams.THOUGHTSEED_INFLUENCES.items():
-            if ts in thoughtseed_activations:
-                awareness_boost += thoughtseed_activations[ts] * influence
-        
-        # Calculate total (without noise)
-        meta_awareness = base_awareness + awareness_boost
-        
+
+        reflection_score = MetacognitionParams.calculate_reflection_score(
+            thoughtseed_activations, network_acts=network_acts
+        )
+
+        meta_awareness = base_awareness + (MetacognitionParams.REFLECTION_SCALE * reflection_score)
         return meta_awareness

@@ -198,7 +198,7 @@ def _analyze_last_steps(filename, total_steps, window):
             last_time = timestamps[i]
             
     if len(state_history) < total_steps:
-        last_state = patterns[-1][1] if patterns else "breath_control"
+        last_state = patterns[-1][1] if patterns else "breath_focus"
         state_history.extend([last_state] * (total_steps - len(state_history)))
         
     relevant = state_history[-window:]

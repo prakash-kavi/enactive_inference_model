@@ -71,21 +71,21 @@ def plot_hierarchy(data, save_path=None):
     ts_mapping = {ts: i for i, ts in enumerate(thoughtseeds)}
     
     # Create categorical scatter plot
+    prev_ts = None
+    prev_y = None
+    prev_i = None
     for i, ts in enumerate(data['dominant_ts_history']):
+        if ts not in ts_mapping:
+            continue
         ax2.scatter(i, ts_mapping[ts], color=THOUGHTSEED_COLORS[ts], s=25, 
                    edgecolors='white', linewidth=0.5, alpha=0.8)
-    
-    # Connect dots with thin lines
-    prev_ts = data['dominant_ts_history'][0]
-    prev_y = ts_mapping[prev_ts]
-    for i in range(1, len(data['dominant_ts_history'])):
-        curr_ts = data['dominant_ts_history'][i]
-        curr_y = ts_mapping[curr_ts]
-        if curr_ts != prev_ts:
-            ax2.plot([i-1, i], [prev_y, curr_y], color='#aaaaaa', 
+        curr_y = ts_mapping[ts]
+        if prev_ts is not None and ts != prev_ts:
+            ax2.plot([prev_i, i], [prev_y, curr_y], color='#aaaaaa', 
                     linestyle='-', linewidth=0.5, alpha=0.4)
-        prev_ts = curr_ts
+        prev_ts = ts
         prev_y = curr_y
+        prev_i = i
     
     ax2.set_yticks(range(len(thoughtseeds)))
     ax2.set_yticklabels(thoughtseeds)

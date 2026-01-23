@@ -45,7 +45,6 @@ NETWORK_COLORS = {
 THOUGHTSEED_COLORS = {
     'attend_breath': '#f58231',
     'equanimity': '#3cb44b',
-    'self_reflection': '#4363d8',
     'pain_discomfort': '#e6194B',
     'pending_tasks': '#911eb4'
 }
@@ -123,6 +122,7 @@ def get_tail_stats(stats_data, tail=TAIL_STEPS):
     keys = [
         'state_history',
         'meta_awareness_history',
+        'reflection_score_history',
         'network_activations_history',
         'free_energy_history',
         'dominant_ts_history',

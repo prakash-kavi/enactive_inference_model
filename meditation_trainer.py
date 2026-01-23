@@ -167,7 +167,7 @@ class Trainer:
 
         target_activations = self.agent.get_target_activations(current_state, meta_awareness)
         free_energy, sensory_nll, _ = self.agent.calculate_vfe(
-            activations, target_activations, sensory_inference, meta_awareness, vfe_trend
+            activations, target_activations, sensory_inference, meta_awareness, network_acts, vfe_trend
         )
 
         # D. Update network profiles (Learning)
@@ -183,6 +183,7 @@ class Trainer:
         self.agent.free_energy_history.append(free_energy)
         self.agent.prediction_error_history.append(sensory_nll)
         self.agent.precision_history.append(0.5 + self.agent.precision_weight * meta_awareness)
+        self.agent.reflection_score_history.append(float(getattr(self.agent, "prev_reflection_score", 0.0)))
 
         dominant_ts = self.agent.thoughtseeds[np.argmax(activations)]
         
