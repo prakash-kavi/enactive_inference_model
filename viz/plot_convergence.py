@@ -24,14 +24,14 @@ DATA_DIR = BASE_DIR / "data"
 PLOT_DIR = BASE_DIR / "plots"
 
 STATE_COLORS = {
-    "breath_control": "#2ca02c",
+    "breath_focus": "#2ca02c",
     "mind_wandering": "#1f77b4",
     "meta_awareness": "#d62728",
     "redirect_breath": "#ff7f0e",
 }
 
 STATE_SHORT = {
-    "breath_control": "BF",
+    "breath_focus": "BF",
     "mind_wandering": "MW",
     "meta_awareness": "MA",
     "redirect_breath": "RA",

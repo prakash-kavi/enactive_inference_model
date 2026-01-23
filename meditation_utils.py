@@ -14,15 +14,16 @@ def clip_array(x, vmin, vmax):
         return float(clipped)
     return clipped
 
-
-def ou_update(x_prev, mu, theta, sigma, dt=1.0):
-    """Ornstein–Uhlenbeck update (mean reversion + Gaussian noise)."""
+def ou_update(x_prev, mu, theta, sigma, dt=1.0, rng=None):
+    """Ornstein–Uhlenbeck update (mean reversion + Gaussian noise).
+    Uses `np.random.RandomState` (agent.rng) for randomness.
+    """
     x_prev_arr = np.asarray(x_prev)
     mu_arr = np.asarray(mu)
-    noise = np.random.normal(0, 1, size=x_prev_arr.shape)
+    rng_to_use = rng if rng is not None else np.random
+    noise = rng_to_use.normal(0, 1, size=x_prev_arr.shape)
     dx = theta * (mu_arr - x_prev_arr) * dt + sigma * noise
     return x_prev_arr + dx
-
 
 def ensure_directories(base_dir=None):
     """Create `data/` and `plots/` under `base_dir` (or package root)."""
@@ -32,7 +33,6 @@ def ensure_directories(base_dir=None):
     os.makedirs(os.path.join(base_dir, "data"), exist_ok=True)
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     logging.info("Directories created/verified: data/, plots/")
-
 
 def _save_json_outputs(learner, output_dir=None):
     """Write learner parameters and time series to JSON files.
@@ -105,7 +105,6 @@ def _save_json_outputs(learner, output_dir=None):
         rel = output_dir
     logging.info("  - JSON parameter files saved to %s directory", rel)
 
-
 def to_json_serializable(obj):
     """Recursively convert NumPy arrays/lists/dicts to JSON-serializable forms."""
     if isinstance(obj, np.ndarray):
@@ -115,7 +114,6 @@ def to_json_serializable(obj):
     if isinstance(obj, list):
         return [to_json_serializable(i) for i in obj]
     return obj
-
 
 def compute_state_aggregates(learner):
     """Return per-state means for activations, networks, VFE and errors."""

@@ -2,9 +2,13 @@
 
 This repository contains the reference implementation of the **Thoughtseeds Framework** for modeling Vipassana meditation dynamics.
 
+![Mediative Cycle](Mediative_cycle.jpg)
+
 This is a stochastic simulation using coupled Ornstein–Uhlenbeck dynamics as an initial Active Inference formulation, serving as a scaffold for future full Active Inference implementations. It is a computational simulation and does not do emprical data fitting or neuromimaging data analysis.
 
 ## Conceptual Overview
+
+![Thoughtseeds Framework](Thoughtseeds%20Framework.jpg)
 
 - Level 1: attentional networks (DMN, VAN, DAN, FPN)
 - Level 2: thoughtseed dynamics (competing content-level activations)
@@ -22,41 +26,13 @@ The model minimizes Variational Free Energy (VFE) through perception–action–
 - **`viz/`**: plotting scripts (`plot_attractors.py`, `plot_diagnostics.py`, `plot_convergence.py`) and plotting utilities.
 - **`data/`**, **`plots/`**: generated JSON outputs and figures.
 
-## Quick Start
-
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
 ```
-
-2. Run the simulation (reproducible):
-```bash
-python run_simulation.py
-```
-`run_simulation.py` calls `Trainer.train(..., seed=42)` by default; to change seed or output path, edit or call the trainer directly from a small script:
-
-```python
-from meditation_model import ActInfAgent
-from meditation_trainer import Trainer
-
-agent = ActInfAgent(experience_level='novice', timesteps_per_cycle=1000)
-Trainer(agent).train(save_outputs=True, output_dir='data/my_run', seed=12345)
-```
-
-3. Regenerate publication figures:
-```bash
-python -m viz.plot_attractors
-python -m viz.plot_diagnostics
-python -m viz.plot_convergence
-```
-
-Generated outputs appear under `data/` (JSON) and `plots/` (PNGs).
-
 ## Reproducibility & Outputs
 
 - The `Trainer.train()` method accepts optional `seed` (sets NumPy RNG) and `output_dir` (path for JSON outputs).
 - Default numeric constants and thresholds are centralized in `meditation_config.DEFAULTS` for maintainability.
 - JSON outputs include `transition_stats_<level>.json`, `thoughtseed_params_<level>.json`, and `active_inference_params_<level>.json`.
+ - Random number seed is set to 42 by default.
 
 ## Useful Commands
 
@@ -65,12 +41,6 @@ Generated outputs appear under `data/` (JSON) and `plots/` (PNGs).
 python run_simulation.py
 
 # regenerate plots
+python -m viz.plot_convergence
 python -m viz.plot_attractors
 python -m viz.plot_diagnostics
-python -m viz.plot_convergence
-
-# run an ad-hoc trainer with custom seed/output
-python - <<'PY'
-from meditation_model import ActInfAgent
-from meditation_trainer import Trainer
-Trainer(ActInfAgent('novice', timesteps_per_cycle=500)).train(save_outputs=True, output_dir='data/run_500', seed=2026)

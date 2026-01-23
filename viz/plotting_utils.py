@@ -15,21 +15,21 @@ import copy
 TAIL_STEPS = 200
 
 STATE_DISPLAY_NAMES = {
-    "breath_control": "Breath Focus",
+    "breath_focus": "Breath Focus",
     "mind_wandering": "Mind Wandering",
     "meta_awareness": "Meta Awareness",
     "redirect_breath": "Redirect Attention"
 }
 
 STATE_SHORT_NAMES = {
-    "breath_control": "BF",
+    "breath_focus": "BF",
     "mind_wandering": "MW",
     "meta_awareness": "MA",
     "redirect_breath": "RA",
 }
 
 STATE_COLORS = {
-    "breath_control": "#2ca02c",
+    "breath_focus": "#2ca02c",
     "mind_wandering": "#1f77b4",
     "meta_awareness": "#d62728",
     "redirect_breath": "#ff7f0e",
@@ -43,7 +43,7 @@ NETWORK_COLORS = {
 }
 
 THOUGHTSEED_COLORS = {
-    'breath_focus': '#f58231',
+    'attend_breath': '#f58231',
     'equanimity': '#3cb44b',
     'self_reflection': '#4363d8',
     'pain_discomfort': '#e6194B',

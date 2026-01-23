@@ -6,18 +6,22 @@ import json
 import logging
 from collections import defaultdict
 import copy
+from typing import Optional, Dict, List, Tuple, Any
 
 from config.meditation_config import (
     THOUGHTSEEDS, STATES, STATE_DWELL_TIMES,
-    get_actinf_params_dict, ActInfParams, ThoughtseedParams, MetacognitionParams,
-    NETWORK_PROFILES, DEFAULTS, load_actinf_params_from_json
+    ActInfParams, ThoughtseedParams, MetacognitionParams,
+    NETWORK_PROFILES, DEFAULTS
 )
-from meditation_utils import ensure_directories, _save_json_outputs, ou_update, clip_array
+from meditation_utils import ou_update, clip_array
 
 class AgentConfig:
-    """Base class for thoughtseed dynamics and state handling."""
+    """Base class for thoughtseed dynamics and mediative state handling.
+    Handles initialization of history tracking, parameter loading, and 
+    stochastic generation of dwell times and target activations.
+    """
     
-    def __init__(self, experience_level='novice', timesteps_per_cycle=200):
+    def __init__(self, experience_level: str = 'novice', timesteps_per_cycle: int = 1000, seed: Optional[int] = None):
         self.experience_level = experience_level
         self.timesteps = timesteps_per_cycle
         self.thoughtseeds = THOUGHTSEEDS
@@ -37,14 +41,15 @@ class AgentConfig:
         self.dominant_ts_history = []
         self.state_history_over_time = []
         
-        # Load per-agent params (JSON-backed profiles preferred).
-        config_path = os.path.join(os.path.dirname(__file__), 'config', 'profiles', 'actinf_defaults.json')
-        self.params = load_actinf_params_from_json(config_path, experience_level=experience_level)
+        # Load per-agent params from dataclass defaults.
+        self.params = ActInfParams.expert() if experience_level == 'expert' else ActInfParams.novice()
         # Copy params into explicit agent attributes (preserve `self.params`).
         for k, v in vars(self.params).items():
             if not hasattr(self, k):
                 setattr(self, k, v)
-        
+
+        # Agent RNG (RandomState)
+        self.rng = np.random.RandomState(seed)
         # Track activation patterns at transition points
         self.transition_activations = {state: [] for state in self.states}
         
@@ -55,10 +60,12 @@ class AgentConfig:
         self.dmn_accumulator = 0.0
         self.fpn_accumulator = 0.0
         # Placeholder for previous network activations (initialized in ActInfAgent)
-        self.prev_network_acts = None
+        self.prev_network_acts: Optional[Dict[str, float]] = None
 
-    def get_target_activations(self, state, meta_awareness):
-        # Return target activations for `state` (modulated by `meta_awareness`)
+    def get_target_activations(self, state: str, meta_awareness: float) -> np.ndarray:
+        """Calculate target thoughtseed activations for a given mediative state.
+        Delegates to `ThoughtseedParams` for base values and applies agent-specific noise.
+        """
         targets_dict = ThoughtseedParams.get_target_activations(
             state, meta_awareness, self.experience_level)
         
@@ -66,12 +73,15 @@ class AgentConfig:
         for i, ts in enumerate(self.thoughtseeds):
             target_activations[i] = targets_dict[ts]
         
-        # Add noise for biological plausibility
-        target_activations += np.random.normal(0, self.noise_level, size=self.num_thoughtseeds)
+        # Uses agent RNG
+        target_activations += self.rng.normal(0, self.noise_level, size=self.num_thoughtseeds)
         return np.clip(target_activations, 0.05, 1.0)
 
-    def get_dwell_time(self, state):
-        # Random dwell time bounded by STATE_DWELL_TIMES and minimal biological plausibility
+    def get_dwell_time(self, state: str) -> int:
+        """Determine how long the agent stays in a mediative state.
+        Draws a random integer from the configuration range defined in `STATE_DWELL_TIMES`.
+        Enforces minimal biological plausibility constraints.
+        """
         config_min, config_max = STATE_DWELL_TIMES[self.experience_level][state]
         
         # Ensure minimal biological plausibility
@@ -82,10 +92,13 @@ class AgentConfig:
             min_biological = 3
             max_biological = config_max
         
-        return max(min_biological, min(max_biological, np.random.randint(config_min, config_max + 1)))
+        # Uses agent RNG
+        return max(min_biological, min(max_biological, int(self.rng.randint(config_min, config_max + 1))))
 
-    def get_meta_awareness(self, current_state, activations):
-        # Compute meta-awareness from thoughtseed activations and state
+    def get_meta_awareness(self, current_state: str, activations: np.ndarray) -> float:
+        """Compute meta-awareness from thoughtseed activations and current mediative state.
+        Delegates to `MetacognitionParams`.
+        """
         activations_dict = {ts: activations[i] for i, ts in enumerate(self.thoughtseeds)}
         
         return MetacognitionParams.calculate_meta_awareness(
@@ -94,10 +107,15 @@ class AgentConfig:
             experience_level=self.experience_level
         )
 
-
 class ActInfAgent(AgentConfig):
-    """Active Inference agent: networks, thoughtseeds, metacognition."""
-    def __init__(self, experience_level='novice', timesteps_per_cycle=200):
+    """Active Inference agent implementing the Free Energy Principle (FEP).
+    This class models the agent's 'brain' including:
+    1. Network Dynamics (DMN, VAN, DAN, FPN)
+    2. Active Inference (Minimizing Variational Free Energy)
+    3. Learning (Updating internal models of world statistics)
+    """
+    
+    def __init__(self, experience_level: str = 'novice', timesteps_per_cycle: int = 200):
         super().__init__(experience_level, timesteps_per_cycle)
         
         self.networks = ['DMN', 'VAN', 'DAN', 'FPN']
@@ -109,10 +127,6 @@ class ActInfAgent(AgentConfig):
         self.precision_history = []
         
         # Track learned network profiles
-        # Learned profiles store two things per agent:
-        # - `thoughtseed_contributions`: per-thoughtseed weights mapping to network contributions
-        # - `state_network_expectations`: expected network activations for each high-level state
-        # These are initialized from `NETWORK_PROFILES` and adapted online during training.
         self.learned_network_profiles = {
             "thoughtseed_contributions": {ts: {} for ts in self.thoughtseeds},
             "state_network_expectations": {state: {} for state in self.states}
@@ -130,74 +144,102 @@ class ActInfAgent(AgentConfig):
         for state in self.states:
             self.learned_network_profiles["state_network_expectations"][state] = NETWORK_PROFILES["state_expected_profiles"][state][self.experience_level].copy()
             
-    def compute_network_activations(self, thoughtseed_activations, current_state, meta_awareness, dt=1.0):
-        # Bottom-up and top-down contributions
+    def compute_network_activations(self, thoughtseed_activations: np.ndarray, current_state: str, meta_awareness: float, dt: float = 1.0) -> Dict[str, float]:
+        """Compute network activations for the current timestep.
+        Integrates top-down expectations, lateral coupling, and fatigue dynamics.
+        """
+        # 1. Top-down: Thoughtseeds drive networks
+        target_acts = self._apply_top_down_influence(thoughtseed_activations, current_state, meta_awareness)
+
+        # 2. Coupled Dynamics: Interactions (if history exists)
+        if self.prev_network_acts:
+            target_acts = self._apply_lateral_coupling(target_acts, current_state)
+            target_acts = self._apply_accumulator_dynamics(target_acts)
+
+        # 3. Stochastic Update: Ornstein-Uhlenbeck process
+        current_acts = self._ou_update_networks(target_acts, dt)
+
+        # 4. Global Limits
+        max_van = DEFAULTS['VAN_MAX']
+        if current_acts['VAN'] > max_van:
+            current_acts['VAN'] = max_van
+            
+        return current_acts
+
+    def _apply_top_down_influence(self, thoughtseed_activations: np.ndarray, current_state: str, meta_awareness: float) -> Dict[str, float]:
+        """Calculate base network targets from thoughtseeds and mediative state expectations."""
         ts_to_network = self.learned_network_profiles["thoughtseed_contributions"]
         target_acts = {net: self.network_base for net in self.networks}
+        
+        # Contribution 1: Thoughtseed activation -> Network
         for i, ts in enumerate(self.thoughtseeds):
             ts_act = thoughtseed_activations[i]
             for net in self.networks:
                 target_acts[net] += ts_act * ts_to_network[ts][net]
     
+        # Contribution 2: Mediative State Expectation (Modulated by Meta-awareness)
         state_expect = self.learned_network_profiles["state_network_expectations"][current_state]
         for net in self.networks:
-            # Meta-awareness scales state influence
-            meta_factor = meta_awareness * (1.05 if self.experience_level == 'expert' else 1.0)
+            # Meta-awareness scales state influence (experts have stronger top-down control)
+            meta_factor = meta_awareness * self.expert_meta_scalar
             state_influence = state_expect[net] * meta_factor
             target_acts[net] = 0.5 * target_acts[net] + 0.5 * state_influence
-
-        # 2. Apply coupled dynamics
-        if self.prev_network_acts:
-            current_dan = self.prev_network_acts['DAN']
-            current_fpn = self.prev_network_acts['FPN']
             
-            # A. Neural efficiency (FPN regulation)
-            if current_state in ['breath_control', 'redirect_breath']:
-                focus_error = max(0, 0.9 - current_dan)
-                fpn_demand = self.fpn_base_demand + (self.fpn_focus_mult * focus_error)
+        return target_acts
 
-                # Experts relax control faster when stable (use per-agent param)
-                efficiency_weight = self.efficiency_weight
-                target_acts['FPN'] = (1 - efficiency_weight) * target_acts['FPN'] + efficiency_weight * fpn_demand
-
-            # B. FPN drives DAN; apply hysteresis
-            target_acts['DAN'] += self.fpn_to_dan_gain * current_fpn * (1.0 - current_dan)
-            
-            # DAN Hysteresis: Momentum of sustained attention; disrupted by DMN
-            current_dmn = self.prev_network_acts.get('DMN', 0)
-            hysteresis_strength = self.hysteresis_strength
-            target_acts['DAN'] += hysteresis_strength * current_dan * (1.0 - current_dmn)
-
-        # C. Mutual inhibition
-        anticorrelation_force = self.anticorrelation_force
-        if self.prev_network_acts:
-            target_acts['DAN'] -= anticorrelation_force * self.prev_network_acts['DMN'] * target_acts['DAN']
-            target_acts['DMN'] -= anticorrelation_force * self.prev_network_acts['DAN'] * target_acts['DMN']
+    def _apply_lateral_coupling(self, target_acts: Dict[str, float], current_state: str) -> Dict[str, float]:
+        """Apply lateral interactions: FPN regulation, DAN hysteresis, and DMN/DAN inhibition."""
+        current_dan = self.prev_network_acts['DAN']
+        current_fpn = self.prev_network_acts['FPN']
+        current_dmn = self.prev_network_acts.get('DMN', 0)
         
-        # VAN accumulator
-        if self.prev_network_acts:
-            current_dmn = self.prev_network_acts['DMN']
-            self.dmn_accumulator = 0.9 * self.dmn_accumulator + 0.1 * current_dmn
-            
-            # Fire if threshold crossed (Refractory period via reset)
-            if self.dmn_accumulator > DEFAULTS.get('VAN_TRIGGER', 0.7):
-                target_acts['VAN'] += self.van_spike  # Salience spike
-                self.dmn_accumulator = 0.0 # Reset
+        # A. FPN Regulation (Neural Efficiency)
+        if current_state in ['breath_focus', 'redirect_breath']:
+            focus_error = max(0, self.dan_focus_target - current_dan)
+            fpn_demand = self.fpn_base_demand + (self.fpn_focus_mult * focus_error)
 
-        # FPN accumulator
-        if self.prev_network_acts:
-            current_fpn = self.prev_network_acts['FPN']
-            
-            # Accumulate FPN usage (Leaky Integrator) - per-agent params
-            self.fpn_accumulator = self.fpn_accum_decay * self.fpn_accumulator + self.fpn_accum_inc * current_fpn
-            
-            # Fatigue Threshold: When effort exceeds capacity, focus collapses.
-            if self.fpn_accumulator > self.fatigue_threshold:
-                target_acts['DAN'] *= self.fpn_collapse_dan_mult
-                target_acts['DMN'] += self.fpn_collapse_dmn_inc
-                self.fpn_accumulator = self.fatigue_reset
+            # Experts relax control faster when stable
+            efficiency_weight = self.efficiency_weight
+            target_acts['FPN'] = (1 - efficiency_weight) * target_acts['FPN'] + efficiency_weight * fpn_demand
 
-        # OU update
+        # B. FPN drives DAN; apply hysteresis
+        target_acts['DAN'] += self.fpn_to_dan_gain * current_fpn * (1.0 - current_dan)
+        
+        # DAN Hysteresis: Momentum of sustained attention; disrupted by DMN
+        hysteresis_strength = self.hysteresis_strength
+        target_acts['DAN'] += hysteresis_strength * current_dan * (1.0 - current_dmn)
+
+        # C. Mutual Inhibition (DMN vs DAN)
+        anticorrelation_force = self.anticorrelation_force
+        target_acts['DAN'] -= anticorrelation_force * current_dmn * target_acts['DAN']
+        target_acts['DMN'] -= anticorrelation_force * current_dan * target_acts['DMN']
+        
+        return target_acts
+
+    def _apply_accumulator_dynamics(self, target_acts: Dict[str, float]) -> Dict[str, float]:
+        """Apply leaky integrators for VAN spikes and FPN fatigue."""
+        # VAN Accumulator (Salience Spike)
+        current_dmn = self.prev_network_acts['DMN']
+        self.dmn_accumulator = 0.9 * self.dmn_accumulator + 0.1 * current_dmn
+        
+        if self.dmn_accumulator > DEFAULTS.get('VAN_TRIGGER', 0.7):
+            target_acts['VAN'] += self.van_spike
+            self.dmn_accumulator = 0.0 # Reset
+
+        # FPN Accumulator (Cognitive Fatigue)
+        current_fpn = self.prev_network_acts['FPN']
+        self.fpn_accumulator = self.fpn_accum_decay * self.fpn_accumulator + self.fpn_accum_inc * current_fpn
+        
+        # Collapse when effort exceeds capacity
+        if self.fpn_accumulator > self.fatigue_threshold:
+            target_acts['DAN'] *= self.fpn_collapse_dan_mult
+            target_acts['DMN'] += self.fpn_collapse_dmn_inc
+            self.fpn_accumulator = self.fatigue_reset
+            
+        return target_acts
+
+    def _ou_update_networks(self, target_acts: Dict[str, float], dt: float) -> Dict[str, float]:
+        """Update network state using Ornstein-Uhlenbeck stochastic process."""
         current_acts = {}
         
         if self.prev_network_acts:
@@ -207,27 +249,18 @@ class ActInfAgent(AgentConfig):
             for net in self.networks:
                 x_prev = self.prev_network_acts[net]
                 mu = target_acts[net]
-
-                current_acts[net] = float(ou_update(x_prev, mu, theta, sigma, dt))
+                current_acts[net] = float(ou_update(x_prev, mu, theta, sigma, dt, rng=self.rng))
         else:
-            # First step initialization
-            current_acts = target_acts
+            current_acts = target_acts.copy()
             
         # Clip to valid network range
-        from meditation_utils import clip_array
-
         for net in self.networks:
             current_acts[net] = float(clip_array(current_acts[net], DEFAULTS['NETWORK_CLIP_MIN'], DEFAULTS['NETWORK_CLIP_MAX']))
-
-        # VAN values > neurophysiological cap
-        max_van = DEFAULTS['VAN_MAX']
-        if current_acts['VAN'] > max_van:
-            current_acts['VAN'] = max_van
             
         return current_acts
     
-    def get_sensory_inference(self, network_acts):
-        # Infer thoughtseed beliefs from network activations
+    def get_sensory_inference(self, network_acts: Dict[str, float]) -> np.ndarray:
+        """Infer thoughtseed beliefs (states) from network activations (observations)."""
         ts_contribs = self.learned_network_profiles["thoughtseed_contributions"]
         inferred = np.zeros(self.num_thoughtseeds)
         
@@ -247,36 +280,42 @@ class ActInfAgent(AgentConfig):
                 
         return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
 
-    def calculate_vfe(self, current_seeds, prior_seeds, sensory_inference, meta_awareness, vfe_trend=0.0):
-        # Compute variational free energy (sensory + prior NLL)
+    def calculate_vfe(self, current_seeds: np.ndarray, prior_seeds: np.ndarray, sensory_inference: np.ndarray, meta_awareness: float, vfe_trend: float = 0.0) -> Tuple[float, float, float]:
+        """Compute Variational Free Energy (VFE).
+        VFE = (Sensory NLL * Sensory Precision) + (Prior NLL * Prior Precision)
+        Minimizing VFE maximizes the evidence for the agent's internal model.
+        """
+        # Sensory NLL (Accuracy)
         sensory_nll = np.sum(
             sensory_inference * np.log(sensory_inference / (current_seeds + 1e-9)) + 
             (1 - sensory_inference) * np.log((1 - sensory_inference) / (1 - current_seeds + 1e-9))
         )
         
-        # Prior NLL (complexity)
+        # Prior NLL (Complexity)
         prior_nll = np.sum(
             current_seeds * np.log(current_seeds / (prior_seeds + 1e-9)) + 
             (1 - current_seeds) * np.log((1 - current_seeds) / (1 - prior_seeds + 1e-9))
         )
         
-        # Precision modulation
+        # Precision modulation based on VFE history (Attention)
         precision_mod = np.clip(-1.0 * vfe_trend, -0.3, 0.3)
 
-        # Sensory precision scales with VAN proxy
+        # Sensory precision scales with VAN proxy (Salience)
         van_proxy = sensory_inference[self.thoughtseeds.index('self_reflection')]
-        pi_sensory = (0.1 + (5.0 * van_proxy)) * (1.0 + precision_mod) * self.precision_weight
+        pi_sensory = (self.sensory_precision_base + (self.sensory_precision_van_scalar * van_proxy)) * (1.0 + precision_mod) * self.precision_weight
         
-        # Prior precision scales with meta-awareness
-        pi_prior = (1.0 + (3.0 * meta_awareness)) * (1.0 + precision_mod) * self.complexity_penalty
+        # Prior precision scales with meta-awareness (Top-down control)
+        pi_prior = (self.prior_precision_base + (self.prior_precision_meta_scalar * meta_awareness)) * (1.0 + precision_mod) * self.complexity_penalty
         
         # Total VFE
         vfe = (sensory_nll * pi_sensory) + (prior_nll * pi_prior)
         
         return vfe, sensory_nll, prior_nll
    
-    def update_network_profiles(self, thoughtseed_activations, network_activations, current_state, prediction_errors):
-        # Update learned mapping using prediction errors
+    def update_network_profiles(self, thoughtseed_activations: np.ndarray, network_activations: Dict[str, float], current_state: str, prediction_errors: Dict[str, float]):
+        """Update learned mappings (generative model) based on prediction errors.
+        Implements a Hebbian-like associative learning rule modulated by precision.
+        """
         if len(self.network_activations_history) < 10:
             return
         
@@ -288,7 +327,7 @@ class ActInfAgent(AgentConfig):
                     current_error = prediction_errors[net] # δ_k(t)
                     
                     # Precision (confidence) and signed Bayesian-like update
-                    precision = 1.0 + (5.0 if self.experience_level == 'expert' else 2.0) * len(self.network_activations_history)/self.timesteps
+                    precision = self.learning_precision_base + self.learning_precision_scalar * len(self.network_activations_history)/self.timesteps
                     
                     # Signed update scaled by learning_rate and ts activation
                     error_sign = 1 if network_activations[net] < self.learned_network_profiles["state_network_expectations"][current_state][net] else -1
@@ -301,15 +340,17 @@ class ActInfAgent(AgentConfig):
                     self.learned_network_profiles["thoughtseed_contributions"][ts][net] = np.clip(
                         self.learned_network_profiles["thoughtseed_contributions"][ts][net], 0.1, 0.9)
         
-        # Update state expectations (slower rate)
+        # Update mediative state expectations (slower rate)
         slow_rate = self.learning_rate * 0.3
         for net in self.networks:
             current_expect = self.learned_network_profiles["state_network_expectations"][current_state][net]
             new_value = (1 - slow_rate) * current_expect + slow_rate * network_activations[net]
             self.learned_network_profiles["state_network_expectations"][current_state][net] = new_value
     
-    def get_network_modulation(self, network_acts, current_state):
-        # Compute adjustments to thoughtseed targets driven by network activity
+    def get_network_modulation(self, network_acts: Dict[str, float], current_state: str) -> Dict[str, float]:
+        """Calculate how current network activity modulates thoughtseed targets.
+        Example: High DMN activity increases 'pending_tasks' and 'self_reflection' (mind-wandering).
+        """
         modulations = {ts: 0.0 for ts in self.thoughtseeds}
         
         # DMN enhances pending_tasks and self_reflection, suppresses breath_focus
@@ -317,7 +358,7 @@ class ActInfAgent(AgentConfig):
 
         modulations['pending_tasks'] += self.dmn_pending_value * dmn_strength
         modulations['self_reflection'] += self.dmn_reflection_value * dmn_strength
-        modulations['breath_focus'] -= self.dmn_breath_value * dmn_strength
+        modulations['attend_breath'] -= self.dmn_breath_value * dmn_strength
 
         # VAN enhances pain_discomfort (salience) and self_reflection during meta_awareness
         van_strength = network_acts.get('VAN', 0)
@@ -330,7 +371,7 @@ class ActInfAgent(AgentConfig):
         # DAN enhances breath_focus, suppresses distractions
         dan_strength = network_acts.get('DAN', 0)
 
-        modulations['breath_focus'] += self.dan_breath_value * dan_strength
+        modulations['attend_breath'] += self.dan_breath_value * dan_strength
         modulations['pending_tasks'] -= self.dan_pending_value * dan_strength
         modulations['pain_discomfort'] -= self.dan_pain_value * dan_strength
         
@@ -343,8 +384,12 @@ class ActInfAgent(AgentConfig):
                 
         return modulations
 
-    def get_transition_probabilities(self, activations, network_acts):
-        # Score and normalize possible next states by similarity to learned profiles
+    def get_transition_probabilities(self, activations: np.ndarray, network_acts: Dict[str, float]) -> Dict[str, float]:
+        """Calculate probability of transitioning to each mediative state.
+        Combines two evidence sources:
+        1. Network Similarity: How close current networks are to mediative state expectations.
+        2. Activation Similarity: How close current thoughtseeds are to mediative state targets.
+        """
         scores = {}
         temp = max(1e-6, self.softmax_temperature)
 
@@ -379,8 +424,10 @@ class ActInfAgent(AgentConfig):
 
         return {s: v / total for s, v in scores.items()}
 
-    def update_thoughtseed_dynamics(self, current_activations, target_activations, current_state, current_dwell, dwell_limit):
-        # Evolve thoughtseed activations toward targets using OU dynamics
+    def update_thoughtseed_dynamics(self, current_activations: np.ndarray, target_activations: np.ndarray, current_state: str, current_dwell: int, dwell_limit: int) -> np.ndarray:
+        """Evolve thoughtseed activations using Ornstein-Uhlenbeck dynamics.
+        Includes distraction buildup, cognitive fatigue, and state-dependent volatility.
+        """
         dt = DEFAULTS['DEFAULT_DT']
         updated_activations = current_activations.copy()
         
@@ -394,7 +441,7 @@ class ActInfAgent(AgentConfig):
                 mu[i] += modulations[ts]
         
         # Apply dynamic modifiers (Distraction Buildup & Fatigue)
-        if current_state in ["breath_control", "redirect_breath"]:
+        if current_state in ["breath_focus", "redirect_breath"]:
             # Distraction increases over time in focused states
             progress = min(1.5, current_dwell / max(5, dwell_limit))
             
@@ -406,7 +453,7 @@ class ActInfAgent(AgentConfig):
                 mu[idx] += distraction_buildup
                 
             # Cognitive Fatigue: Decay of focus capability
-            bf_idx = self.thoughtseeds.index("breath_focus")
+            bf_idx = self.thoughtseeds.index("attend_breath")
             mu[bf_idx] = max(0.1, mu[bf_idx] - (self.fatigue_rate * progress))
 
         # 2. Set Stochastic Parameters (Ornstein-Uhlenbeck)
@@ -430,12 +477,12 @@ class ActInfAgent(AgentConfig):
                     theta *= 0.5
 
             # Focused states are more stable
-            if current_state == "breath_control" and ts == "breath_focus":
+            if current_state == "breath_focus" and ts == "attend_breath":
                 sigma *= 0.5
                 theta *= 1.5
 
-            # Calculate update using OU helper
-            updated_activations[i] = float(ou_update(x_prev, target, theta, sigma, dt))
+            # OU update using agent RNG
+            updated_activations[i] = float(ou_update(x_prev, target, theta, sigma, dt, rng=self.rng))
             
         from meditation_utils import clip_array
         return clip_array(updated_activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
