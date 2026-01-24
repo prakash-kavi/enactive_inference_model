@@ -56,7 +56,7 @@ class AgentConfig:
         
         # Initialize accumulators (Leaky Integrators) - AFTER params are loaded
         self.dmn_accumulator = LeakyAccumulator(decay=0.9, gain=0.1, activation='sigmoid') 
-        self.aha_accumulator = LeakyAccumulator(decay=self.aha_accum_decay, gain=self.aha_accum_inc, activation='sigmoid')
+        self.aha_accumulator = LeakyAccumulator(decay=self.aha_accum_decay, gain=self.aha_accum_inc, activation='linear')  # Linear to avoid double-sigmoid
         self.fpn_accumulator = LeakyAccumulator(decay=self.fpn_accum_decay, gain=1.0 - self.fpn_accum_decay, activation='linear')
         self.vfe_accumulator = LeakyAccumulator(decay=self.vfe_accum_decay, gain=1.0 - self.vfe_accum_decay, activation='linear')
         # Placeholder for previous network activations (initialized in ActInfAgent)
@@ -184,11 +184,22 @@ class ActInfAgent(AgentConfig):
             target_acts = self._apply_lateral_coupling(target_acts, current_state)
             target_acts = self._apply_accumulator_dynamics(target_acts)
             
-            # Compute Aha Drive (Option C)
+            # Compute Aha Drive (Option C - Discrete Phenomenology)
+            # Aha moments occur when VAN spikes (detection of mind-wandering)
+            # This represents the "moment of noticing" MW, not continuous MW state
             current_dmn = self.prev_network_acts.get('DMN', 0)
-            aha_val = self.aha_accumulator.update(current_dmn)
+            dmn_val = self.dmn_accumulator.value  # Already updated in _apply_accumulator_dynamics
             
-            # Sigmoid activation: (val - threshold) * slope
+            # Trigger Aha on VAN spike (discrete event)
+            if dmn_val > DEFAULTS.get('VAN_TRIGGER', 0.7):
+                # Feed the spike magnitude to aha accumulator
+                spike_strength = dmn_val - DEFAULTS.get('VAN_TRIGGER', 0.7)
+                aha_val = self.aha_accumulator.update(spike_strength * 10.0)  # Amplify for faster accumulation
+            else:
+                # Decay when no spike
+                aha_val = self.aha_accumulator.update(0.0)
+            
+            # Sigmoid activation to get smooth Aha drive from accumulated signal
             activation = 1.0 / (1.0 + np.exp(-self.aha_slope * (aha_val - self.aha_threshold)))
             self.aha_drive = activation
         

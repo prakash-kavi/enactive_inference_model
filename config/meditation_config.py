@@ -308,7 +308,6 @@ class ActInfParams:
         "van_spike": 0.5,
         "softmax_temperature": 2.5,
         "efficiency_weight": 0.3,
-        "efficiency_weight": 0.3,
         "fatigue_threshold": 0.50,
         # Aha Moment Defaults
         "aha_threshold": 0.6,
