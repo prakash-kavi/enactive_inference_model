@@ -141,7 +141,30 @@ class ActInfAgent(AgentConfig):
 
         for state in self.states:
             self.learned_network_profiles["state_network_expectations"][state] = NETWORK_PROFILES["state_expected_profiles"][state][self.experience_level].copy()
-            
+        self._state_expect_vectors = {
+            state: self._build_state_expect_vector(state) for state in self.states
+        }
+        self._refresh_ts_contrib_cache()
+
+    def _build_state_expect_vector(self, state: str) -> np.ndarray:
+        """Build a dense vector of network expectations for a given state."""
+        expect = self.learned_network_profiles["state_network_expectations"][state]
+        return np.array([expect[net] for net in self.networks])
+
+    def _build_ts_contrib_matrix(self) -> np.ndarray:
+        """Build a thoughtseed x network contribution matrix."""
+        contribs = self.learned_network_profiles["thoughtseed_contributions"]
+        matrix = np.zeros((self.num_thoughtseeds, len(self.networks)))
+        for i, ts in enumerate(self.thoughtseeds):
+            for j, net in enumerate(self.networks):
+                matrix[i, j] = contribs[ts][net]
+        return matrix
+
+    def _refresh_ts_contrib_cache(self) -> None:
+        """Refresh cached contribution matrix and its row sums."""
+        self._ts_contrib_matrix = self._build_ts_contrib_matrix()
+        self._ts_contrib_weight_sum = self._ts_contrib_matrix.sum(axis=1)
+
     def compute_network_activations(self, thoughtseed_activations: np.ndarray, current_state: str, meta_awareness: float, dt: float = 1.0) -> Dict[str, float]:
         """Compute network activations for the current timestep.
         Integrates top-down expectations, lateral coupling, and fatigue dynamics.
@@ -166,15 +189,11 @@ class ActInfAgent(AgentConfig):
 
     def _apply_top_down_influence(self, thoughtseed_activations: np.ndarray, current_state: str, meta_awareness: float) -> Dict[str, float]:
         """Calculate base network targets from thoughtseeds and mediative state expectations."""
-        ts_to_network = self.learned_network_profiles["thoughtseed_contributions"]
-        target_acts = {net: self.network_base for net in self.networks}
+        ts_contrib = thoughtseed_activations @ self._ts_contrib_matrix
+        target_acts = {
+            net: self.network_base + ts_contrib[i] for i, net in enumerate(self.networks)
+        }
         
-        # Contribution 1: Thoughtseed activation -> Network
-        for i, ts in enumerate(self.thoughtseeds):
-            ts_act = thoughtseed_activations[i]
-            for net in self.networks:
-                target_acts[net] += ts_act * ts_to_network[ts][net]
-    
         # Contribution 2: Mediative State Expectation (Modulated by Meta-awareness)
         state_expect = self.learned_network_profiles["state_network_expectations"][current_state]
         for net in self.networks:
@@ -259,22 +278,10 @@ class ActInfAgent(AgentConfig):
     
     def get_sensory_inference(self, network_acts: Dict[str, float]) -> np.ndarray:
         """Infer thoughtseed beliefs (states) from network activations (observations)."""
-        ts_contribs = self.learned_network_profiles["thoughtseed_contributions"]
-        inferred = np.zeros(self.num_thoughtseeds)
-        
-        for i, ts in enumerate(self.thoughtseeds):
-            match_score = 0.0
-            total_weight = 0.0
-            
-            for net in self.networks:
-                weight = ts_contribs[ts][net]
-                match_score += network_acts[net] * weight
-                total_weight += weight
-            
-            if total_weight > 0:
-                inferred[i] = match_score / total_weight
-            else: # pragma: no cover
-                inferred[i] = 0.1
+        net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
+        match_scores = self._ts_contrib_matrix @ net_vec
+        total_weight = self._ts_contrib_weight_sum
+        inferred = np.where(total_weight > 0, match_scores / total_weight, 0.1)
                 
         return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
 
@@ -337,6 +344,7 @@ class ActInfAgent(AgentConfig):
                     # Bound weights [W_min, W_max]
                     self.learned_network_profiles["thoughtseed_contributions"][ts][net] = np.clip(
                         self.learned_network_profiles["thoughtseed_contributions"][ts][net], 0.1, 0.9)
+        self._refresh_ts_contrib_cache()
         
         # Update mediative state expectations (slower rate)
         slow_rate = self.learning_rate * 0.3
@@ -344,6 +352,7 @@ class ActInfAgent(AgentConfig):
             current_expect = self.learned_network_profiles["state_network_expectations"][current_state][net]
             new_value = (1 - slow_rate) * current_expect + slow_rate * network_activations[net]
             self.learned_network_profiles["state_network_expectations"][current_state][net] = new_value
+        self._state_expect_vectors[current_state] = self._build_state_expect_vector(current_state)
     
     def get_network_modulation(self, network_acts: Dict[str, float], current_state: str) -> Dict[str, float]:
         """Calculate how current network activity modulates thoughtseed targets.
@@ -387,11 +396,10 @@ class ActInfAgent(AgentConfig):
         w_net = self.transition_weight_network
         w_act = self.transition_weight_activation
 
+        net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
         for state in self.states:
             # Network expectation similarity (negative L2 distance)
-            expect = self.learned_network_profiles["state_network_expectations"][state]
-            expect_vec = np.array([expect[net] for net in self.networks])
-            net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
+            expect_vec = self._state_expect_vectors[state]
             net_dist = np.linalg.norm(net_vec - expect_vec)
 
             # Activation similarity: compare to target activations for that state

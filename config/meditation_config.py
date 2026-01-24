@@ -273,60 +273,63 @@ class ActInfParams:
     dan_focus_target: float
     expert_meta_scalar: float
 
+    _BASE_DEFAULTS = {
+        "precision_weight": 0.4,
+        "complexity_penalty": 0.4,
+        "learning_rate": 0.01,
+        "noise_level": 0.04,
+        "memory_factor": 0.85,
+        "fpn_enhancement": 1.0,
+        "distraction_pressure": 1.30,
+        "fatigue_rate": 0.30,
+        "smoothing": 0.6,
+        "blend_factor_transition": 0.3,
+        "blend_factor_state": 0.4,
+        "blend_variation": 0.1,
+        "transition_perturb_std": 0.02,
+        "transition_variation_low": -0.05,
+        "transition_variation_high": 0.1,
+        "vfe_accum_decay": 0.9,
+        "vfe_accum_alpha": 0.1,
+        "base_theta": 0.2,
+        "base_sigma": 0.05,
+        "transition_weight_network": 1.0,
+        "transition_weight_activation": 1.0,
+        "fpn_accum_decay": 0.98,
+        "fpn_accum_inc": 0.02,
+        "fatigue_reset": 0.4,
+        "fpn_collapse_dan_mult": 0.6,
+        "fpn_collapse_dmn_inc": 0.2,
+        "fpn_base_demand": 0.2,
+        "fpn_focus_mult": 2.0,
+        # network/dynamics defaults (may be overridden by config/*.json)
+        "network_base": 0.1,
+        "fpn_to_dan_gain": 0.4,
+        "hysteresis_strength": 0.1,
+        "anticorrelation_force": 0.25,
+        "van_spike": 0.5,
+        "softmax_temperature": 2.5,
+        "efficiency_weight": 0.3,
+        "fatigue_threshold": 0.50,
+        # Newly extracted magic numbers
+        "sensory_precision_base": 0.1,
+        "sensory_precision_van_scalar": 5.0,
+        "prior_precision_base": 1.0,
+        "prior_precision_meta_scalar": 3.0,
+        "dan_focus_target": 0.9,
+        "expert_meta_scalar": 1.0,  # Novice default
+        "learning_precision_base": 1.0,
+        "learning_precision_scalar": 2.0
+    }
+
     @classmethod
     def novice(cls) -> 'ActInfParams':
-        return cls(
-            precision_weight=0.4,
-            complexity_penalty=0.4,
-            learning_rate=0.01,
-            noise_level=0.04,
-            memory_factor=0.85,
-            fpn_enhancement=1.0,
-            distraction_pressure=1.30,
-            fatigue_rate=0.30,
-            smoothing=0.6,
-            blend_factor_transition=0.3,
-            blend_factor_state=0.4,
-            blend_variation=0.1,
-            transition_perturb_std=0.02,
-            transition_variation_low=-0.05,
-            transition_variation_high=0.1,
-            vfe_accum_decay=0.9,
-            vfe_accum_alpha=0.1,
-            base_theta=0.2,
-            base_sigma=0.05,
-            transition_weight_network=1.0,
-            transition_weight_activation=1.0,
-            fpn_accum_decay=0.98,
-            fpn_accum_inc=0.02,
-            fatigue_reset=0.4,
-            fpn_collapse_dan_mult=0.6,
-            fpn_collapse_dmn_inc=0.2,
-            fpn_base_demand=0.2,
-            fpn_focus_mult=2.0,
-            # network/dynamics defaults (may be overridden by config/*.json)
-            network_base=0.1,
-            fpn_to_dan_gain=0.4,
-            hysteresis_strength=0.1,
-            anticorrelation_force=0.25,
-            van_spike=0.5,
-            softmax_temperature=2.5,
-            efficiency_weight=0.3,
-            fatigue_threshold=0.50,
-            # Newly extracted magic numbers
-            sensory_precision_base=0.1,
-            sensory_precision_van_scalar=5.0,
-            prior_precision_base=1.0,
-            prior_precision_meta_scalar=3.0,
-            dan_focus_target=0.9,
-            expert_meta_scalar=1.0,  # Novice default
-            learning_precision_base=1.0,
-            learning_precision_scalar=2.0
-        )
+        return cls(**cls._BASE_DEFAULTS)
 
     @classmethod
     def expert(cls) -> 'ActInfParams':
-        return cls(
+        base = dict(cls._BASE_DEFAULTS)
+        base.update(
             precision_weight=0.5,
             complexity_penalty=0.2,
             learning_rate=0.02,
@@ -336,41 +339,13 @@ class ActInfParams:
             distraction_pressure=0.62,
             fatigue_rate=0.15,
             smoothing=0.8,
-            blend_factor_transition=0.3,
-            blend_factor_state=0.4,
-            blend_variation=0.1,
-            transition_perturb_std=0.02,
-            transition_variation_low=-0.05,
-            transition_variation_high=0.1,
-            vfe_accum_decay=0.9,
-            vfe_accum_alpha=0.1,
             base_theta=0.25,
             base_sigma=0.035,
-            transition_weight_network=1.0,
-            transition_weight_activation=1.0,
-            fpn_accum_decay=0.98,
-            fpn_accum_inc=0.02,
-            fatigue_reset=0.4,
-            fpn_collapse_dan_mult=0.6,
-            fpn_collapse_dmn_inc=0.2,
-            fpn_base_demand=0.2,
-            fpn_focus_mult=2.0,
-            # network/dynamics defaults (may be overridden by config/*.json)
-            network_base=0.1,
-            fpn_to_dan_gain=0.4,
             hysteresis_strength=0.2,
-            anticorrelation_force=0.25,
-            van_spike=0.5,
             softmax_temperature=2.0,
             efficiency_weight=0.7,
             fatigue_threshold=0.75,
-            # Newly extracted magic numbers
-            sensory_precision_base=0.1,
-            sensory_precision_van_scalar=5.0,
-            prior_precision_base=1.0,
-            prior_precision_meta_scalar=3.0,
-            dan_focus_target=0.9,
             expert_meta_scalar=1.05,
-            learning_precision_base=1.0,
             learning_precision_scalar=5.0
         )
+        return cls(**base)
