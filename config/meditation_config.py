@@ -1,10 +1,10 @@
 """Configuration for the Vipassana Entropy meditation simulation.
 
-Note: external JSON-based config loading (e.g. `config/config.json`) is
-possible for experiment workflows but is not enabled in this file.
+Note: external JSON-based config loading is possible for experiment workflows
+but is not enabled in this file.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Union
 import numpy as np
 
@@ -65,16 +65,6 @@ class NetworkProfile:
     DAN: float
     FPN: float
     
-@dataclass
-class StateTargetActivations:
-    attend_breath: float
-    equanimity: float
-    pain_discomfort: float
-    pending_tasks: float
-    aha_moment: float
-    
-    # Instances can be converted to dicts via `dataclasses.asdict` where needed.
-
 @dataclass
 class ActInfParams:
     precision_weight: float
@@ -309,34 +299,34 @@ class ThoughtseedParams:
     
     # Base target activation patterns for each thoughtseed in each mediative state
     BASE_ACTIVATIONS = {
-        "breath_focus": asdict(StateTargetActivations(
-            attend_breath=0.7,
-            equanimity=0.3,
-            pain_discomfort=0.15,
-            pending_tasks=0.1,
-            aha_moment=0.2
-        )),
-        "mind_wandering": asdict(StateTargetActivations(
-            attend_breath=0.1,
-            equanimity=0.1,
-            pain_discomfort=0.6,
-            pending_tasks=0.7,
-            aha_moment=0.1
-        )),
-        "meta_awareness": asdict(StateTargetActivations(
-            attend_breath=0.2,
-            equanimity=0.3,
-            pain_discomfort=0.15,
-            pending_tasks=0.15,
-            aha_moment=0.8
-        )),
-        "redirect_breath": asdict(StateTargetActivations(
-            attend_breath=0.6,
-            equanimity=0.7,
-            pain_discomfort=0.2,
-            pending_tasks=0.1,
-            aha_moment=0.4
-        ))
+        "breath_focus": {
+            "attend_breath": 0.7,
+            "equanimity": 0.3,
+            "pain_discomfort": 0.15,
+            "pending_tasks": 0.1,
+            "aha_moment": 0.2
+        },
+        "mind_wandering": {
+            "attend_breath": 0.1,
+            "equanimity": 0.1,
+            "pain_discomfort": 0.6,
+            "pending_tasks": 0.7,
+            "aha_moment": 0.1
+        },
+        "meta_awareness": {
+            "attend_breath": 0.2,
+            "equanimity": 0.3,
+            "pain_discomfort": 0.15,
+            "pending_tasks": 0.15,
+            "aha_moment": 0.8
+        },
+        "redirect_breath": {
+            "attend_breath": 0.6,
+            "equanimity": 0.7,
+            "pain_discomfort": 0.2,
+            "pending_tasks": 0.1,
+            "aha_moment": 0.4
+        }
     }
     
     # Unified target adjustments: (meta_modulator, expert_offset)
