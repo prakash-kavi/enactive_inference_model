@@ -167,7 +167,7 @@ class Trainer:
 
         target_activations = self.agent.get_target_activations(current_state, meta_awareness)
         free_energy, sensory_nll, _ = self.agent.calculate_vfe(
-            activations, target_activations, sensory_inference, meta_awareness, network_acts, vfe_trend
+            activations, target_activations, sensory_inference, meta_awareness, vfe_trend
         )
 
         # D. Update network profiles (Learning)
@@ -183,7 +183,6 @@ class Trainer:
         self.agent.free_energy_history.append(free_energy)
         self.agent.prediction_error_history.append(sensory_nll)
         self.agent.precision_history.append(0.5 + self.agent.precision_weight * meta_awareness)
-        self.agent.reflection_score_history.append(float(getattr(self.agent, "prev_reflection_score", 0.0)))
 
         dominant_ts = self.agent.thoughtseeds[np.argmax(activations)]
         
@@ -211,12 +210,20 @@ class Trainer:
         dwell_expired = current_dwell >= dwell_limit
         
         if dwell_expired or (critical_vfe and current_dwell >= min_dwell):
-            return self._execute_transition(current_state, activations, network_acts, free_energy, meta_awareness=self.agent.prev_meta_awareness)
+            forced = (not dwell_expired) and critical_vfe and current_dwell >= min_dwell
+            return self._execute_transition(
+                current_state,
+                activations,
+                network_acts,
+                free_energy,
+                meta_awareness=self.agent.prev_meta_awareness,
+                forced=forced
+            )
             
         return None
 
     def _execute_transition(self, current_state: str, activations: np.ndarray, network_acts: Dict[str, float], 
-                           free_energy: float, meta_awareness: float) -> Tuple:
+                           free_energy: float, meta_awareness: float, forced: bool = False) -> Tuple:
         """Execute the transition logic: sample next state, blend activations, and reset counters."""
         
         # 1. Get Transition Probabilities
@@ -240,7 +247,11 @@ class Trainer:
         # 3. Update Agent Counters
         self.agent.vfe_accumulator = 0.0
         self.agent.transition_activations[current_state].append(activations.copy())
-        self.agent.natural_transition_count += 1
+        if forced:
+            self.agent.forced_transition_count += 1
+        else:
+            self.agent.natural_transition_count += 1
+        self.agent.transition_counts[current_state][next_state] += 1
         
         # 4. Prepare return pattern
         pattern = (
@@ -347,3 +358,4 @@ class Trainer:
 
         # Generate consumer-ready JSONs
         _save_json_outputs(self.agent, output_dir=out_dir)
+

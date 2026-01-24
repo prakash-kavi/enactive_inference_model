@@ -1,30 +1,35 @@
-# Vipassana TS2 Transition Specification (v1.2)
+# Vipassana TS2 Transition Specification (v1.1)
 
 ## 1) Goals and non-goals
-- Keep core behavior stable while removing the self_reflection thoughtseed.
-- Introduce a derived reflection_score to drive meta-awareness.
-- Avoid major architecture changes (global workspace, energy system) in this phase.
+- Keep existing code behavior stable; changes must be additive.
+- Focus only on improving aha_moment handling.
+- Defer major architecture changes (global workspace, energy system) to a later phase.
 
 ## 2) Canonical entities (match current code)
 - Networks: DMN, VAN, DAN, FPN
-- Thoughtseeds: attend_breath, pain_discomfort, pending_tasks, equanimity
-- States: breath_focus, mind_wandering, meta_awareness, redirect_breath
+- Thoughtseeds: breath_focus, pain_discomfort, pending_tasks, aha_moment, equanimity
+- States: breath_control, mind_wandering, meta_awareness, redirect_breath
 - Experience levels: novice, expert
 
 ## 3) Current dynamics to preserve (compatibility contract)
-- Networks are driven by thoughtseeds and state expectations, then updated via OU.
+- Network activations are driven by thoughtseeds and state expectations, then updated via OU.
 - Thoughtseeds evolve toward state-dependent targets with OU smoothing and network modulation.
-- Meta-awareness is derived from state base levels and a compact reflection signal.
-- State transitions remain VFE-driven with dwell-time constraints.
+- Meta-awareness is derived from state base levels plus thoughtseed influences.
+- State transitions are VFE-driven with dwell-time constraints.
 
-## 4) Derived reflection_score (replaces self_reflection thoughtseed)
+## 4) Self-reflection: new addressing without breaking behavior
 ### 4.1 Rationale
-Self_reflection is removed as a thoughtseed to reduce redundancy and prevent conflation of
-rumination (DMN-heavy) with skillful reflection (FPN-supported). A compact derived signal
-captures reflective capacity without expanding the thoughtseed set.
+The current model treats aha_moment as both a thoughtseed and a driver of meta-awareness.
+This can blur rumination (DMN-heavy) with skillful reflection (FPN-supported). We want a
+bounded reflection signal that distinguishes these modes, without changing the thoughtseed list.
 
-### 4.2 Definition
+### 4.2 Additive model: reflection_score (derived, optional)
+Introduce a derived reflection_score that gates how aha_moment affects meta-awareness and
+precision. This is an optional, additive change that defaults to the current behavior when
+disabled.
+
 Let:
+- sr = z[aha_moment]
 - eq = z[equanimity]
 - dmn = N[DMN]
 - fpn = N[FPN]
@@ -32,32 +37,46 @@ Let:
 Then:
 
 reflection_score = sigmoid(
+  w_sr * sr +
   w_eq * eq +
   w_fpn * fpn -
   w_dmn * dmn +
   b_reflection
 )
 
-Meta-awareness:
-- meta_awareness = base_by_state + k_reflection * reflection_score
+Usage (when enabled):
+- meta_awareness = base_awareness + k_reflection * reflection_score + k_eq * eq
+- Optionally scale sensory/prior precision (VFE) by reflection_score instead of raw sr
 
-Notes:
-- reflection_score is a derived signal, not a thoughtseed.
-- Use fixed constants in code for now (no extra config surface in Phase 1).
+### 4.3 Backward compatibility
+If reflection_score parameters are absent or disabled, keep current logic:
+- meta_awareness = base + (aha_moment * 0.1) + (equanimity * 0.1)
+- aha_moment remains a thoughtseed and stays in all logging and targets
 
-### 4.3 VFE precision (unchanged intent)
-Sensory precision should scale with salience; use VAN activation directly (not a thoughtseed).
-Prior precision remains scaled by meta-awareness.
+## 5) Transition policy (unchanged)
+- Maintain current dwell-time and VFE accumulator policy.
+- reflection_score may only modulate meta-awareness or precision; it is not a new gate.
 
-## 5) Removal scope (Phase 1)
-- Remove self_reflection from thoughtseed list, targets, modulators, and network profiles.
-- Remove self_reflection-specific modulation parameters (DMN/VAN/FPN reflection knobs).
-- Update plots and analysis to expect 4 thoughtseeds.
+## 6) Optional config additions (non-breaking)
+Add a new optional block to JSON profiles or config overrides:
 
-## 6) Outputs for evaluation
-- Keep existing outputs.
-- Add reflection_score_history to time-series outputs for analysis.
+aha_moment_policy:
+  enabled: false
+  w_sr: 1.0
+  w_eq: 0.6
+  w_fpn: 0.4
+  w_dmn: 0.5
+  b_reflection: -0.2
+  k_reflection: 0.3
+
+When disabled or missing, behavior is identical to the current code.
 
 ## 7) Transition plan
-Phase 1 (this change): remove self_reflection thoughtseed, add reflection_score, clean config.
-Phase 2 (optional): further simplify transition logic or add higher-level control if needed.
+Phase 0 (doc-only): align names and clarify compatibility.
+Phase 1 (safe code): add reflection_score computation with defaults that reproduce current behavior.
+Phase 2 (optional): explore global workspace and energy dynamics if needed.
+
+## 8) Outputs for evaluation
+- Keep existing outputs.
+- If reflection_score is enabled, log it as a time series for analysis.
+

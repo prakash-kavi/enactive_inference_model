@@ -1,8 +1,12 @@
 """Core meditation models: AgentConfig and ActInfAgent."""
 
 import numpy as np
+import os
+import json
+import logging
 from collections import defaultdict
-from typing import Optional, Dict, Tuple
+import copy
+from typing import Optional, Dict, List, Tuple, Any
 
 from config.meditation_config import (
     THOUGHTSEEDS, STATES, STATE_DWELL_TIMES,
@@ -34,7 +38,6 @@ class AgentConfig:
         self.activations_history = []
         self.state_history = []
         self.meta_awareness_history = []
-        self.reflection_score_history = []
         self.dominant_ts_history = []
         self.state_history_over_time = []
         
@@ -58,7 +61,6 @@ class AgentConfig:
         self.fpn_accumulator = 0.0
         # Placeholder for previous network activations (initialized in ActInfAgent)
         self.prev_network_acts: Optional[Dict[str, float]] = None
-        self.prev_reflection_score = 0.0
 
     def get_target_activations(self, state: str, meta_awareness: float) -> np.ndarray:
         """Calculate target thoughtseed activations for a given mediative state.
@@ -98,18 +100,11 @@ class AgentConfig:
         Delegates to `MetacognitionParams`.
         """
         activations_dict = {ts: activations[i] for i, ts in enumerate(self.thoughtseeds)}
-
-        reflection_score = MetacognitionParams.calculate_reflection_score(
-            thoughtseed_activations=activations_dict,
-            network_acts=self.prev_network_acts
-        )
-        self.prev_reflection_score = reflection_score
-
+        
         return MetacognitionParams.calculate_meta_awareness(
             state=current_state,
             thoughtseed_activations=activations_dict,
-            experience_level=self.experience_level,
-            network_acts=self.prev_network_acts
+            experience_level=self.experience_level
         )
 
 class ActInfAgent(AgentConfig):
@@ -285,7 +280,7 @@ class ActInfAgent(AgentConfig):
                 
         return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
 
-    def calculate_vfe(self, current_seeds: np.ndarray, prior_seeds: np.ndarray, sensory_inference: np.ndarray, meta_awareness: float, network_acts: Dict[str, float], vfe_trend: float = 0.0) -> Tuple[float, float, float]:
+    def calculate_vfe(self, current_seeds: np.ndarray, prior_seeds: np.ndarray, sensory_inference: np.ndarray, meta_awareness: float, vfe_trend: float = 0.0) -> Tuple[float, float, float]:
         """Compute Variational Free Energy (VFE).
         VFE = (Sensory NLL * Sensory Precision) + (Prior NLL * Prior Precision)
         Minimizing VFE maximizes the evidence for the agent's internal model.
@@ -305,8 +300,8 @@ class ActInfAgent(AgentConfig):
         # Precision modulation based on VFE history (Attention)
         precision_mod = np.clip(-1.0 * vfe_trend, -0.3, 0.3)
 
-        # Sensory precision scales with VAN activation (Salience)
-        van_proxy = float(network_acts.get('VAN', 0.0))
+        # Sensory precision scales with VAN proxy (Salience)
+        van_proxy = sensory_inference[self.thoughtseeds.index('aha_moment')]
         pi_sensory = (self.sensory_precision_base + (self.sensory_precision_van_scalar * van_proxy)) * (1.0 + precision_mod) * self.precision_weight
         
         # Prior precision scales with meta-awareness (Top-down control)
@@ -354,20 +349,24 @@ class ActInfAgent(AgentConfig):
     
     def get_network_modulation(self, network_acts: Dict[str, float], current_state: str) -> Dict[str, float]:
         """Calculate how current network activity modulates thoughtseed targets.
-        Example: High DMN activity increases 'pending_tasks' and suppresses 'attend_breath' (mind-wandering).
+        Example: High DMN activity increases 'pending_tasks' and 'aha_moment' (mind-wandering).
         """
         modulations = {ts: 0.0 for ts in self.thoughtseeds}
         
-        # DMN enhances pending_tasks, suppresses attend_breath
+        # DMN enhances pending_tasks and aha_moment, suppresses breath_focus
         dmn_strength = network_acts.get('DMN', 0)
 
         modulations['pending_tasks'] += self.dmn_pending_value * dmn_strength
+        modulations['aha_moment'] += self.dmn_reflection_value * dmn_strength
         modulations['attend_breath'] -= self.dmn_breath_value * dmn_strength
 
-        # VAN enhances pain_discomfort (salience)
+        # VAN enhances pain_discomfort (salience) and aha_moment during meta_awareness
         van_strength = network_acts.get('VAN', 0)
 
         modulations['pain_discomfort'] += self.van_pain_value * van_strength
+
+        if current_state == "meta_awareness":
+            modulations['aha_moment'] += self.van_reflection_value * van_strength
 
         # DAN enhances breath_focus, suppresses distractions
         dan_strength = network_acts.get('DAN', 0)
@@ -376,10 +375,11 @@ class ActInfAgent(AgentConfig):
         modulations['pending_tasks'] -= self.dan_pending_value * dan_strength
         modulations['pain_discomfort'] -= self.dan_pain_value * dan_strength
         
-        # FPN enhances equanimity (metacognition and regulation)
+        # FPN enhances aha_moment and equanimity (metacognition and regulation)
         fpn_strength = network_acts.get('FPN', 0)
         fpn_enhancement = self.fpn_enhancement
 
+        modulations['aha_moment'] += self.fpn_reflection_value * fpn_strength * fpn_enhancement
         modulations['equanimity'] += self.fpn_equanimity_value * fpn_strength * fpn_enhancement
                 
         return modulations

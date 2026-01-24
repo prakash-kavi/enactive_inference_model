@@ -80,6 +80,7 @@
       "attend_breath": {"DMN": 0.2, "VAN": 0.3, "DAN": 0.65, "FPN": 0.6},
       "pain_discomfort": {"DMN": 0.5, "VAN": 0.7, "DAN": 0.3, "FPN": 0.4},
       "pending_tasks": {"DMN": 0.8, "VAN": 0.5, "DAN": 0.2, "FPN": 0.4},
+      "aha_moment": {"DMN": 0.6, "VAN": 0.4, "DAN": 0.3, "FPN": 0.8},
       "equanimity": {"DMN": 0.3, "VAN": 0.3, "DAN": 0.5, "FPN": 0.9}
     },
     "state_expected_profiles": {

@@ -76,7 +76,6 @@ def _save_json_outputs(learner, output_dir=None):
         "activations_history": convert(activations_history),
         "network_activations_history": convert(network_activations_history),
         "meta_awareness_history": learner.meta_awareness_history,
-        "reflection_score_history": getattr(learner, "reflection_score_history", []),
         "free_energy_history": learner.free_energy_history,
         "state_history": learner.state_history,
         "dominant_ts_history": learner.dominant_ts_history,

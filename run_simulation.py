@@ -10,7 +10,7 @@ from config.meditation_config import DEFAULTS
 
 def run_simulation():
     seed = 42
-    T = 2000
+    T = 3000
     out_dir = None
 
     logging.info("Starting simulation...")

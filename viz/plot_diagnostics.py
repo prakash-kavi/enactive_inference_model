@@ -15,9 +15,10 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+
 from .plotting_utils import (
     set_plot_style, load_json_data, get_tail_stats, smooth_series,
-    PLOT_DIR, TAIL_STEPS, STATE_COLORS, NETWORK_COLORS, 
+    PLOT_DIR, TAIL_STEPS, STATE_COLORS, NETWORK_COLORS,
     STATE_SHORT_NAMES, STATE_DISPLAY_NAMES, THOUGHTSEED_COLORS
 )
 from config.meditation_config import STATES, THOUGHTSEEDS
