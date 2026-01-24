@@ -175,26 +175,16 @@ Five hypothetical attentional agents :
 python run_training.py
 
 # Generate training visualizations
-python viz/plot_training.py
+python -m viz.plot_training
 
 # Run simulation with trained attractors
 python run_simulation.py
 
-# Generate simulation visualizations
-python plot_simulation.py
-
-# Run individual visualization modules (legacy)
+# Run individual visualization modules
 python -m viz.plot_convergence
 python -m viz.plot_attractors
 python -m viz.plot_diagnostics
 ```
-
-## Requirements
-
-See `requirements.txt` for Python package dependencies. Key dependencies include:
-- `numpy`
-- `matplotlib`
-- `scipy` (for Ornstein–Uhlenbeck dynamics)
 
 ## Notes
 
