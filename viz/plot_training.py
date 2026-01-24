@@ -226,7 +226,7 @@ def plot_radar_comparison(novice_summary, expert_summary, output_dir="plots/trai
                bbox_to_anchor=(0.5, 0.08), ncol=2, fontsize=13)
 
     plt.tight_layout()
-    save_path = os.path.join(output_dir, "Fig3B_Radar_Comparison.png")
+    save_path = os.path.join(output_dir, "Fig3A_Radar_Comparison.png")
     try:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         logging.info(f"Saved Radar to {save_path}")

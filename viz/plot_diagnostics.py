@@ -553,8 +553,7 @@ if __name__ == "__main__":
     # Panel B: Free Energy Bar (Use Full Stats for accurate distribution)
     plot_free_energy_bar(nov_stats, exp_stats, os.path.join(PLOT_DIR, "Fig3A_FreeEnergy.png"))
     
-    # Panel C: Radar (Use AI params)
-    plot_network_radar(nov_ai, exp_ai, os.path.join(PLOT_DIR, "Fig3B_Radar.png"))
+    # Panel C: Radar removed - now generated from training data in plot_training.py
     
     # Panel D: Dwell Times (Use Full Stats for accurate means/variance)
     plot_dwell_times(nov_stats, exp_stats, os.path.join(PLOT_DIR, "Fig3C_DwellTime.png"))
