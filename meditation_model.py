@@ -11,7 +11,7 @@ from typing import Optional, Dict, List, Tuple, Any
 from config.meditation_config import (
     THOUGHTSEEDS, STATES, STATE_DWELL_TIMES,
     ActInfParams, ThoughtseedParams, MetacognitionParams,
-    NETWORK_PROFILES, DEFAULTS
+    NETWORK_PROFILES, DEFAULTS, NETWORK_MODULATION
 )
 from meditation_utils import ou_update, clip_array
 
@@ -351,34 +351,27 @@ class ActInfAgent(AgentConfig):
         """
         modulations = {ts: 0.0 for ts in self.thoughtseeds}
         
-        # DMN enhances pending_tasks and aha_moment, suppresses breath_focus
+        mods = NETWORK_MODULATION
+
         dmn_strength = network_acts.get('DMN', 0)
+        modulations['pending_tasks'] += mods['DMN']['pending_tasks'] * dmn_strength
+        modulations['aha_moment'] += mods['DMN']['aha_moment'] * dmn_strength
+        modulations['attend_breath'] += mods['DMN']['attend_breath'] * dmn_strength
 
-        modulations['pending_tasks'] += self.dmn_pending_value * dmn_strength
-        modulations['aha_moment'] += self.dmn_reflection_value * dmn_strength
-        modulations['attend_breath'] -= self.dmn_breath_value * dmn_strength
-
-        # VAN enhances pain_discomfort (salience) and aha_moment during meta_awareness
         van_strength = network_acts.get('VAN', 0)
-
-        modulations['pain_discomfort'] += self.van_pain_value * van_strength
-
+        modulations['pain_discomfort'] += mods['VAN']['pain_discomfort'] * van_strength
         if current_state == "meta_awareness":
-            modulations['aha_moment'] += self.van_reflection_value * van_strength
+            modulations['aha_moment'] += mods['VAN']['aha_moment_meta_awareness'] * van_strength
 
-        # DAN enhances breath_focus, suppresses distractions
         dan_strength = network_acts.get('DAN', 0)
-
-        modulations['attend_breath'] += self.dan_breath_value * dan_strength
-        modulations['pending_tasks'] -= self.dan_pending_value * dan_strength
-        modulations['pain_discomfort'] -= self.dan_pain_value * dan_strength
+        modulations['attend_breath'] += mods['DAN']['attend_breath'] * dan_strength
+        modulations['pending_tasks'] += mods['DAN']['pending_tasks'] * dan_strength
+        modulations['pain_discomfort'] += mods['DAN']['pain_discomfort'] * dan_strength
         
-        # FPN enhances aha_moment and equanimity (metacognition and regulation)
         fpn_strength = network_acts.get('FPN', 0)
         fpn_enhancement = self.fpn_enhancement
-
-        modulations['aha_moment'] += self.fpn_reflection_value * fpn_strength * fpn_enhancement
-        modulations['equanimity'] += self.fpn_equanimity_value * fpn_strength * fpn_enhancement
+        modulations['aha_moment'] += mods['FPN']['aha_moment'] * fpn_strength * fpn_enhancement
+        modulations['equanimity'] += mods['FPN']['equanimity'] * fpn_strength * fpn_enhancement
                 
         return modulations
 

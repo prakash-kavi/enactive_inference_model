@@ -12,6 +12,27 @@ import numpy as np
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
 
+NETWORK_MODULATION = {
+    "DMN": {
+        "pending_tasks": 0.15,
+        "aha_moment": 0.05,
+        "attend_breath": -0.2
+    },
+    "VAN": {
+        "pain_discomfort": 0.15,
+        "aha_moment_meta_awareness": 0.2
+    },
+    "DAN": {
+        "attend_breath": 0.2,
+        "pending_tasks": -0.15,
+        "pain_discomfort": -0.1
+    },
+    "FPN": {
+        "aha_moment": 0.15,
+        "equanimity": 0.2
+    }
+}
+
 @dataclass
 class DwellTimeConfig:
     breath_focus: Tuple[int, int]
@@ -62,8 +83,6 @@ class ActInfParams:
     noise_level: float
     memory_factor: float
     fpn_enhancement: float
-    fpn_reflection_value: float
-    fpn_equanimity_value: float
     distraction_pressure: float
     fatigue_rate: float
     fpn_accum_decay: float
@@ -81,14 +100,6 @@ class ActInfParams:
     anticorrelation_force: float
     van_spike: float
     # Surface / modulation defaults (DMN/VAN/DAN effects)
-    dmn_pending_value: float
-    dmn_reflection_value: float
-    dmn_breath_value: float
-    van_pain_value: float
-    van_reflection_value: float
-    dan_breath_value: float
-    dan_pending_value: float
-    dan_pain_value: float
     # Efficiency weight (expert vs novice differences)
     efficiency_weight: float
     # Per-agent smoothing/blending and transition noise
@@ -131,8 +142,6 @@ class ActInfParams:
             noise_level=0.04,
             memory_factor=0.85, 
             fpn_enhancement=1.0,
-            fpn_reflection_value=0.15,
-            fpn_equanimity_value=0.2,
             distraction_pressure=1.30,
             fatigue_rate=0.30,
             smoothing=0.6,
@@ -162,14 +171,6 @@ class ActInfParams:
             anticorrelation_force=0.25,
             van_spike=0.5,
             # surface/modulation defaults
-            dmn_pending_value=0.15,
-            dmn_reflection_value=0.05,
-            dmn_breath_value=0.2,
-            van_pain_value=0.15,
-            van_reflection_value=0.2,
-            dan_breath_value=0.2,
-            dan_pending_value=0.15,
-            dan_pain_value=0.1,
             softmax_temperature=2.5,
             efficiency_weight=0.3,
             fatigue_threshold=0.50,
@@ -193,8 +194,6 @@ class ActInfParams:
             noise_level=0.03,  
             memory_factor=0.75,  
             fpn_enhancement=1.1, 
-            fpn_reflection_value=0.2,
-            fpn_equanimity_value=0.25,
             distraction_pressure=0.62,
             fatigue_rate=0.15,         
             smoothing=0.8,
@@ -224,14 +223,6 @@ class ActInfParams:
             anticorrelation_force=0.25,
             van_spike=0.5,
             # surface/modulation defaults
-            dmn_pending_value=0.15,
-            dmn_reflection_value=0.05,
-            dmn_breath_value=0.2,
-            van_pain_value=0.15,
-            van_reflection_value=0.2,
-            dan_breath_value=0.2,
-            dan_pending_value=0.15,
-            dan_pain_value=0.1,
             softmax_temperature=2.0,   
             efficiency_weight=0.7,
             fatigue_threshold=0.75,
