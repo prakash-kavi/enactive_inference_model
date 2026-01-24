@@ -29,13 +29,7 @@
       "base_theta": 0.2,
       "base_sigma": 0.05,
       "softmax_temperature": 2.5,
-      "fatigue_threshold": 0.5,
-      "transition_thresholds": {
-        "mind_wandering": 0.6,
-        "dmn_dan_ratio": 0.5,
-        "meta_awareness": 0.4,
-        "return_focus": 0.3
-      }
+      "fatigue_threshold": 0.5
     },
     "expert": {
       "precision_weight": 0.5,
@@ -66,13 +60,7 @@
       "base_theta": 0.25,
       "base_sigma": 0.035,
       "softmax_temperature": 2.0,
-      "fatigue_threshold": 0.75,
-      "transition_thresholds": {
-        "mind_wandering": 0.65,
-        "dmn_dan_ratio": 0.6,
-        "meta_awareness": 0.3,
-        "return_focus": 0.35
-      }
+      "fatigue_threshold": 0.75
     }
   },
   "network_profiles": {

@@ -29,7 +29,6 @@ class AgentConfig:
         self.num_thoughtseeds = len(self.thoughtseeds)
         
         # State tracking
-        self.state_indices = {state: i for i, state in enumerate(self.states)}
         self.transition_counts = defaultdict(lambda: defaultdict(int))
         self.natural_transition_count = 0
         self.forced_transition_count = 0
@@ -39,7 +38,6 @@ class AgentConfig:
         self.state_history = []
         self.meta_awareness_history = []
         self.dominant_ts_history = []
-        self.state_history_over_time = []
         
         # Load per-agent params from dataclass defaults.
         self.params = ActInfParams.expert() if experience_level == 'expert' else ActInfParams.novice()
@@ -384,7 +382,7 @@ class ActInfAgent(AgentConfig):
                 
         return modulations
 
-    def get_transition_probabilities(self, activations: np.ndarray, network_acts: Dict[str, float]) -> Dict[str, float]:
+    def get_transition_probabilities(self, activations: np.ndarray, network_acts: Dict[str, float], targets_by_state: Dict[str, np.ndarray]) -> Dict[str, float]:
         """Calculate probability of transitioning to each mediative state.
         Combines two evidence sources:
         1. Network Similarity: How close current networks are to mediative state expectations.
@@ -393,8 +391,8 @@ class ActInfAgent(AgentConfig):
         scores = {}
         temp = max(1e-6, self.softmax_temperature)
 
-        # Use previous meta-awareness as a proxy (fallback to 0.5)
-        meta = getattr(self, 'prev_meta_awareness', 0.5) if getattr(self, 'prev_meta_awareness', None) is not None else 0.5
+        w_net = self.transition_weight_network
+        w_act = self.transition_weight_activation
 
         for state in self.states:
             # Network expectation similarity (negative L2 distance)
@@ -402,18 +400,13 @@ class ActInfAgent(AgentConfig):
             expect_vec = np.array([expect[net] for net in self.networks])
             net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
             net_dist = np.linalg.norm(net_vec - expect_vec)
-            net_score = np.exp(-net_dist / (temp * 1.0))
 
             # Activation similarity: compare to target activations for that state
-            try:
-                target_ts = self.get_target_activations(state, meta)
-                act_dist = np.linalg.norm(activations - target_ts)
-                act_score = np.exp(-act_dist / (temp * 1.0))
-            except Exception:
-                act_score = 1.0
+            target_ts = targets_by_state[state]
+            act_dist = np.linalg.norm(activations - target_ts)
 
-            # Combine scores (multiplicative fusion)
-            scores[state] = float(net_score * act_score)
+            # Combine scores (deterministic, weighted distances)
+            scores[state] = float(np.exp(-(w_net * net_dist + w_act * act_dist) / (temp * 1.0)))
 
         # Normalize into probabilities (avoid division by zero)
         total = sum(scores.values())

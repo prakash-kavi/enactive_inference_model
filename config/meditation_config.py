@@ -45,31 +45,6 @@ class NetworkProfile:
     FPN: float
     
 @dataclass
-class TransitionThresholds:
-    mind_wandering: float  # Distraction level threshold
-    dmn_dan_ratio: float   # DMN/DAN ratio threshold
-    meta_awareness: float  # Self-reflection threshold for meta-awareness
-    return_focus: float    # Threshold to return to focused states
-    
-    @classmethod
-    def novice(cls) -> 'TransitionThresholds':
-        return cls(
-            mind_wandering=0.6,
-            dmn_dan_ratio=0.5,
-            meta_awareness=0.4,
-            return_focus=0.3
-        )
-    
-    @classmethod
-    def expert(cls) -> 'TransitionThresholds':
-        return cls(
-            mind_wandering=0.65,
-            dmn_dan_ratio=0.6,
-            meta_awareness=0.3,
-            return_focus=0.35
-        )
-
-@dataclass
 class StateTargetActivations:
     attend_breath: float
     equanimity: float
@@ -130,8 +105,9 @@ class ActInfParams:
     base_theta: float
     base_sigma: float
     softmax_temperature: float
+    transition_weight_network: float
+    transition_weight_activation: float
     fatigue_threshold: float
-    transition_thresholds: TransitionThresholds
     # VFE Precision Parameters
     sensory_precision_base: float
     sensory_precision_van_scalar: float
@@ -170,6 +146,8 @@ class ActInfParams:
             vfe_accum_alpha=0.1,
             base_theta=0.2,
             base_sigma=0.05,
+            transition_weight_network=1.0,
+            transition_weight_activation=1.0,
             fpn_accum_decay=0.98,
             fpn_accum_inc=0.02,
             fatigue_reset=0.4,
@@ -195,7 +173,6 @@ class ActInfParams:
             softmax_temperature=2.5,
             efficiency_weight=0.3,
             fatigue_threshold=0.50,
-            transition_thresholds=TransitionThresholds.novice(),
             # Newly extracted magic numbers
             sensory_precision_base=0.1,
             sensory_precision_van_scalar=5.0,
@@ -231,6 +208,8 @@ class ActInfParams:
             vfe_accum_alpha=0.1,
             base_theta=0.25,
             base_sigma=0.035,
+            transition_weight_network=1.0,
+            transition_weight_activation=1.0,
             fpn_accum_decay=0.98,
             fpn_accum_inc=0.02,
             fatigue_reset=0.4,
@@ -256,7 +235,6 @@ class ActInfParams:
             softmax_temperature=2.0,   
             efficiency_weight=0.7,
             fatigue_threshold=0.75,
-            transition_thresholds=TransitionThresholds.expert(),
             # Newly extracted magic numbers
             sensory_precision_base=0.1,
             sensory_precision_van_scalar=5.0,
@@ -370,67 +348,35 @@ class ThoughtseedParams:
         ))
     }
     
-    # How meta-awareness modulates each thoughtseed in each mediative state
-    META_AWARENESS_MODULATORS = {
+    # Unified target adjustments: (meta_modulator, expert_offset)
+    TARGET_ADJUSTMENTS = {
         "breath_focus": {
-            "attend_breath": 0.1,
-            "equanimity": 0.25,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.1
+            "attend_breath": (0.1, 0.1),
+            "equanimity": (0.25, 0.2),
+            "pain_discomfort": (0.0, 0.0),
+            "pending_tasks": (0.0, 0.0),
+            "aha_moment": (0.1, 0.0)
         },
         "mind_wandering": {
-            "attend_breath": 0.0,
-            "equanimity": -0.05,
-            "pain_discomfort": -0.1,
-            "pending_tasks": -0.1,
-            "aha_moment": 0.3
+            "attend_breath": (0.0, 0.0),
+            "equanimity": (-0.05, 0.05),
+            "pain_discomfort": (-0.1, 0.4),
+            "pending_tasks": (-0.1, 0.4),
+            "aha_moment": (0.3, 0.0)
         },
         "meta_awareness": {
-            "attend_breath": 0.1,
-            "equanimity": 0.1,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.1
+            "attend_breath": (0.1, 0.0),
+            "equanimity": (0.1, 0.1),
+            "pain_discomfort": (0.0, 0.0),
+            "pending_tasks": (0.0, 0.0),
+            "aha_moment": (0.1, 0.1)
         },
         "redirect_breath": {
-            "attend_breath": 0.2,
-            "equanimity": 0.25,
-            "pain_discomfort": -0.1,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.1
-        }
-    }
-    
-    # Experience-specific adjustments (values to add for experts)
-    EXPERT_ADJUSTMENTS = {
-        "breath_focus": {
-            "attend_breath": 0.1,
-            "equanimity": 0.2,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.0
-        },
-        "mind_wandering": {
-            "attend_breath": 0.0,
-            "equanimity": 0.05,
-            "pain_discomfort": 0.4,
-            "pending_tasks": 0.4,
-            "aha_moment": 0.0
-        },
-        "meta_awareness": {
-            "attend_breath": 0.0,
-            "equanimity": 0.1,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.1
-        },
-        "redirect_breath": {
-            "attend_breath": 0.0,
-            "equanimity": 0.2,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.0
+            "attend_breath": (0.2, 0.0),
+            "equanimity": (0.25, 0.2),
+            "pain_discomfort": (-0.1, 0.0),
+            "pending_tasks": (0.0, 0.0),
+            "aha_moment": (0.1, 0.0)
         }
     }
     
@@ -440,15 +386,12 @@ class ThoughtseedParams:
         # Start with base activations for this mediative state
         activations = ThoughtseedParams.BASE_ACTIVATIONS[state].copy()
         
-        # Apply meta-awareness modulation
+        # Apply unified adjustments
         for ts in activations:
-            modulator = ThoughtseedParams.META_AWARENESS_MODULATORS[state][ts]
-            activations[ts] += modulator * meta_awareness
-        
-        # Apply expert adjustments if applicable
-        if experience_level == 'expert':
-            for ts in activations:
-                activations[ts] += ThoughtseedParams.EXPERT_ADJUSTMENTS[state].get(ts, 0)
+            meta_mod, expert_offset = ThoughtseedParams.TARGET_ADJUSTMENTS[state][ts]
+            activations[ts] += meta_mod * meta_awareness
+            if experience_level == 'expert':
+                activations[ts] += expert_offset
         
         return activations
 

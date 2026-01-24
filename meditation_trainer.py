@@ -32,21 +32,19 @@ class Trainer:
         # 1. Initialization
         current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness = self._initialize_simulation()
         
-        # Local tracking variables
-        time_in_focused_state = 0
         state_transition_patterns = []
         transition_timestamps = []
 
         # 2. Training Loop
         for t in range(self.agent.timesteps):
             # 2.1 Top-Down Pass (Dynamics)
-            meta_awareness, activations, time_in_focused_state = self._pass_top_down(
-                current_state, current_dwell, dwell_limit, activations, meta_awareness, time_in_focused_state
+            meta_awareness, activations, targets_by_state = self._pass_top_down(
+                current_state, current_dwell, dwell_limit, activations, meta_awareness
             )
             
             # 2.2 Bottom-Up Pass (Perception & Learning)
             network_acts, sensory_inference, free_energy, sensory_nll = self._pass_bottom_up(
-                current_state, activations, meta_awareness
+                current_state, activations, meta_awareness, targets_by_state[current_state]
             )
 
             # 2.3 Record History
@@ -54,7 +52,7 @@ class Trainer:
 
             # 2.4 State Transitions (Policy)
             transition_result = self._handle_state_transitions(
-                current_state, current_dwell, dwell_limit, activations, network_acts, free_energy, t
+                current_state, current_dwell, dwell_limit, activations, network_acts, free_energy, t, targets_by_state
             )
             
             if transition_result:
@@ -100,7 +98,7 @@ class Trainer:
         return current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness
 
     def _pass_top_down(self, current_state: str, current_dwell: int, dwell_limit: int, 
-                      activations: np.ndarray, prev_meta_awareness: float, time_in_focused_state: int) -> Tuple[float, np.ndarray, int]:
+                      activations: np.ndarray, prev_meta_awareness: float) -> Tuple[float, np.ndarray, Dict[str, np.ndarray]]:
         """Execute Top-Down dynamics: Meta-awareness update, transition blending, and thoughtseed evolution."""
         
         # A. Calculate and Smooth Meta-awareness
@@ -112,8 +110,12 @@ class Trainer:
         # B. Handle Transition Blending (if needed)
         activations = self._apply_transition_blending(activations)
 
-        # C. Get Target Activations (L3 -> L2 Prior)
-        target_activations = self.agent.get_target_activations(current_state, meta_awareness)
+        # C. Get Target Activations (L3 -> L2 Prior) once per timestep
+        targets_by_state = {
+            state: self.agent.get_target_activations(state, meta_awareness)
+            for state in self.agent.states
+        }
+        target_activations = targets_by_state[current_state]
 
         # D. Update Thoughtseed Dynamics (L2 Belief Update)
         activations = self.agent.update_thoughtseed_dynamics(
@@ -122,14 +124,12 @@ class Trainer:
 
         # E. Track Distraction Buildup
         if current_state in ["breath_focus", "redirect_breath"]:
-            time_in_focused_state += 1
             progress = min(1.5, current_dwell / max(10, dwell_limit))
             self.agent.distraction_buildup_rates.append(self.agent.distraction_pressure * progress)
         else:
-            time_in_focused_state = 0
             self.agent.distraction_buildup_rates.append(0)
             
-        return meta_awareness, activations, time_in_focused_state
+        return meta_awareness, activations, targets_by_state
 
     def _apply_transition_blending(self, activations: np.ndarray) -> np.ndarray:
         """Apply smoothing to activations during state transitions."""
@@ -151,7 +151,7 @@ class Trainer:
                 
         return activations
 
-    def _pass_bottom_up(self, current_state: str, activations: np.ndarray, meta_awareness: float) -> Tuple[Dict[str, float], np.ndarray, float, float]:
+    def _pass_bottom_up(self, current_state: str, activations: np.ndarray, meta_awareness: float, target_activations: np.ndarray) -> Tuple[Dict[str, float], np.ndarray, float, float]:
         """Execute Bottom-Up dynamics: Network computation, Sensory Inference, and VFE calculation."""
         
         # A. Compute network activations (L1 Generative Process)
@@ -165,7 +165,6 @@ class Trainer:
         if len(self.agent.free_energy_history) > 5:
             vfe_trend = np.mean(np.diff(self.agent.free_energy_history[-5:]))
 
-        target_activations = self.agent.get_target_activations(current_state, meta_awareness)
         free_energy, sensory_nll, _ = self.agent.calculate_vfe(
             activations, target_activations, sensory_inference, meta_awareness, vfe_trend
         )
@@ -190,10 +189,10 @@ class Trainer:
         self.agent.activations_history.append(activations.copy())
         self.agent.meta_awareness_history.append(meta_awareness)
         self.agent.dominant_ts_history.append(dominant_ts)
-        self.agent.state_history_over_time.append(self.agent.state_indices[current_state])
 
     def _handle_state_transitions(self, current_state: str, current_dwell: int, dwell_limit: int,
-                                activations: np.ndarray, network_acts: Dict[str, float], free_energy: float, t: int) -> Optional[Tuple]:
+                                activations: np.ndarray, network_acts: Dict[str, float], free_energy: float, t: int,
+                                targets_by_state: Dict[str, np.ndarray]) -> Optional[Tuple]:
         """Check for and execute state transitions based on VFE and dwell time."""
         
         # Accumulate VFE (Evidence of Policy Failure)
@@ -217,17 +216,24 @@ class Trainer:
                 network_acts,
                 free_energy,
                 meta_awareness=self.agent.prev_meta_awareness,
-                forced=forced
+                forced=forced,
+                targets_by_state=targets_by_state
             )
             
         return None
 
     def _execute_transition(self, current_state: str, activations: np.ndarray, network_acts: Dict[str, float], 
-                           free_energy: float, meta_awareness: float, forced: bool = False) -> Tuple:
+                           free_energy: float, meta_awareness: float, forced: bool = False,
+                           targets_by_state: Optional[Dict[str, np.ndarray]] = None) -> Tuple:
         """Execute the transition logic: sample next state, blend activations, and reset counters."""
         
         # 1. Get Transition Probabilities
-        probs = self.agent.get_transition_probabilities(activations, network_acts)
+        if targets_by_state is None:
+            targets_by_state = {
+                state: self.agent.get_target_activations(state, meta_awareness)
+                for state in self.agent.states
+            }
+        probs = self.agent.get_transition_probabilities(activations, network_acts, targets_by_state)
 
         # Force transition (exclude current)
         if current_state in probs:
@@ -263,7 +269,7 @@ class Trainer:
         )
 
         # 5. Calculate new targets and blend
-        new_target = self.agent.get_target_activations(next_state, meta_awareness)
+        new_target = targets_by_state[next_state].copy()
         
         # Introduce biological variability
         low = self.agent.transition_variation_low
@@ -297,19 +303,6 @@ class Trainer:
         # Serialize transition counts
         serial_transition_counts = {k: {kk: int(vv) for kk, vv in inner.items()} for k, inner in self.agent.transition_counts.items()}
 
-        tt = self.agent.params.transition_thresholds # Access via params in new structure if needed, or agent itself if updated
-        # Note: In previous code, it accessed self.agent.transition_thresholds. 
-        # But ActInfParams put it in self.params.transition_thresholds? 
-        # Let's check agent init. `for k, v in vars(self.params).items(): setattr(self, k, v)`. 
-        # So `agent.transition_thresholds` exists.
-        
-        serial_transition_thresholds = {
-            'mind_wandering': float(self.agent.transition_thresholds.mind_wandering),
-            'dmn_dan_ratio': float(self.agent.transition_thresholds.dmn_dan_ratio),
-            'meta_awareness': float(self.agent.transition_thresholds.meta_awareness),
-            'return_focus': float(self.agent.transition_thresholds.return_focus)
-        }
-
         # Serialize patterns
         serial_patterns = []
         for (frm, to, ts_dict, net_dict, fe) in state_transition_patterns:
@@ -323,7 +316,6 @@ class Trainer:
 
         transition_stats = {
             'transition_counts': serial_transition_counts,
-            'transition_thresholds': serial_transition_thresholds,
             'natural_transitions': int(self.agent.natural_transition_count),
             'forced_transitions': int(self.agent.forced_transition_count),
             'transition_timestamps': [int(x) for x in transition_timestamps],
