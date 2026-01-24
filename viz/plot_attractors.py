@@ -9,8 +9,6 @@ Generates attractor landscape visualizations from tail of training rollouts:
 from __future__ import annotations
 
 import numpy as np
-import logging
-import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap
@@ -178,7 +176,7 @@ def plot_attractor_2d(
     fig.suptitle(suptitle or "Thoughtseed Attractor Trajectories", fontsize=16, fontweight="bold")
 
     out_path = save_path or (Path(pu.PLOT_DIR) / "attractor_landscape_2d.png")
-    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    pu.save_figure(fig, out_path, "Attractor 2D")
     plt.close(fig)
 
 def _kernel_surface(
@@ -357,7 +355,7 @@ def plot_attractor_landscape_3d(
     cbar.ax.tick_params(labelsize=9)
 
     out_path = save_path or (Path(pu.PLOT_DIR) / "attractor_landscape_3d.png")
-    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    pu.save_figure(fig, out_path, "Attractor 3D")
     plt.close(fig)
 
 def generate_plots(tail: int | None = 500) -> None:
@@ -376,11 +374,7 @@ def generate_plots(tail: int | None = 500) -> None:
         save_path=Path(pu.PLOT_DIR) / "Fig5B_Attractor3D.png"
     )
 
-    try:
-        rel = os.path.relpath(str(pu.PLOT_DIR), start=os.getcwd())
-    except Exception:
-        rel = str(pu.PLOT_DIR)
-    logging.info("Saved attractor plots to %s", rel)
+    # save_figure already logs file paths
 
 if __name__ == "__main__":
     generate_plots()

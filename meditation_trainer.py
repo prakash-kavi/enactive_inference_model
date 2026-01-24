@@ -11,7 +11,7 @@ import logging
 import numpy as np
 from typing import Tuple, List, Dict, Any, Optional
 
-from meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates
+from meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates, build_transition_stats
 from config.meditation_config import STATE_DWELL_TIMES, DEFAULTS
 
 class Trainer:
@@ -297,31 +297,12 @@ class Trainer:
 
         aggregates = compute_state_aggregates(self.agent)
 
-        # Serialize transition counts
-        serial_transition_counts = {k: {kk: int(vv) for kk, vv in inner.items()} for k, inner in self.agent.transition_counts.items()}
-
-        # Serialize patterns
-        serial_patterns = []
-        for (frm, to, ts_dict, net_dict, fe) in state_transition_patterns:
-            serial_patterns.append({
-                'from': frm,
-                'to': to,
-                'thoughtseed_activations': {k: float(v) for k, v in ts_dict.items()},
-                'network_acts': {k: float(v) for k, v in net_dict.items()},
-                'free_energy': float(fe)
-            })
-
-        transition_stats = {
-            'transition_counts': serial_transition_counts,
-            'natural_transitions': int(self.agent.natural_transition_count),
-            'forced_transitions': int(self.agent.forced_transition_count),
-            'transition_timestamps': [int(x) for x in transition_timestamps],
-            'state_transition_patterns': serial_patterns,
-            'distraction_buildup_rates': [float(x) for x in self.agent.distraction_buildup_rates],
-            'average_activations_at_transition': aggregates.get('average_activations_at_transition', {}),
-            'average_network_activations_by_state': aggregates.get('average_network_activations_by_state', {}),
-            'average_free_energy_by_state': aggregates.get('average_free_energy_by_state', {}),
-        }
+        transition_stats = build_transition_stats(
+            self.agent,
+            state_transition_patterns,
+            transition_timestamps,
+            aggregates
+        )
 
         # Debug logging
         logging.info("%s NETWORK VALUES BY STATE:", self.agent.experience_level.upper())
@@ -343,5 +324,5 @@ class Trainer:
         logging.info("  - Natural transitions: %d, Forced transitions: %d", self.agent.natural_transition_count, self.agent.forced_transition_count)
 
         # Generate consumer-ready JSONs
-        _save_json_outputs(self.agent, output_dir=out_dir)
+        _save_json_outputs(self.agent, output_dir=out_dir, aggregates=aggregates)
 

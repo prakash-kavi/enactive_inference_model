@@ -19,7 +19,8 @@ from matplotlib.gridspec import GridSpec
 from .plotting_utils import (
     set_plot_style, load_json_data, get_tail_stats, smooth_series,
     PLOT_DIR, TAIL_STEPS, STATE_COLORS, NETWORK_COLORS,
-    STATE_SHORT_NAMES, STATE_DISPLAY_NAMES, THOUGHTSEED_COLORS
+    STATE_SHORT_NAMES, STATE_DISPLAY_NAMES, THOUGHTSEED_COLORS,
+    save_figure
 )
 from config.meditation_config import STATES, THOUGHTSEEDS
 
@@ -161,12 +162,7 @@ def plot_hierarchy(data, save_path=None):
     plt.subplots_adjust(hspace=0.25, bottom=0.12) 
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        try:
-            rel = os.path.relpath(str(save_path), start=os.getcwd())
-        except Exception:
-            rel = save_path
-        logging.info("Saved Hierarchy Plot to %s", rel)
+        save_figure(fig, save_path, "Hierarchy Plot")
     plt.close()
 
 def plot_time_series(novice_stats, expert_stats, save_path=None):
@@ -239,12 +235,7 @@ def plot_time_series(novice_stats, expert_stats, save_path=None):
 
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        try:
-            rel = os.path.relpath(str(save_path), start=os.getcwd())
-        except Exception:
-            rel = save_path
-        logging.info("Saved Time Series to %s", rel)
+        save_figure(fig, save_path, "Time Series")
     plt.close()
 
 def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
@@ -368,12 +359,7 @@ def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
 
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        try:
-            rel = os.path.relpath(str(save_path), start=os.getcwd())
-        except Exception:
-            rel = save_path
-        logging.info("Saved Time Series to %s", rel)
+        save_figure(fig, save_path, "Time Series")
     plt.close()
 
 def plot_free_energy_bar(novice_stats, expert_stats, save_path=None):
@@ -423,12 +409,7 @@ def plot_free_energy_bar(novice_stats, expert_stats, save_path=None):
 
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        try:
-            rel = os.path.relpath(str(save_path), start=os.getcwd())
-        except Exception:
-            rel = save_path
-        logging.info("Saved FE Bar to %s", rel)
+        save_figure(fig, save_path, "FE Bar")
     plt.close()
 
 def plot_network_radar(novice_ts, expert_ts, save_path=None):
@@ -490,12 +471,7 @@ def plot_network_radar(novice_ts, expert_ts, save_path=None):
 
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        try:
-            rel = os.path.relpath(str(save_path), start=os.getcwd())
-        except Exception:
-            rel = save_path
-        logging.info("Saved Radar to %s", rel)
+        save_figure(fig, save_path, "Radar")
     plt.close()
 
 def get_dwell_times(stats):
@@ -552,17 +528,10 @@ def plot_dwell_times(novice_stats, expert_stats, save_path=None):
 
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        try:
-            rel = os.path.relpath(str(save_path), start=os.getcwd())
-        except Exception:
-            rel = save_path
-        logging.info("Saved Dwell Times to %s", rel)
+        save_figure(fig, save_path, "Dwell Times")
     plt.close()
 
 if __name__ == "__main__":
-    os.makedirs(PLOT_DIR, exist_ok=True)
-    
     # Load Data
     nov_ts, nov_ai, nov_stats = load_json_data("novice")
     exp_ts, exp_ai, exp_stats = load_json_data("expert")

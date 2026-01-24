@@ -11,6 +11,7 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
+from pathlib import Path
 
 TAIL_STEPS = 200
 
@@ -65,6 +66,22 @@ def set_plot_style():
     plt.rcParams["grid.alpha"] = 0.3
     plt.rcParams["figure.dpi"] = 300
     plt.rcParams["savefig.bbox"] = "tight"
+
+def save_figure(fig, save_path, label=None):
+    """Save a figure and log a consistent message."""
+    if not save_path:
+        return
+    path = Path(save_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    try:
+        rel = os.path.relpath(str(path), start=os.getcwd())
+    except Exception:
+        rel = str(path)
+    if label:
+        logging.info("Saved %s to %s", label, rel)
+    else:
+        logging.info("Saved plot to %s", rel)
 
 def load_time_series(cohort):
     """Load thoughtseed time-series payload for a cohort."""

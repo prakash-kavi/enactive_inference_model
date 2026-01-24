@@ -14,7 +14,6 @@ from typing import Dict, List
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 
 from config.meditation_config import STATES
 from .plotting_utils import (
@@ -24,6 +23,7 @@ from .plotting_utils import (
     STATE_COLORS,
     STATE_SHORT_NAMES,
     load_time_series,
+    save_figure,
     set_plot_style,
 )
 
@@ -124,10 +124,8 @@ def plot_convergence_panels(cohort: str, window: int = 25, tail_span: int = 200,
     fig.suptitle(f"Convergence diagnostics ({cohort.title()})", fontsize=16, fontweight="bold")
     plt.tight_layout(rect=[0, 0, 1, 0.97])
 
-    plot_dir = Path(PLOT_DIR)
-    plot_dir.mkdir(parents=True, exist_ok=True)
-    out_path = plot_dir / f"FigS1_Convergence_{cohort.title()}.png"
-    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    out_path = Path(PLOT_DIR) / f"FigS1_Convergence_{cohort.title()}.png"
+    save_figure(fig, out_path, "Convergence")
     plt.close(fig)
 
     if free_energy.size:
@@ -149,11 +147,7 @@ def generate_all(window: int = 25, tail_span: int = 200) -> None:
             global_fe_max = max(global_fe_max, free_energy.max())
     for cohort in ("novice", "expert"):
         plot_convergence_panels(cohort, window=window, tail_span=tail_span, fe_ylim=(global_fe_min, global_fe_max))
-    try:
-        rel = os.path.relpath(str(plot_dir), start=os.getcwd())
-    except Exception:
-        rel = str(plot_dir)
-    logging.info("Saved convergence plots to %s", rel)
+    # save_figure already logs file paths
 
 if __name__ == "__main__":
     generate_all()

@@ -34,7 +34,7 @@ def ensure_directories(base_dir=None):
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     logging.info("Directories created/verified: data/, plots/")
 
-def _save_json_outputs(learner, output_dir=None):
+def _save_json_outputs(learner, output_dir=None, aggregates=None):
     """Write learner parameters and time series to JSON files.
 
     Converts NumPy arrays to lists and computes per-state aggregates.
@@ -47,7 +47,8 @@ def _save_json_outputs(learner, output_dir=None):
     def convert(obj):
         return to_json_serializable(obj)
 
-    aggregates = compute_state_aggregates(learner)
+    if aggregates is None:
+        aggregates = compute_state_aggregates(learner)
     activations_history = learner.activations_history or []
     network_activations_history = learner.network_activations_history or []
 
@@ -105,6 +106,32 @@ def _save_json_outputs(learner, output_dir=None):
         rel = output_dir
     logging.info("  - JSON parameter files saved to %s directory", rel)
 
+def build_transition_stats(agent, state_transition_patterns, transition_timestamps, aggregates):
+    """Build a serializable transition stats payload for logging/output."""
+    serial_transition_counts = {k: {kk: int(vv) for kk, vv in inner.items()} for k, inner in agent.transition_counts.items()}
+
+    serial_patterns = []
+    for (frm, to, ts_dict, net_dict, fe) in state_transition_patterns:
+        serial_patterns.append({
+            'from': frm,
+            'to': to,
+            'thoughtseed_activations': {k: float(v) for k, v in ts_dict.items()},
+            'network_acts': {k: float(v) for k, v in net_dict.items()},
+            'free_energy': float(fe)
+        })
+
+    return {
+        'transition_counts': serial_transition_counts,
+        'natural_transitions': int(getattr(agent, "natural_transition_count", 0)),
+        'forced_transitions': int(getattr(agent, "forced_transition_count", 0)),
+        'transition_timestamps': [int(x) for x in transition_timestamps],
+        'state_transition_patterns': serial_patterns,
+        'distraction_buildup_rates': [float(x) for x in getattr(agent, "distraction_buildup_rates", [])],
+        'average_activations_at_transition': aggregates.get('average_activations_at_transition', {}),
+        'average_network_activations_by_state': aggregates.get('average_network_activations_by_state', {}),
+        'average_free_energy_by_state': aggregates.get('average_free_energy_by_state', {}),
+    }
+
 def to_json_serializable(obj):
     """Recursively convert NumPy arrays/lists/dicts to JSON-serializable forms."""
     if isinstance(obj, np.ndarray):
@@ -125,24 +152,44 @@ def compute_state_aggregates(learner):
     pred_error_means = {}
     precision_means = {}
 
+    state_indices = {
+        state: [j for j, s in enumerate(learner.state_history) if s == state]
+        for state in states
+    }
+
+    activations_history = learner.activations_history
+    network_history = learner.network_activations_history
+    free_energy_history = np.asarray(learner.free_energy_history, dtype=float)
+    pred_error_history = np.asarray(learner.prediction_error_history, dtype=float)
+    precision_history = np.asarray(learner.precision_history, dtype=float)
+
     for state in states:
-        indices = [j for j, s in enumerate(learner.state_history) if s == state]
+        indices = state_indices.get(state, [])
         if not indices:
             continue
 
-        activation_means[state] = {
-            ts: float(np.mean([learner.activations_history[j][i] for j in indices]))
-            for i, ts in enumerate(learner.thoughtseeds)
-        }
+        if activations_history:
+            acts = np.asarray([activations_history[j] for j in indices], dtype=float)
+            act_means = np.mean(acts, axis=0)
+            activation_means[state] = {
+                ts: float(act_means[i])
+                for i, ts in enumerate(learner.thoughtseeds)
+            }
 
-        network_means[state] = {
-            net: float(np.mean([learner.network_activations_history[j][net] for j in indices]))
-            for net in learner.networks
-        }
+        if network_history:
+            net_matrix = np.asarray(
+                [[network_history[j].get(net, 0.0) for net in learner.networks] for j in indices],
+                dtype=float
+            )
+            net_means = np.mean(net_matrix, axis=0)
+            network_means[state] = {
+                net: float(net_means[i])
+                for i, net in enumerate(learner.networks)
+            }
 
-        free_energy_means[state] = float(np.mean([learner.free_energy_history[j] for j in indices]))
-        pred_error_means[state] = float(np.mean([learner.prediction_error_history[j] for j in indices]))
-        precision_means[state] = float(np.mean([learner.precision_history[j] for j in indices]))
+        free_energy_means[state] = float(np.mean(free_energy_history[indices]))
+        pred_error_means[state] = float(np.mean(pred_error_history[indices]))
+        precision_means[state] = float(np.mean(precision_history[indices]))
 
     avg_acts_at_trans = {
         state: (np.mean(acts, axis=0).tolist() if len(acts) > 0 else np.zeros(learner.num_thoughtseeds).tolist())
