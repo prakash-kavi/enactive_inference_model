@@ -229,10 +229,7 @@ class Trainer:
         
         # 1. Get Transition Probabilities
         if targets_by_state is None:
-            targets_by_state = {
-                state: self.agent.get_target_activations(state, meta_awareness)
-                for state in self.agent.states
-            }
+            raise ValueError("targets_by_state must be provided for transition scoring.")
         probs = self.agent.get_transition_probabilities(activations, network_acts, targets_by_state)
 
         # Force transition (exclude current)
@@ -328,15 +325,12 @@ class Trainer:
 
         # Debug logging
         logging.info("%s NETWORK VALUES BY STATE:", self.agent.experience_level.upper())
+        state_network_means = aggregates.get('average_network_activations_by_state', {})
         for state in self.agent.states:
             logging.info("  %s:", state)
-            indices = [j for j, s in enumerate(self.agent.state_history) if s == state]
-            if indices:
-                state_networks = {
-                    net: float(np.mean([self.agent.network_activations_history[j][net] for j in indices])) 
-                    for net in self.agent.networks
-                }
-                for net in self.agent.networks:
+            state_networks = state_network_means.get(state, {})
+            for net in self.agent.networks:
+                if net in state_networks:
                     logging.info("    %s: %.2f", net, state_networks[net])
 
         # Save to file

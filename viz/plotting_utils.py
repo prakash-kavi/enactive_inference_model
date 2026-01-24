@@ -35,6 +35,8 @@ STATE_COLORS = {
     "redirect_breath": "#ff7f0e",
 }
 
+NETWORK_KEYS = ["DMN", "VAN", "DAN", "FPN"]
+
 NETWORK_COLORS = {
     'DMN': '#CA3542',
     'VAN': '#B77FB4',
@@ -63,6 +65,15 @@ def set_plot_style():
     plt.rcParams["grid.alpha"] = 0.3
     plt.rcParams["figure.dpi"] = 300
     plt.rcParams["savefig.bbox"] = "tight"
+
+def load_time_series(cohort):
+    """Load thoughtseed time-series payload for a cohort."""
+    ts_path = os.path.join(DATA_DIR, f"thoughtseed_params_{cohort}.json")
+    if not os.path.exists(ts_path):
+        raise FileNotFoundError(f"Missing training output: {ts_path}")
+    with open(ts_path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    return payload.get("time_series", {})
 
 def load_json_data(cohort):
     """

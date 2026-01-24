@@ -8,7 +8,6 @@ Generates convergence diagnostic figures:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Dict, List
 
@@ -18,49 +17,15 @@ import numpy as np
 import os
 
 from config.meditation_config import STATES
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-PLOT_DIR = BASE_DIR / "plots"
-
-STATE_COLORS = {
-    "breath_focus": "#2ca02c",
-    "mind_wandering": "#1f77b4",
-    "meta_awareness": "#d62728",
-    "redirect_breath": "#ff7f0e",
-}
-
-STATE_SHORT = {
-    "breath_focus": "BF",
-    "mind_wandering": "MW",
-    "meta_awareness": "MA",
-    "redirect_breath": "RA",
-}
-
-NETWORK_KEYS = ["DMN", "VAN", "DAN", "FPN"]
-NETWORK_COLORS = {
-    "DMN": "#CA3542",
-    "VAN": "#B77FB4",
-    "DAN": "#2C8B4B",
-    "FPN": "#E58429",
-}
-
-
-def set_plot_style() -> None:
-    plt.style.use("seaborn-v0_8-whitegrid")
-    plt.rcParams["font.family"] = "DejaVu Sans"
-    plt.rcParams["axes.linewidth"] = 0.5
-    plt.rcParams["grid.linewidth"] = 0.5
-    plt.rcParams["grid.alpha"] = 0.3
-
-
-def _load_series(cohort: str) -> Dict[str, List]:
-    path = DATA_DIR / f"thoughtseed_params_{cohort}.json"
-    if not path.exists():
-        raise FileNotFoundError(f"Missing training output: {path}")
-    with path.open("r", encoding="utf-8") as fh:
-        payload = json.load(fh)
-    return payload.get("time_series", {})
+from .plotting_utils import (
+    NETWORK_COLORS,
+    NETWORK_KEYS,
+    PLOT_DIR,
+    STATE_COLORS,
+    STATE_SHORT_NAMES,
+    load_time_series,
+    set_plot_style,
+)
 
 
 def rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
@@ -106,7 +71,7 @@ def _network_matrix(history: List[Dict[str, float]]) -> np.ndarray:
 
 def plot_convergence_panels(cohort: str, window: int = 25, tail_span: int = 200, fe_ylim: tuple[float, float] | None = None) -> Path:
     set_plot_style()
-    series = _load_series(cohort)
+    series = load_time_series(cohort)
 
     # Extract time-series produced by training outputs (thoughtseed_params.time_series)
     free_energy = np.asarray(series.get("free_energy_history", []), dtype=float)
@@ -140,7 +105,7 @@ def plot_convergence_panels(cohort: str, window: int = 25, tail_span: int = 200,
     ax = axes[1]
     fractions = cumulative_state_fraction(states)
     for state in STATES:
-        ax.plot(steps, fractions[state], color=STATE_COLORS[state], linewidth=1.8, label=STATE_SHORT[state])
+        ax.plot(steps, fractions[state], color=STATE_COLORS[state], linewidth=1.8, label=STATE_SHORT_NAMES[state])
     ax.set_ylabel("Cumulative fraction")
     ax.set_xlabel("Timestep")
     ax.set_ylim(0.0, 1.0)
@@ -159,8 +124,9 @@ def plot_convergence_panels(cohort: str, window: int = 25, tail_span: int = 200,
     fig.suptitle(f"Convergence diagnostics ({cohort.title()})", fontsize=16, fontweight="bold")
     plt.tight_layout(rect=[0, 0, 1, 0.97])
 
-    PLOT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = PLOT_DIR / f"FigS1_Convergence_{cohort.title()}.png"
+    plot_dir = Path(PLOT_DIR)
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    out_path = plot_dir / f"FigS1_Convergence_{cohort.title()}.png"
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
@@ -171,11 +137,12 @@ def plot_convergence_panels(cohort: str, window: int = 25, tail_span: int = 200,
 
 
 def generate_all(window: int = 25, tail_span: int = 200) -> None:
+    plot_dir = Path(PLOT_DIR)
     # Compute global min/max for free energy across cohorts to set consistent ylim
     global_fe_min = float('inf')
     global_fe_max = float('-inf')
     for cohort in ("novice", "expert"):
-        series = _load_series(cohort)
+        series = load_time_series(cohort)
         free_energy = np.asarray(series.get("free_energy_history", []), dtype=float)
         if free_energy.size:
             global_fe_min = min(global_fe_min, free_energy.min())
@@ -183,12 +150,10 @@ def generate_all(window: int = 25, tail_span: int = 200) -> None:
     for cohort in ("novice", "expert"):
         plot_convergence_panels(cohort, window=window, tail_span=tail_span, fe_ylim=(global_fe_min, global_fe_max))
     try:
-        rel = os.path.relpath(str(PLOT_DIR), start=os.getcwd())
+        rel = os.path.relpath(str(plot_dir), start=os.getcwd())
     except Exception:
-        rel = str(PLOT_DIR)
+        rel = str(plot_dir)
     logging.info("Saved convergence plots to %s", rel)
 
 if __name__ == "__main__":
     generate_all()
-
-
