@@ -136,9 +136,6 @@ class ActInfAgent(AgentConfig):
         self.in_transition = False
         self.transition_counter = 0
         self.transition_target = None
-        self.in_transition = False
-        self.transition_counter = 0
-        self.transition_target = None
         self.prev_meta_awareness = 0.0
         self.aha_drive = 0.0 # Standardized access for Aha signal
         

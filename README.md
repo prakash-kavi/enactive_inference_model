@@ -161,7 +161,7 @@ Four empirically-based meditative states:
 
 ### Thoughtseeds
 
-Five hypothetical constructs representing competing content-level activations:
+Five hypothetical attentional agents :
 - `attend_breath`
 - `pain_discomfort`
 - `pending_tasks`
@@ -175,7 +175,7 @@ Five hypothetical constructs representing competing content-level activations:
 python run_training.py
 
 # Generate training visualizations
-python plot_training.py
+python viz/plot_training.py
 
 # Run simulation with trained attractors
 python run_simulation.py

@@ -26,9 +26,18 @@ def load_trained_attractors(level: str, training_dir: str = "data/training") -> 
 
 def initialize_agent_with_attractors(agent: ActInfAgent, attractors: dict):
     """Initialize agent's state-network expectations with trained attractors."""
+    # Validate that all states are present in attractors
+    missing_states = [state for state in agent.states if state not in attractors]
+    if missing_states:
+        raise ValueError(f"Missing attractors for states: {missing_states}")
+    
     # Override the default state-network expectations with trained values
     for state in agent.states:
         if state in attractors:
+            # Validate network keys match
+            missing_networks = [net for net in agent.networks if net not in attractors[state]]
+            if missing_networks:
+                raise ValueError(f"Missing networks in attractor for state {state}: {missing_networks}")
             agent.learned_network_profiles["state_network_expectations"][state] = attractors[state].copy()
     
     # Rebuild state expectation vectors
