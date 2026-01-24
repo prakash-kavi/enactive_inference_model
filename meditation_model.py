@@ -13,7 +13,7 @@ from config.meditation_config import (
     ActInfParams, ThoughtseedParams, MetacognitionParams,
     NETWORK_PROFILES, DEFAULTS, NETWORK_MODULATION
 )
-from meditation_utils import ou_update, clip_array
+from meditation_utils import ou_update, clip_array, LeakyAccumulator
 
 class AgentConfig:
     """Base class for thoughtseed dynamics and mediative state handling.
@@ -54,11 +54,14 @@ class AgentConfig:
         # Track distraction buildup patterns
         self.distraction_buildup_rates = []
         
-        # Initialize accumulators (Leaky Integrators)
-        self.dmn_accumulator = 0.0
-        self.fpn_accumulator = 0.0
+        # Initialize accumulators (Leaky Integrators) - AFTER params are loaded
+        self.dmn_accumulator = LeakyAccumulator(decay=0.9, gain=0.1, activation='sigmoid') 
+        self.aha_accumulator = LeakyAccumulator(decay=self.aha_accum_decay, gain=self.aha_accum_inc, activation='sigmoid')
+        self.fpn_accumulator = LeakyAccumulator(decay=self.fpn_accum_decay, gain=1.0 - self.fpn_accum_decay, activation='linear')
+        self.vfe_accumulator = LeakyAccumulator(decay=self.vfe_accum_decay, gain=1.0 - self.vfe_accum_decay, activation='linear')
         # Placeholder for previous network activations (initialized in ActInfAgent)
         self.prev_network_acts: Optional[Dict[str, float]] = None
+
 
     def get_target_activations(self, state: str, meta_awareness: float) -> np.ndarray:
         """Calculate target thoughtseed activations for a given mediative state.
@@ -133,7 +136,11 @@ class ActInfAgent(AgentConfig):
         self.in_transition = False
         self.transition_counter = 0
         self.transition_target = None
+        self.in_transition = False
+        self.transition_counter = 0
+        self.transition_target = None
         self.prev_meta_awareness = 0.0
+        self.aha_drive = 0.0 # Standardized access for Aha signal
         
         # Initialize with default profiles
         for ts in self.thoughtseeds:
@@ -176,7 +183,15 @@ class ActInfAgent(AgentConfig):
         if self.prev_network_acts:
             target_acts = self._apply_lateral_coupling(target_acts, current_state)
             target_acts = self._apply_accumulator_dynamics(target_acts)
-
+            
+            # Compute Aha Drive (Option C)
+            current_dmn = self.prev_network_acts.get('DMN', 0)
+            aha_val = self.aha_accumulator.update(current_dmn)
+            
+            # Sigmoid activation: (val - threshold) * slope
+            activation = 1.0 / (1.0 + np.exp(-self.aha_slope * (aha_val - self.aha_threshold)))
+            self.aha_drive = activation
+        
         # 3. Stochastic Update: Ornstein-Uhlenbeck process
         current_acts = self._ou_update_networks(target_acts, dt)
 
@@ -237,21 +252,23 @@ class ActInfAgent(AgentConfig):
         """Apply leaky integrators for VAN spikes and FPN fatigue."""
         # VAN Accumulator (Salience Spike)
         current_dmn = self.prev_network_acts['DMN']
-        self.dmn_accumulator = 0.9 * self.dmn_accumulator + 0.1 * current_dmn
         
-        if self.dmn_accumulator > DEFAULTS.get('VAN_TRIGGER', 0.7):
+        # Use Standard LeakyAccumulator
+        self.dmn_accumulator.update(current_dmn)
+        
+        if self.dmn_accumulator.value > DEFAULTS.get('VAN_TRIGGER', 0.7):
             target_acts['VAN'] += self.van_spike
-            self.dmn_accumulator = 0.0 # Reset
+            self.dmn_accumulator.reset(0.0) 
 
         # FPN Accumulator (Cognitive Fatigue)
         current_fpn = self.prev_network_acts['FPN']
-        self.fpn_accumulator = self.fpn_accum_decay * self.fpn_accumulator + self.fpn_accum_inc * current_fpn
+        self.fpn_accumulator.update(current_fpn)
         
         # Collapse when effort exceeds capacity
-        if self.fpn_accumulator > self.fatigue_threshold:
+        if self.fpn_accumulator.value > self.fatigue_threshold:
             target_acts['DAN'] *= self.fpn_collapse_dan_mult
             target_acts['DMN'] += self.fpn_collapse_dmn_inc
-            self.fpn_accumulator = self.fatigue_reset
+            self.fpn_accumulator.reset(self.fatigue_reset)
             
         return target_acts
 
@@ -305,9 +322,13 @@ class ActInfAgent(AgentConfig):
         # Precision modulation based on VFE history (Attention)
         precision_mod = np.clip(-1.0 * vfe_trend, -0.3, 0.3)
 
-        # Sensory precision scales with VAN proxy (Salience)
+        # Sensory precision scales with VAN proxy (Salience) AND Aha Drive
         van_proxy = sensory_inference[self.thoughtseeds.index('aha_moment')]
-        pi_sensory = (self.sensory_precision_base + (self.sensory_precision_van_scalar * van_proxy)) * (1.0 + precision_mod) * self.precision_weight
+        
+        # Option C: Aha Drive strongly boosts precision
+        aha_precision_boost = 1.0 + (self.aha_vfe_gain * self.aha_drive)
+        
+        pi_sensory = (self.sensory_precision_base + (self.sensory_precision_van_scalar * van_proxy)) * (1.0 + precision_mod) * self.precision_weight * aha_precision_boost
         
         # Prior precision scales with meta-awareness (Top-down control)
         pi_prior = (self.prior_precision_base + (self.prior_precision_meta_scalar * meta_awareness)) * (1.0 + precision_mod) * self.complexity_penalty
@@ -433,6 +454,11 @@ class ActInfAgent(AgentConfig):
             modulations = self.get_network_modulation(self.prev_network_acts, current_state)
             for i, ts in enumerate(self.thoughtseeds):
                 mu[i] += modulations[ts]
+                
+            # Option C: Aha Drive directly boosts aha_moment target
+            if self.aha_drive > 0.01:
+                idx = self.thoughtseeds.index('aha_moment')
+                mu[idx] += self.aha_drive * self.aha_target_gain
         
         # Apply dynamic modifiers (Distraction Buildup & Fatigue)
         if current_state in ["breath_focus", "redirect_breath"]:

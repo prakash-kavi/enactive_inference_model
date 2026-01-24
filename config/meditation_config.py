@@ -227,7 +227,8 @@ class ActInfParams:
     distraction_pressure: float
     fatigue_rate: float
     fpn_accum_decay: float
-    fpn_accum_inc: float
+    fpn_accum_decay: float
+    # fpn_accum_inc is redundant (= 1 - decay)
     fatigue_reset: float
     # FPN collapse / base demand tunables
     fpn_collapse_dan_mult: float
@@ -244,21 +245,24 @@ class ActInfParams:
     efficiency_weight: float
     # Per-agent smoothing/blending and transition noise
     smoothing: float
-    blend_factor_transition: float
-    blend_factor_state: float
-    blend_variation: float
-    transition_perturb_std: float
-    transition_variation_low: float
-    transition_variation_high: float
+    blend_rate: float
+    transition_noise_sigma: float
     # VFE accumulator dynamics
     vfe_accum_decay: float
-    vfe_accum_alpha: float
+    # vfe_accum_alpha is redundant (= 1 - decay)
     base_theta: float
     base_sigma: float
     softmax_temperature: float
     transition_weight_network: float
     transition_weight_activation: float
     fatigue_threshold: float
+    # Aha Moment Dynamics (Option C)
+    aha_threshold: float
+    aha_slope: float
+    aha_target_gain: float
+    aha_vfe_gain: float
+    aha_accum_decay: float
+    aha_accum_inc: float
     # VFE Precision Parameters
     sensory_precision_base: float
     sensory_precision_van_scalar: float
@@ -283,20 +287,14 @@ class ActInfParams:
         "distraction_pressure": 1.30,
         "fatigue_rate": 0.30,
         "smoothing": 0.6,
-        "blend_factor_transition": 0.3,
-        "blend_factor_state": 0.4,
-        "blend_variation": 0.1,
-        "transition_perturb_std": 0.02,
-        "transition_variation_low": -0.05,
-        "transition_variation_high": 0.1,
+        "blend_rate": 0.35,
+        "transition_noise_sigma": 0.05,
         "vfe_accum_decay": 0.9,
-        "vfe_accum_alpha": 0.1,
         "base_theta": 0.2,
         "base_sigma": 0.05,
         "transition_weight_network": 1.0,
         "transition_weight_activation": 1.0,
         "fpn_accum_decay": 0.98,
-        "fpn_accum_inc": 0.02,
         "fatigue_reset": 0.4,
         "fpn_collapse_dan_mult": 0.6,
         "fpn_collapse_dmn_inc": 0.2,
@@ -310,7 +308,15 @@ class ActInfParams:
         "van_spike": 0.5,
         "softmax_temperature": 2.5,
         "efficiency_weight": 0.3,
+        "efficiency_weight": 0.3,
         "fatigue_threshold": 0.50,
+        # Aha Moment Defaults
+        "aha_threshold": 0.6,
+        "aha_slope": 10.0,
+        "aha_target_gain": 0.2,
+        "aha_vfe_gain": 2.0,
+        "aha_accum_decay": 0.95,
+        "aha_accum_inc": 0.05,
         # Newly extracted magic numbers
         "sensory_precision_base": 0.1,
         "sensory_precision_van_scalar": 5.0,

@@ -34,6 +34,35 @@ def ensure_directories(base_dir=None):
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     logging.info("Directories created/verified: data/, plots/")
 
+class LeakyAccumulator:
+    """Standardized Leaky Integrator for signal accumulation.
+    Used for DMN spikes, FPN fatigue, VFE tracking, and Aha Detection.
+    """
+    def __init__(self, decay: float = 0.9, gain: float = 0.1, initial_value: float = 0.0, activation: str = 'linear'):
+        self.decay = decay
+        self.gain = gain
+        self.value = initial_value
+        self.activation = activation
+
+    def update(self, input_val: float) -> float:
+        """Update the accumulator: value = activation(decay * value + gain * input)."""
+        new_val = self.decay * self.value + self.gain * input_val
+        
+        if self.activation == 'sigmoid':
+            self.value = 1.0 / (1.0 + np.exp(-10.0 * (new_val - 0.5))) # Standard sigmoid centered at 0.5
+        elif self.activation == 'tanh':
+            self.value = np.tanh(new_val)
+        elif self.activation == 'relu':
+            self.value = max(0.0, new_val)
+        else:
+            self.value = new_val
+            
+        return self.value
+
+    def reset(self, value: float = 0.0):
+        """Reset the accumulator to a specific value."""
+        self.value = value
+
 def _save_json_outputs(learner, output_dir=None, aggregates=None):
     """Write learner parameters and time series to JSON files.
 

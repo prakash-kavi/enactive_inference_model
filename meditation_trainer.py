@@ -20,12 +20,14 @@ class Trainer:
     def __init__(self, agent):
         self.agent = agent
 
-    def train(self, save_outputs: bool = True, output_dir: str = None, seed: int = None):
+    def train(self, save_outputs: bool = True, output_dir: str = None, seed: int = None, enable_learning: bool = True):
         """Run training using the provided `agent`.
 
         - `output_dir` (optional): directory to save JSON outputs.
         - `seed` (optional): reproducibility seed (sets numpy RNG).
+        - `enable_learning` (optional): if False, generative model weights are fixed (Fixed Attractor mode).
         """
+
         if seed is not None:
             self.agent.rng = np.random.RandomState(seed)
 
@@ -44,7 +46,7 @@ class Trainer:
             
             # 2.2 Bottom-Up Pass (Perception & Learning)
             network_acts, sensory_inference, free_energy, sensory_nll = self._pass_bottom_up(
-                current_state, activations, meta_awareness, targets_by_state[current_state]
+                current_state, activations, meta_awareness, targets_by_state[current_state], enable_learning
             )
 
             # 2.3 Record History
@@ -93,7 +95,7 @@ class Trainer:
         # Initialize meta-awareness and VFE accumulator
         meta_awareness = self.agent.get_meta_awareness(current_state, activations)
         self.agent.prev_meta_awareness = meta_awareness
-        self.agent.vfe_accumulator = 0.0
+        self.agent.vfe_accumulator.reset(0.0)
         
         return current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness
 
@@ -134,12 +136,11 @@ class Trainer:
     def _apply_transition_blending(self, activations: np.ndarray) -> np.ndarray:
         """Apply smoothing to activations during state transitions."""
         if hasattr(self.agent, 'in_transition') and self.agent.in_transition:
-            base_blend = self.agent.blend_factor_transition
-            blend_factor = base_blend * (1.0 + self.agent.rng.uniform(-self.agent.blend_variation, self.agent.blend_variation))
+            blend_factor = self.agent.blend_rate
 
-            # Small perturbations
+            # Small perturbations using Gaussian noise
             perturbed_target = self.agent.transition_target.copy()
-            perturbed_target += self.agent.rng.normal(0, self.agent.transition_perturb_std, size=len(perturbed_target))
+            perturbed_target += self.agent.rng.normal(0, self.agent.transition_noise_sigma, size=len(perturbed_target))
             perturbed_target = np.clip(perturbed_target, DEFAULTS['TARGET_CLIP_MIN'], DEFAULTS['TARGET_CLIP_MAX'])
 
             # Apply blending
@@ -151,7 +152,7 @@ class Trainer:
                 
         return activations
 
-    def _pass_bottom_up(self, current_state: str, activations: np.ndarray, meta_awareness: float, target_activations: np.ndarray) -> Tuple[Dict[str, float], np.ndarray, float, float]:
+    def _pass_bottom_up(self, current_state: str, activations: np.ndarray, meta_awareness: float, target_activations: np.ndarray, enable_learning: bool = True) -> Tuple[Dict[str, float], np.ndarray, float, float]:
         """Execute Bottom-Up dynamics: Network computation, Sensory Inference, and VFE calculation."""
         
         # A. Compute network activations (L1 Generative Process)
@@ -163,15 +164,16 @@ class Trainer:
         # C. Calculate VFE (L2 Belief Revision & L3 Monitoring)
         vfe_trend = 0.0
         if len(self.agent.free_energy_history) > 5:
+
             vfe_trend = np.mean(np.diff(self.agent.free_energy_history[-5:]))
 
         free_energy, sensory_nll, _ = self.agent.calculate_vfe(
             activations, target_activations, sensory_inference, meta_awareness, vfe_trend
         )
-
         # D. Update network profiles (Learning)
-        dummy_errors = {net: sensory_nll * 0.1 for net in self.agent.networks}
-        self.agent.update_network_profiles(activations, network_acts, current_state, dummy_errors)
+        if enable_learning:
+            dummy_errors = {net: sensory_nll * 0.1 for net in self.agent.networks}
+            self.agent.update_network_profiles(activations, network_acts, current_state, dummy_errors)
         
         return network_acts, sensory_inference, free_energy, sensory_nll
 
@@ -196,16 +198,15 @@ class Trainer:
         """Check for and execute state transitions based on VFE and dwell time."""
         
         # Accumulate VFE (Evidence of Policy Failure)
-        decay = self.agent.vfe_accum_decay
-        alpha = self.agent.vfe_accum_alpha
-        self.agent.vfe_accumulator = decay * self.agent.vfe_accumulator + alpha * free_energy
+        self.agent.vfe_accumulator.update(free_energy)
 
         # Dynamic params
         base_threshold = 2.5 if self.agent.experience_level == 'expert' else 3.5
         min_dwell = STATE_DWELL_TIMES[self.agent.experience_level][current_state][0]
 
-        # Transition Condition: Dwell expired OR Critical VFE (after refractory period)
-        critical_vfe = self.agent.vfe_accumulator > (base_threshold * 1.5)
+        # Transition Conditions
+        # Use .value to access the float value of the accumulator
+        critical_vfe = self.agent.vfe_accumulator.value > (base_threshold * 1.5)
         dwell_expired = current_dwell >= dwell_limit
         
         if dwell_expired or (critical_vfe and current_dwell >= min_dwell):
@@ -248,7 +249,7 @@ class Trainer:
         next_state = self.agent.rng.choice(states, p=probabilities)
 
         # 3. Update Agent Counters
-        self.agent.vfe_accumulator = 0.0
+        self.agent.vfe_accumulator.reset(0.0)
         self.agent.transition_activations[current_state].append(activations.copy())
         if forced:
             self.agent.forced_transition_count += 1
@@ -268,16 +269,13 @@ class Trainer:
         # 5. Calculate new targets and blend
         new_target = targets_by_state[next_state].copy()
         
-        # Introduce biological variability
-        low = self.agent.transition_variation_low
-        high = self.agent.transition_variation_high
+        # Introduce biological variability using Gaussian noise
         for i in range(len(new_target)):
-            variation = 1.0 + self.agent.rng.uniform(low, high)
+            variation = self.agent.rng.normal(1.0, self.agent.transition_noise_sigma)
             new_target[i] = max(DEFAULTS['TARGET_CLIP_MIN'], new_target[i] * variation)
 
-        # Blend
-        base_blend = self.agent.blend_factor_state
-        blend_factor = base_blend * (1.0 + self.agent.rng.uniform(-self.agent.blend_variation, self.agent.blend_variation))
+        # Blend using consolidated blend_rate
+        blend_factor = self.agent.blend_rate
         new_activations = (1 - blend_factor) * activations + blend_factor * new_target
 
         # Set transition flags
