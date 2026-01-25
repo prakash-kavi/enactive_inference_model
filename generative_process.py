@@ -26,7 +26,7 @@ class MeditationGenerativeProcess:
     def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None):
         self.networks = ['DMN', 'VAN', 'DAN', 'FPN']
         self.level = experience_level.lower()
-        self.dt = 1.0  # Fixed unit time step (1 second)
+        self.dt = 0.5  # Smaller time step for better numerical stability (2 substeps = 1 second)
         self.rng = np.random.RandomState(seed)
         
         # Initial activation state (Neutral baseline)
@@ -48,8 +48,8 @@ class MeditationGenerativeProcess:
         }[self.level]
         
         self.current_max_dwell = self._sample_weibull_dwell()
-        # Reduced noise variance for smoother dynamics (was 0.005)
-        self.noise_variance = 0.002
+        # Noise variance: Expert uses lower noise (50% reduction) for less jitter
+        self.noise_variance = 0.001 if self.level == 'expert' else 0.002
 
     def _sample_weibull_dwell(self) -> int:
         """
@@ -68,12 +68,25 @@ class MeditationGenerativeProcess:
         # Clamp to ensure we stay within plausible biological bounds
         return int(np.clip(sample, min_d, max_d))
 
-    def _transition_state(self):
-        """Cyclical transition: Breath Focus -> Mind Wandering -> Meta-Awareness -> Redirect."""
+    def _transition_state(self, active_states: Optional[dict] = None):
+        """Cyclical transition: Breath Focus -> Mind Wandering -> Meta-Awareness -> Redirect.
+        
+        Args:
+            active_states: Optional modulation from Markov Blanket (for dwell modifier)
+        """
         flow = {'BF': 'MW', 'MW': 'MA', 'MA': 'RA', 'RA': 'BF'}
         self.current_state = flow[self.current_state]
         self.state_timer = 0
+        
+        # Sample new dwell time
         self.current_max_dwell = self._sample_weibull_dwell()
+        
+        # Apply volitional control (dwell modifier) only at transition to avoid mid-cycle disruption
+        if active_states and 'dwell_modifier' in active_states:
+            # Only apply to distraction states (MW) - allow agent to "short-circuit" wandering
+            if self.current_state == 'MW':
+                self.current_max_dwell = int(self.current_max_dwell * active_states['dwell_modifier'])
+                self.current_max_dwell = max(1, self.current_max_dwell)  # Ensure at least 1 timestep
 
     def get_dynamics(self) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieves exact state-specific Mean Targets (mu) and Drift Matrices (Theta)."""
@@ -140,34 +153,54 @@ class MeditationGenerativeProcess:
                 theta[i, i] = row_sums[i] + epsilon                
         return mu, theta
 
-    def update(self) -> Tuple[Dict[str, float], str]:
-        """Core MVOU update step (Piecewise Linear Dynamics)."""
+    def update(self, active_states: Optional[dict] = None) -> Tuple[Dict[str, float], str]:
+        """
+        Core MVOU update step (Piecewise Linear Dynamics) with downward causation.
+        
+        Args:
+            active_states: Optional modulation from Markov Blanket for attentional gain and volitional control
+        
+        Returns:
+            Tuple of (network_activations_dict, state_abbreviation)
+        """
         self.state_timer += 1
         if self.state_timer >= self.current_max_dwell:
-            self._transition_state()
+            self._transition_state(active_states)
 
         mu, theta = self.get_dynamics()
         
-        # dx_t = -Theta(x_t - mu)dt
-        drift = -theta @ (self.x - mu) * self.dt
+        # Apply Attentional Gain (Noise Reduction) from Markov Blanket
+        effective_noise_variance = self.noise_variance
+        if active_states and 'noise_reduction' in active_states:
+            effective_noise_variance = self.noise_variance * active_states['noise_reduction']
+            effective_noise_variance = max(0.0005, effective_noise_variance)  # Safety: never zero
         
         # Correlated Noise: K mirrors coupling structure
-        K = np.eye(4) * self.noise_variance
+        K = np.eye(4) * effective_noise_variance
         for i in range(4):
             for j in range(i + 1, 4):
                 if theta[i, j] != 0:
                     corr = -0.5 * (theta[i, j] / np.max(np.abs(theta)))
-                    K[i, j] = K[j, i] = corr * self.noise_variance
+                    K[i, j] = K[j, i] = corr * effective_noise_variance
         
         try:
             L = np.linalg.cholesky(K)
         except np.linalg.LinAlgError:
             L = np.linalg.cholesky(K + np.eye(4) * 1e-6)
-            
-        noise = L @ self.rng.standard_normal(4) * np.sqrt(self.dt)
         
-        # Stochastic Update + Biological Saturation
-        self.x = np.clip(self.x + drift + noise, 0.05, 0.9)
+        # Sub-stepping: 2 steps with dt=0.5 = 1.0 second total (better numerical stability)
+        n_substeps = 2
+        dt_sub = self.dt
+        
+        for _ in range(n_substeps):
+            # dx_t = -Theta(x_t - mu)dt
+            drift = -theta @ (self.x - mu) * dt_sub
+            
+            # Generate noise for this substep
+            noise = L @ self.rng.standard_normal(4) * np.sqrt(dt_sub)
+            
+            # Stochastic Update + Biological Saturation
+            self.x = np.clip(self.x + drift + noise, 0.05, 0.9)
         
         # Apply exponential moving average smoothing for smooth network trajectories
         # This reduces jitter while maintaining responsiveness to state changes

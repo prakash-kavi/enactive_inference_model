@@ -62,10 +62,10 @@ class Trainer:
         transition_timestamps = []
         old_state_abbrev = self.agent.map_state_full_to_abbrev(current_state)  # Track for transitions
 
-        # 2. Training Loop
+        # 2. Training Loop (Russian Doll Enactive Inference)
         for t in range(self.agent.timesteps):
-            # 2.1 Update Process (Layer 1): Get observations
-            network_acts, process_state_abbrev = self.process.update()
+            # 2.1 Biology (Layer 1): Generate network signals with downward causation
+            network_acts, process_state_abbrev = self.process.update(self.agent.blanket.active_states)
             process_state = self.agent.map_state_abbrev_to_full(process_state_abbrev)
             
             # Check if state transition occurred in process
@@ -78,9 +78,11 @@ class Trainer:
             else:
                 current_dwell += 1
             
-            # 2.2 Agent Inference (Layers 2 & 3): Top-Down and Bottom-Up
-            # Compute sensory inference first (from observed networks) for Bayesian blending
-            sensory_inference = self.agent.get_sensory_inference(network_acts)
+            # 2.2 Sensory Step: Update blanket's sensory states
+            self.agent.blanket.update_sensory_states(network_acts)
+            
+            # 2.3 Perception (Layer 3): Perceptual inference from blanket
+            sensory_inference = self.agent.perceptual_inference()
             
             meta_awareness, activations, targets_by_state = self._pass_top_down(
                 current_state, current_dwell, dwell_limit, activations, meta_awareness, 
@@ -90,8 +92,12 @@ class Trainer:
                 current_state, activations, meta_awareness, targets_by_state[current_state], 
                 network_acts, sensory_inference, enable_learning
             )
+            
+            # 2.4 Action (Layer 3): Prescriptive action based on beliefs and VFE
+            prescription = self.agent.prescriptive_action(activations, free_energy, current_state)
+            # Note: prescription is already applied to blanket in prescriptive_action()
 
-            # 2.3 Record History & Transitions (Now correct: VFE is ready)
+            # 2.5 Record History & Transitions (Now correct: VFE is ready)
             self._record_history(current_state, activations, meta_awareness, network_acts, free_energy, sensory_nll)
             
             if state_changed:
@@ -135,8 +141,11 @@ class Trainer:
         activations = self.agent.get_target_activations(current_state, 0.6)
         
         # Get initial network observations from generative process
-        network_acts, _ = self.process.update()
+        network_acts, _ = self.process.update(self.agent.blanket.active_states)
         self.agent.prev_network_acts = network_acts.copy()
+        
+        # Initialize blanket's sensory states
+        self.agent.blanket.update_sensory_states(network_acts)
 
         # Initialize meta-awareness and VFE accumulator
         meta_awareness = self.agent.get_meta_awareness(current_state, activations)

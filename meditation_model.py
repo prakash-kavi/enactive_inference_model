@@ -14,6 +14,7 @@ from config.meditation_config import (
     NETWORK_PROFILES, DEFAULTS, NETWORK_MODULATION
 )
 from meditation_utils import ou_update, clip_array, LeakyAccumulator
+from markov_blanket import MarkovBlanket
 
 class AgentConfig:
     """Base class for thoughtseed dynamics and mediative state handling.
@@ -111,7 +112,7 @@ class ActInfAgent(AgentConfig):
         self.prediction_error_history = []
         self.precision_history = []
         
-        # SCIENTIFIC MATRIX FORM: The Weight Matrix (W)
+        # The Weight Matrix (W)
         # Rows: Thoughtseeds [attend_breath, pain_discomfort, pending_tasks, aha_moment, equanimity]
         # Cols: Networks [DMN, VAN, DAN, FPN]
         # Aligned with "Neural Efficiency" and empirical targets
@@ -124,7 +125,7 @@ class ActInfAgent(AgentConfig):
         ], dtype=np.float64)
         
         # Track learned network profiles (generative model parameters)
-        # NOTE: W matrix is now fixed (scientific form), but state expectations are still learned
+        # W matrix is now fixed, but state expectations are still learned
         self.learned_network_profiles = {
             "state_network_expectations": {state: {} for state in self.states}
         }
@@ -152,6 +153,9 @@ class ActInfAgent(AgentConfig):
             'MA': 'meta_awareness', 'RA': 'redirect_breath'
         }
         self._state_full_to_abbrev = {v: k for k, v in self._state_abbrev_map.items()}
+        
+        # Markov Blanket: The agent's statistical boundary (Russian Doll architecture)
+        self.blanket = MarkovBlanket(smoothing=0.9)
 
     def _build_state_expect_vector(self, state: str) -> np.ndarray:
         """Build a dense vector of network expectations for a given state."""
@@ -210,7 +214,17 @@ class ActInfAgent(AgentConfig):
         return {net: observed[net] - predicted[net] for net in self.networks}
     
     
-    def get_sensory_inference(self, network_acts: Dict[str, float]) -> np.ndarray:
+    def perceptual_inference(self) -> np.ndarray:
+        """
+        Layer 3: Perceptual Inference (Bottom-Up Recognition).
+        Infers thoughtseed beliefs (z) from sensory states in the Markov Blanket.
+        Uses amortized inference via matrix-transpose projection.
+        """
+        # Get observations from blanket's sensory states
+        network_acts = self.blanket.sensory_states
+        if not network_acts:
+            # Fallback: return neutral inference if no sensory data
+            return np.array([0.2] * self.num_thoughtseeds)
         """
         Layer 3: Recognition/Inference.
         
@@ -238,6 +252,58 @@ class ActInfAgent(AgentConfig):
         inferred = np.where(row_sums > 0, match_scores / row_sums, 0.1)
                 
         return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+    
+    def prescriptive_action(self, z: np.ndarray, vfe: float, current_state: str) -> dict:
+        """
+        Layer 3: Prescriptive Action (Top-Down Policy Selection).
+        Selects Active State prescriptions based on internal beliefs and VFE.
+        Implements Expert Policy Table for downward causation.
+        
+        Policies:
+        1. Aha! Moment Short-Circuit: If aha_moment > 0.75, truncate MW dwell
+        2. Attentional Sharpening: If meta_awareness > 0.6, reduce noise
+        3. Equanimity Buffer: If equanimity > 0.6, reduce fatigue
+        4. Precision Reset: If in meta_awareness state, clear signal
+        
+        Args:
+            z: Current thoughtseed activations (from perceptual_inference)
+            vfe: Current Variational Free Energy
+            current_state: Current meditative state
+            
+        Returns:
+            Prescription dictionary for Markov Blanket
+        """
+        prescription = {
+            'noise_reduction': 1.0,  # 1.0 = no change; < 1.0 = clearer signal
+            'dwell_modifier': 1.0,   # 1.0 = no change; < 1.0 = shorter duration
+            'fatigue_buffer': 1.0    # 1.0 = no change; < 1.0 = less fatigue
+        }
+        
+        # Policy 1: Aha! Moment Short-Circuit (Immediate MW termination)
+        aha_idx = self.thoughtseeds.index('aha_moment')
+        if z[aha_idx] > 0.75:
+            prescription['dwell_modifier'] = 0.2  # Truncate to 20% of max dwell
+            prescription['noise_reduction'] = 0.5  # Strong attentional gain
+        
+        # Policy 2: Attentional Sharpening (Meta-Awareness → Noise Reduction)
+        meta_awareness = self.get_meta_awareness(current_state, z)
+        if meta_awareness > 0.6:
+            # Use minimum (strongest reduction wins) for noise
+            prescription['noise_reduction'] = min(prescription['noise_reduction'], 0.6)
+        
+        # Policy 3: Equanimity Buffer (Reduces fatigue/distraction)
+        equanimity_idx = self.thoughtseeds.index('equanimity')
+        if z[equanimity_idx] > 0.6:
+            prescription['fatigue_buffer'] = 0.5
+        
+        # Policy 4: Precision Reset (Meta-Awareness state → Signal clearing)
+        if current_state == 'meta_awareness':
+            prescription['noise_reduction'] = min(prescription['noise_reduction'], 0.4)
+        
+        # Update blanket's active states with temporal smoothing
+        self.blanket.update_active_states(prescription)
+        
+        return prescription
 
     def calculate_vfe(self, current_seeds: np.ndarray, prior_seeds: np.ndarray, sensory_inference: np.ndarray, meta_awareness: float, vfe_trend: float = 0.0) -> Tuple[float, float, float]:
         """Compute Variational Free Energy (VFE).
@@ -413,7 +479,7 @@ class ActInfAgent(AgentConfig):
         
         Implements Prior-Likelihood blending:
         - Prior (μ_prior): target_activations from ThoughtseedParams (where agent wants to be)
-        - Likelihood (μ_likelihood): sensory_inference from get_sensory_inference (where brain actually is)
+        - Likelihood (μ_likelihood): sensory_inference from perceptual_inference (where brain actually is)
         - Final target: μ = α·μ_prior + (1-α)·μ_likelihood
         
         This allows thoughtseeds to be pulled toward both:
@@ -462,20 +528,25 @@ class ActInfAgent(AgentConfig):
         mu = prior_weight * mu_prior + (1 - prior_weight) * mu_likelihood
         
         # Apply dynamic modifiers (Distraction Buildup & Fatigue)
+        # Apply Equanimity Buffer from Markov Blanket if available
+        fatigue_buffer = self.blanket.active_states.get('fatigue_buffer', 1.0)
+        effective_fatigue_rate = self.fatigue_rate * fatigue_buffer
+        effective_distraction_pressure = self.distraction_pressure * fatigue_buffer
+        
         if current_state in ["breath_focus", "redirect_breath"]:
             # Distraction increases over time in focused states
             progress = min(1.5, current_dwell / max(5, dwell_limit))
             
-            # Distraction Pressure: Accumulation of internal stimuli
-            distraction_buildup = self.distraction_pressure * progress
+            # Distraction Pressure: Accumulation of internal stimuli (modulated by equanimity)
+            distraction_buildup = effective_distraction_pressure * progress
             
             for ts in ["pain_discomfort", "pending_tasks"]:
                 idx = self.thoughtseeds.index(ts)
                 mu[idx] += distraction_buildup
                 
-            # Cognitive Fatigue: Decay of focus capability
+            # Cognitive Fatigue: Decay of focus capability (modulated by equanimity)
             bf_idx = self.thoughtseeds.index("attend_breath")
-            mu[bf_idx] = max(0.1, mu[bf_idx] - (self.fatigue_rate * progress))
+            mu[bf_idx] = max(0.1, mu[bf_idx] - (effective_fatigue_rate * progress))
 
         # 2. Set Stochastic Parameters (Ornstein-Uhlenbeck)
         # Theta (Reversion Speed)
