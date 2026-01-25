@@ -1,5 +1,9 @@
 """Configuration for the Vipassana Entropy meditation simulation.
 Defines thoughtseed/network profiles, mediative states, and tunable parameters.
+
+Architecture:
+- Layer 1 (Generative Process): generative_process.py - MVOU dynamics, dwell times, Θ matrices
+- Layers 2 & 3 (Agent): meditation_model.py - W matrix, learns state expectations
 """
 
 from __future__ import annotations
@@ -9,56 +13,24 @@ from dataclasses import dataclass
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
 
-STATE_DWELL_TIMES = {
-    # Per-experience-level dwell time ranges (min, max) for each mediative state
-    'novice': {
-        'breath_focus': (5, 15),
-        'mind_wandering': (22, 42),
-        'meta_awareness': (2, 7),
-        'redirect_breath': (2, 5)
-    },
-    'expert': {
-        'breath_focus': (15, 25),
-        'mind_wandering': (8, 12),
-        'meta_awareness': (2, 4),
-        'redirect_breath': (2, 4)
-    }
-}
-
-# Network profiles for thoughtseeds and mediative states
+# Network profiles for mediative states (used for agent learning initialization)
 NETWORK_PROFILES = {
-    "thoughtseed_contributions": {
-        "attend_breath": {"DMN": 0.2, "VAN": 0.3, "DAN": 0.65, "FPN": 0.6},
-        "pain_discomfort": {"DMN": 0.5, "VAN": 0.7, "DAN": 0.3, "FPN": 0.4},
-        "pending_tasks": {"DMN": 0.8, "VAN": 0.5, "DAN": 0.2, "FPN": 0.4},
-        "aha_moment": {"DMN": 0.6, "VAN": 0.4, "DAN": 0.3, "FPN": 0.8},
-        "equanimity": {"DMN": 0.3, "VAN": 0.3, "DAN": 0.5, "FPN": 0.9}
-    },
-
-    # Expected network activations per high-level mediative state and experience level
     "state_expected_profiles": {
-        # BREATH CONTROL: Experts have lower DMN, higher DAN/FPN
         "breath_focus": {
-            "novice": {"DMN": 0.35, "VAN": 0.4, "DAN": 0.7, "FPN": 0.5},
-            "expert": {"DMN": 0.24, "VAN": 0.42, "DAN": 0.68, "FPN": 0.65}
+            "novice": {"DMN": 0.55, "VAN": 0.50, "DAN": 0.60, "FPN": 0.65},
+            "expert": {"DMN": 0.30, "VAN": 0.45, "DAN": 0.60, "FPN": 0.45}
         },
-
-        # MIND WANDERING: Experts have much lower DMN, higher FPN control
         "mind_wandering": {
-            "novice": {"DMN": 0.85, "VAN": 0.45, "DAN": 0.2, "FPN": 0.35},
-            "expert": {"DMN": 0.55, "VAN": 0.55, "DAN": 0.35, "FPN": 0.50}
+            "novice": {"DMN": 0.75, "VAN": 0.40, "DAN": 0.35, "FPN": 0.40},
+            "expert": {"DMN": 0.60, "VAN": 0.65, "DAN": 0.40, "FPN": 0.65}
         },
-
-        # META-AWARENESS: Experts have higher VAN (detection) and FPN (control)
         "meta_awareness": {
-            "novice": {"DMN": 0.35, "VAN": 0.7, "DAN": 0.5, "FPN": 0.45},
-            "expert": {"DMN": 0.32, "VAN": 0.85, "DAN": 0.48, "FPN": 0.55}
+            "novice": {"DMN": 0.50, "VAN": 0.60, "DAN": 0.50, "FPN": 0.55},
+            "expert": {"DMN": 0.40, "VAN": 0.80, "DAN": 0.50, "FPN": 0.70}
         },
-
-        # REDIRECT BREATH: Experts have lower DMN, higher DAN/FPN (control)
         "redirect_breath": {
-            "novice": {"DMN": 0.3, "VAN": 0.45, "DAN": 0.65, "FPN": 0.55},
-            "expert": {"DMN": 0.18, "VAN": 0.55, "DAN": 0.68, "FPN": 0.65}
+            "novice": {"DMN": 0.45, "VAN": 0.50, "DAN": 0.65, "FPN": 0.70},
+            "expert": {"DMN": 0.35, "VAN": 0.55, "DAN": 0.65, "FPN": 0.55}
         }
     }
 }
@@ -85,25 +57,18 @@ NETWORK_MODULATION = {
 }
 
 DEFAULTS = {
-    # Numeric clamps and thresholds used across the simulation
-    'TARGET_CLIP_MIN': 0.05,  # lower bound for thoughtseed target activations
-    'TARGET_CLIP_MAX': 1.0,   # upper bound for thoughtseed target activations
+    'TARGET_CLIP_MIN': 0.05,
+    'TARGET_CLIP_MAX': 1.0,
     'ACTIVATION_CLIP_MIN': 0.01,
     'ACTIVATION_CLIP_MAX': 0.99,
-    'NETWORK_CLIP_MIN': 0.05,  # network activation lower bound
-    'NETWORK_CLIP_MAX': 0.9,   # network activation upper bound
-    'VAN_TRIGGER': 0.7,        # VAN accumulator threshold for salience spike
-    'VAN_MAX': 0.85,           # physiological cap for VAN
+    'NETWORK_CLIP_MIN': 0.05,
+    'NETWORK_CLIP_MAX': 0.9,
     'DEFAULT_DT': 1.0,
     'MIN_HISTORY_FOR_LEARNING': 10,
-    'TRANSITION_COUNTER_BASE': 3,
-    'TRANSITION_COUNTER_RAND': 2
 }
 
 @dataclass
 class ThoughtseedParams:
-
-    # Base target activation patterns for each thoughtseed in each mediative state
     BASE_ACTIVATIONS = {
         "breath_focus": {
             "attend_breath": 0.7,
@@ -135,7 +100,6 @@ class ThoughtseedParams:
         }
     }
 
-    # Target adjustments:  how meta-awareness and experience level modify base activations
     TARGET_ADJUSTMENTS = {
         "breath_focus": {
             "attend_breath": (0.1, 0.1),
@@ -170,22 +134,16 @@ class ThoughtseedParams:
     @staticmethod
     def get_target_activations(state, meta_awareness, experience_level='novice'):
         """Get target activation values for each thoughtseed in the specified mediative state."""
-        # Start with base activations for this mediative state
         activations = ThoughtseedParams.BASE_ACTIVATIONS[state].copy()
-
-        # Apply unified adjustments
         for ts in activations:
             meta_mod, expert_offset = ThoughtseedParams.TARGET_ADJUSTMENTS[state][ts]
             activations[ts] += meta_mod * meta_awareness
             if experience_level == 'expert':
                 activations[ts] += expert_offset
-
         return activations
 
 @dataclass
 class MetacognitionParams:
-
-    # Base meta-awareness levels for each mediative state
     BASE_AWARENESS = {
         "breath_focus": 0.4,
         "mind_wandering": 0.2,
@@ -193,88 +151,61 @@ class MetacognitionParams:
         "redirect_breath": 0.5
     }
 
-    # How thoughtseeds influence meta-awareness
     THOUGHTSEED_INFLUENCES = {
-        "aha_moment": 0.1,  # Self-reflection strongly enhances meta-awareness
-        "equanimity": 0.1   # Equanimity provides a stronger regulation boost for experts
+        "aha_moment": 0.1,
+        "equanimity": 0.1
     }
 
     @staticmethod
     def calculate_meta_awareness(state, thoughtseed_activations, experience_level='novice'):
         """Compute meta-awareness from mediative state and thoughtseed activations."""
-        # Get base awareness for this mediative state
         base_awareness = MetacognitionParams.BASE_AWARENESS[state]
-
-        # Calculate thoughtseed influence
         awareness_boost = 0
         for ts, influence in MetacognitionParams.THOUGHTSEED_INFLUENCES.items():
             if ts in thoughtseed_activations:
                 awareness_boost += thoughtseed_activations[ts] * influence
-
-        # Calculate total (without noise)
-        meta_awareness = base_awareness + awareness_boost
-
-        return meta_awareness
+        return base_awareness + awareness_boost
 
 @dataclass
 class ActInfParams:
+    # VFE and learning
     precision_weight: float
     complexity_penalty: float
     learning_rate: float
     noise_level: float
     memory_factor: float
-    fpn_enhancement: float
+    
+    # Thoughtseed dynamics
     distraction_pressure: float
     fatigue_rate: float
-    fpn_accum_decay: float
-    fpn_accum_decay: float
-    # fpn_accum_inc is redundant (= 1 - decay)
-    fatigue_reset: float
-    # FPN collapse / base demand tunables
-    fpn_collapse_dan_mult: float
-    fpn_collapse_dmn_inc: float
-    fpn_base_demand: float
-    fpn_focus_mult: float
-    # Network/dynamics tunables (migrated from DEFAULTS)
-    network_base: float
-    fpn_to_dan_gain: float
-    hysteresis_strength: float
-    anticorrelation_force: float
-    van_spike: float
-    # Efficiency weight (expert vs novice differences)
-    efficiency_weight: float
-    # Per-agent smoothing/blending and transition noise
     smoothing: float
-    blend_rate: float
-    transition_noise_sigma: float
-    # VFE accumulator dynamics
-    vfe_accum_decay: float
-    # vfe_accum_alpha is redundant (= 1 - decay)
     base_theta: float
     base_sigma: float
-    softmax_temperature: float
-    transition_weight_network: float
-    transition_weight_activation: float
-    fatigue_threshold: float
-    # Aha Moment Dynamics (Option C)
+    
+    # Aha moment dynamics
     aha_threshold: float
     aha_slope: float
     aha_target_gain: float
     aha_vfe_gain: float
     aha_accum_decay: float
     aha_accum_inc: float
-    # VFE Precision Parameters
+    
+    # VFE accumulator
+    vfe_accum_decay: float
+    
+    # Precision parameters
     sensory_precision_base: float
     sensory_precision_van_scalar: float
     prior_precision_base: float
     prior_precision_meta_scalar: float
-
-    # Learning Rate Precision
     learning_precision_base: float
     learning_precision_scalar: float
-
-    # Network Targets & modulation
-    dan_focus_target: float
+    
+    # State expectations and modulation
+    fpn_enhancement: float
+    softmax_temperature: float
+    transition_weight_network: float
+    transition_weight_activation: float
     expert_meta_scalar: float
 
     _BASE_DEFAULTS = {
@@ -283,48 +214,29 @@ class ActInfParams:
         "learning_rate": 0.01,
         "noise_level": 0.04,
         "memory_factor": 0.85,
-        "fpn_enhancement": 1.0,
         "distraction_pressure": 1.30,
         "fatigue_rate": 0.30,
         "smoothing": 0.6,
-        "blend_rate": 0.35,
-        "transition_noise_sigma": 0.05,
-        "vfe_accum_decay": 0.9,
         "base_theta": 0.2,
         "base_sigma": 0.05,
+        "vfe_accum_decay": 0.9,
+        "softmax_temperature": 2.5,
         "transition_weight_network": 1.0,
         "transition_weight_activation": 1.0,
-        "fpn_accum_decay": 0.98,
-        "fatigue_reset": 0.4,
-        "fpn_collapse_dan_mult": 0.6,
-        "fpn_collapse_dmn_inc": 0.2,
-        "fpn_base_demand": 0.2,
-        "fpn_focus_mult": 2.0,
-        # network/dynamics defaults (may be overridden by config/*.json)
-        "network_base": 0.1,
-        "fpn_to_dan_gain": 0.4,
-        "hysteresis_strength": 0.1,
-        "anticorrelation_force": 0.25,
-        "van_spike": 0.5,
-        "softmax_temperature": 2.5,
-        "efficiency_weight": 0.3,
-        "fatigue_threshold": 0.50,
-        # Aha Moment Defaults
+        "fpn_enhancement": 1.0,
         "aha_threshold": 0.6,
         "aha_slope": 10.0,
         "aha_target_gain": 0.2,
         "aha_vfe_gain": 2.0,
         "aha_accum_decay": 0.95,
         "aha_accum_inc": 0.05,
-        # Newly extracted magic numbers
         "sensory_precision_base": 0.1,
         "sensory_precision_van_scalar": 5.0,
         "prior_precision_base": 1.0,
         "prior_precision_meta_scalar": 3.0,
-        "dan_focus_target": 0.9,
-        "expert_meta_scalar": 1.0,  # Novice default
         "learning_precision_base": 1.0,
-        "learning_precision_scalar": 2.0
+        "learning_precision_scalar": 2.0,
+        "expert_meta_scalar": 1.0,
     }
 
     @classmethod
@@ -346,10 +258,7 @@ class ActInfParams:
             smoothing=0.8,
             base_theta=0.25,
             base_sigma=0.035,
-            hysteresis_strength=0.2,
             softmax_temperature=2.0,
-            efficiency_weight=0.7,
-            fatigue_threshold=0.75,
             expert_meta_scalar=1.05,
             learning_precision_scalar=5.0
         )

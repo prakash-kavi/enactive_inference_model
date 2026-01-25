@@ -96,10 +96,18 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
             base_activation = 0.0
             responsiveness = 1.0
 
+        # Extract network profile from W matrix (Scientific Matrix Form)
+        # W matrix: rows = thoughtseeds, cols = networks [DMN, VAN, DAN, FPN]
+        ts_idx = learner.thoughtseeds.index(ts)
+        network_profile = {
+            net: float(learner.W[ts_idx, net_idx]) 
+            for net_idx, net in enumerate(learner.networks)
+        }
+        
         thoughtseed_params["agent_parameters"][ts] = {
             "base_activation": base_activation,
             "responsiveness": responsiveness,
-            "network_profile": learner.learned_network_profiles["thoughtseed_contributions"][ts],
+            "network_profile": network_profile,
         }
 
     thoughtseed_params["time_series"] = {
