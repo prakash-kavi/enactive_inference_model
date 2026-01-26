@@ -145,8 +145,6 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
 
 def build_transition_stats(agent, state_transition_patterns, transition_timestamps, aggregates):
     """Build a serializable transition stats payload for logging/output."""
-    serial_transition_counts = {k: {kk: int(vv) for kk, vv in inner.items()} for k, inner in agent.transition_counts.items()}
-
     serial_patterns = []
     for (frm, to, ts_dict, net_dict, fe) in state_transition_patterns:
         serial_patterns.append({
@@ -158,13 +156,9 @@ def build_transition_stats(agent, state_transition_patterns, transition_timestam
         })
 
     return {
-        'transition_counts': serial_transition_counts,
-        'natural_transitions': int(getattr(agent, "natural_transition_count", 0)),
-        'forced_transitions': int(getattr(agent, "forced_transition_count", 0)),
         'transition_timestamps': [int(x) for x in transition_timestamps],
         'state_transition_patterns': serial_patterns,
         'distraction_buildup_rates': [float(x) for x in getattr(agent, "distraction_buildup_rates", [])],
-        'average_activations_at_transition': aggregates.get('average_activations_at_transition', {}),
         'average_network_activations_by_state': aggregates.get('average_network_activations_by_state', {}),
         'average_free_energy_by_state': aggregates.get('average_free_energy_by_state', {}),
     }
@@ -228,16 +222,10 @@ def compute_state_aggregates(learner):
         pred_error_means[state] = float(np.mean(pred_error_history[indices]))
         precision_means[state] = float(np.mean(precision_history[indices]))
 
-    avg_acts_at_trans = {
-        state: (np.mean(acts, axis=0).tolist() if len(acts) > 0 else np.zeros(learner.num_thoughtseeds).tolist())
-        for state, acts in learner.transition_activations.items()
-    }
-
     aggregates["activation_means_by_state"] = activation_means
     aggregates["average_network_activations_by_state"] = network_means
     aggregates["average_free_energy_by_state"] = free_energy_means
     aggregates["average_prediction_error_by_state"] = pred_error_means
     aggregates["average_precision_by_state"] = precision_means
-    aggregates["average_activations_at_transition"] = avg_acts_at_trans
 
     return aggregates

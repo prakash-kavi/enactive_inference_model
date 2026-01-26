@@ -155,8 +155,8 @@ During training, the model learns **state-network attractors**: expected network
 
 Four empirically-based meditative states:
 - **Breath Focus** (BF): Focused attention on breath
-- **Mind Wandering** (MW): Default mode, distracted state
-- **Meta-Awareness** (MA): Awareness of mental states
+- **Mind Wandering** (MW): Distracted state
+- **Meta-Awareness** (MA): Noticing mind has wandered
 - **Redirect Breath** (RA): Returning attention to breath
 
 ### Thoughtseeds

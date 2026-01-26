@@ -47,9 +47,7 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
             'network_profiles': {},
             'seed': seed,
             'timesteps': timesteps,
-            'experience_level': level,
-            'natural_transitions': agent.natural_transition_count,
-            'forced_transitions': agent.forced_transition_count
+            'experience_level': level
         }
         
         for state in agent.states:

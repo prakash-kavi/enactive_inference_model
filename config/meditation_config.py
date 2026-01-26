@@ -186,7 +186,6 @@ class ActInfParams:
     aha_threshold: float
     aha_slope: float
     aha_target_gain: float
-    aha_vfe_gain: float
     aha_accum_decay: float
     aha_accum_inc: float
     
@@ -195,17 +194,10 @@ class ActInfParams:
     
     # Precision parameters
     sensory_precision_base: float
-    sensory_precision_van_scalar: float
     prior_precision_base: float
-    prior_precision_meta_scalar: float
-    learning_precision_base: float
-    learning_precision_scalar: float
     
     # State expectations and modulation
     fpn_enhancement: float
-    softmax_temperature: float
-    transition_weight_network: float
-    transition_weight_activation: float
     expert_meta_scalar: float
 
     _BASE_DEFAULTS = {
@@ -220,22 +212,14 @@ class ActInfParams:
         "base_theta": 0.2,
         "base_sigma": 0.05,
         "vfe_accum_decay": 0.9,
-        "softmax_temperature": 2.5,
-        "transition_weight_network": 1.0,
-        "transition_weight_activation": 1.0,
         "fpn_enhancement": 1.0,
         "aha_threshold": 0.6,
         "aha_slope": 10.0,
         "aha_target_gain": 0.2,
-        "aha_vfe_gain": 2.0,
         "aha_accum_decay": 0.95,
         "aha_accum_inc": 0.05,
         "sensory_precision_base": 0.1,
-        "sensory_precision_van_scalar": 5.0,
         "prior_precision_base": 1.0,
-        "prior_precision_meta_scalar": 3.0,
-        "learning_precision_base": 1.0,
-        "learning_precision_scalar": 2.0,
         "expert_meta_scalar": 1.0,
     }
 
@@ -258,8 +242,6 @@ class ActInfParams:
             smoothing=0.8,
             base_theta=0.25,
             base_sigma=0.035,
-            softmax_temperature=2.0,
-            expert_meta_scalar=1.05,
-            learning_precision_scalar=5.0
+            expert_meta_scalar=1.05
         )
         return cls(**base)

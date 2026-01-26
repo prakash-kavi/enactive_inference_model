@@ -1,12 +1,7 @@
 """Core meditation models: AgentConfig and ActInfAgent."""
 
 import numpy as np
-import os
-import json
-import logging
-from collections import defaultdict
-import copy
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, Tuple
 
 from config.meditation_config import (
     THOUGHTSEEDS, STATES,
@@ -28,11 +23,6 @@ class AgentConfig:
         self.thoughtseeds = THOUGHTSEEDS
         self.states = STATES
         self.num_thoughtseeds = len(self.thoughtseeds)
-        
-        # State tracking
-        self.transition_counts = defaultdict(lambda: defaultdict(int))
-        self.natural_transition_count = 0
-        self.forced_transition_count = 0
         
         # History tracking
         self.activations_history = []
@@ -150,6 +140,13 @@ class ActInfAgent(AgentConfig):
         # Markov Blanket: The agent's statistical boundary (Russian Doll architecture)
         self.blanket = MarkovBlanket(smoothing=0.9)
 
+    # ========================================================================
+    # LAYER 2: GENERATIVE MODEL
+    # ========================================================================
+    # The agent's internal "world model" that predicts network activations
+    # from latent thoughtseeds and state context.
+    # ========================================================================
+
     def _build_state_expect_vector(self, state: str) -> np.ndarray:
         """Build a dense vector of network expectations for a given state."""
         expect = self.learned_network_profiles["state_network_expectations"][state]
@@ -187,276 +184,12 @@ class ActInfAgent(AgentConfig):
             
         return dict(zip(self.networks, final_prediction))
     
-    def compute_prediction_errors(self, predicted: Dict[str, float], observed: Dict[str, float]) -> Dict[str, float]:
-        """
-        Prediction Error: δ = observed - predicted
-        Explicit error signal for Active Inference learning.
-        """
-        return {net: observed[net] - predicted[net] for net in self.networks}
-    
-    
-    def perceptual_inference(self) -> np.ndarray:
-        """
-        Layer 3: Perceptual Inference (Bottom-Up Recognition).
-        Infers thoughtseed beliefs (z) from sensory states in the Markov Blanket.
-        Uses amortized inference via matrix-transpose projection.
-        """
-        # Get observations from blanket's sensory states
-        network_acts = self.blanket.sensory_states
-        if not network_acts:
-            # Fallback: return neutral inference if no sensory data
-            return np.array([0.2] * self.num_thoughtseeds)
-        """
-        Layer 3: Recognition/Inference.
-        
-        Infers thoughtseed beliefs (z) by inverting the generative mapping.
-        Uses matrix-transpose projection: z_inferred = (network_obs · W^T) / row_sums(W)
-        
-        This allows Layer 3 to recognize patterns:
-        - VAN spike (0.80) → high aha_moment activation (row has 0.80 in VAN)
-        - High FPN distinguishes aha_moment (0.70) from pain_discomfort (0.40)
-        
-        Args:
-            network_acts: Observed network activations {DMN, VAN, DAN, FPN}
-        
-        Returns:
-            Inferred thoughtseed activations (5×1 vector)
-        """
-        # Convert dictionary observation to vector
-        net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
-        
-        # Sensory Inference (A-Matrix inversion): 
-        # Project network data back onto the Thoughtseed space
-        # Normalized by the row-sums of W to ensure activation scales are preserved
-        match_scores = net_vec @ self.W.T  # (1×4) @ (4×5) = (1×5)
-        row_sums = np.sum(self.W, axis=1)  # Sum across networks for each thoughtseed
-        inferred = np.where(row_sums > 0, match_scores / row_sums, 0.1)
-                
-        return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
-    
-    def prescriptive_action(self, z: np.ndarray, vfe: float, current_state: str) -> dict:
-        """
-        Layer 3: Prescriptive Action (Top-Down Policy Selection).
-        Selects Active State prescriptions based on internal beliefs and VFE.
-        Implements Expert Policy Table for downward causation.
-        
-        Policies:
-        1. Aha! Moment Short-Circuit: If aha_moment > 0.75, truncate MW dwell
-        2. Attentional Sharpening: If meta_awareness > 0.6, reduce noise
-        3. Equanimity Buffer: If equanimity > 0.6, reduce fatigue
-        4. Precision Reset: If in meta_awareness state, clear signal
-        
-        Args:
-            z: Current thoughtseed activations (from perceptual_inference)
-            vfe: Current Variational Free Energy
-            current_state: Current meditative state
-            
-        Returns:
-            Prescription dictionary for Markov Blanket
-        """
-        prescription = {
-            'noise_reduction': 1.0,  # 1.0 = no change; < 1.0 = clearer signal
-            'dwell_modifier': 1.0,   # 1.0 = no change; < 1.0 = shorter duration
-            'fatigue_buffer': 1.0    # 1.0 = no change; < 1.0 = less fatigue
-        }
-        
-        # Policy 1: Aha! Moment Short-Circuit (Immediate MW termination)
-        aha_idx = self.thoughtseeds.index('aha_moment')
-        if z[aha_idx] > 0.75:
-            prescription['dwell_modifier'] = 0.2  # Truncate to 20% of max dwell
-            prescription['noise_reduction'] = 0.5  # Strong attentional gain
-        
-        # Policy 2: Attentional Sharpening (Meta-Awareness → Noise Reduction)
-        meta_awareness = self.get_meta_awareness(current_state, z)
-        if meta_awareness > 0.6:
-            # Use minimum (strongest reduction wins) for noise
-            prescription['noise_reduction'] = min(prescription['noise_reduction'], 0.6)
-        
-        # Policy 3: Equanimity Buffer (Reduces fatigue/distraction)
-        equanimity_idx = self.thoughtseeds.index('equanimity')
-        if z[equanimity_idx] > 0.6:
-            prescription['fatigue_buffer'] = 0.5
-        
-        # Policy 4: Precision Reset (Meta-Awareness state → Signal clearing)
-        if current_state == 'meta_awareness':
-            prescription['noise_reduction'] = min(prescription['noise_reduction'], 0.4)
-        
-        # Update blanket's active states with temporal smoothing
-        self.blanket.update_active_states(prescription)
-        
-        return prescription
-
-    def calculate_vfe(self, current_seeds: np.ndarray, prior_seeds: np.ndarray, sensory_inference: np.ndarray, meta_awareness: float, vfe_trend: float = 0.0) -> Tuple[float, float, float]:
-        """Compute Variational Free Energy (VFE).
-        VFE = (Sensory NLL * Sensory Precision) + (Prior NLL * Prior Precision)
-        Minimizing VFE maximizes the evidence for the agent's internal model.
-        """
-        # Sensory NLL (Accuracy)
-        sensory_nll = np.sum(
-            sensory_inference * np.log(sensory_inference / (current_seeds + 1e-9)) + 
-            (1 - sensory_inference) * np.log((1 - sensory_inference) / (1 - current_seeds + 1e-9))
-        )
-        
-        # Prior NLL (Complexity)
-        prior_nll = np.sum(
-            current_seeds * np.log(current_seeds / (prior_seeds + 1e-9)) + 
-            (1 - current_seeds) * np.log((1 - current_seeds) / (1 - prior_seeds + 1e-9))
-        )
-        
-        # Precision modulation based on VFE history (Attention)
-        precision_mod = np.clip(-1.0 * vfe_trend, -0.3, 0.3)
-
-        # Sensory precision scales with VAN proxy (Salience) AND Aha Drive
-        van_proxy = sensory_inference[self.thoughtseeds.index('aha_moment')]
-        
-        # Option C: Aha Drive strongly boosts precision
-        aha_precision_boost = 1.0 + (self.aha_vfe_gain * self.aha_drive)
-        
-        pi_sensory = (self.sensory_precision_base + (self.sensory_precision_van_scalar * van_proxy)) * (1.0 + precision_mod) * self.precision_weight * aha_precision_boost
-        
-        # Prior precision scales with meta-awareness (Top-down control)
-        pi_prior = (self.prior_precision_base + (self.prior_precision_meta_scalar * meta_awareness)) * (1.0 + precision_mod) * self.complexity_penalty
-        
-        # Total VFE
-        vfe = (sensory_nll * pi_sensory) + (prior_nll * pi_prior)
-        
-        return vfe, sensory_nll, prior_nll
-   
-    def update_network_profiles(self, thoughtseed_activations: np.ndarray, network_activations: Dict[str, float], current_state: str, prediction_errors: Dict[str, float]):
-        """Update learned mappings (generative model) based on prediction errors.
-        
-        NOTE: W matrix is now fixed (Scientific Matrix Form). Only state expectations are learned.
-        This preserves the mathematically precise form while allowing state-specific learning.
-        
-        Implements a Hebbian-like associative learning rule modulated by precision.
-        """
-        if len(self.network_activations_history) < 10:
-            return
-        
-        # W matrix is fixed - no updates to thoughtseed contributions
-        # Learning now focuses only on state expectations (which are state-specific)
-        
-        # Update mediative state expectations (slower rate)
-        # Use empirical targets as anchors to prevent coupling effects from biasing learning
-        slow_rate = self.learning_rate * 0.3
-        
-        # Empirical targets from ACTIVE_INFERENCE_FRAMEWORK.md (user's table)
-        empirical_targets = {
-            "breath_focus": {
-                "expert": {"DMN": 0.30, "VAN": 0.45, "DAN": 0.60, "FPN": 0.45},
-                "novice": {"DMN": 0.55, "VAN": 0.50, "DAN": 0.60, "FPN": 0.65}
-            },
-            "mind_wandering": {
-                "expert": {"DMN": 0.60, "VAN": 0.65, "DAN": 0.40, "FPN": 0.65},
-                "novice": {"DMN": 0.75, "VAN": 0.40, "DAN": 0.35, "FPN": 0.40}
-            },
-            "meta_awareness": {
-                "expert": {"DMN": 0.40, "VAN": 0.80, "DAN": 0.50, "FPN": 0.70},
-                "novice": {"DMN": 0.50, "VAN": 0.60, "DAN": 0.50, "FPN": 0.55}
-            },
-            "redirect_breath": {
-                "expert": {"DMN": 0.35, "VAN": 0.55, "DAN": 0.65, "FPN": 0.55},
-                "novice": {"DMN": 0.45, "VAN": 0.50, "DAN": 0.65, "FPN": 0.70}
-            }
-        }
-        
-        for net in self.networks:
-            current_expect = self.learned_network_profiles["state_network_expectations"][current_state][net]
-            observed = network_activations[net]
-            empirical_target = empirical_targets.get(current_state, {}).get(self.experience_level, {}).get(net, None)
-            
-            if empirical_target is not None:
-                # Use empirical target as anchor - blend between current expectation, observed, and target
-                # Weight: 70% current, 15% observed, 15% empirical target
-                # This prevents runaway while allowing learning from observations
-                new_value = (0.70 * current_expect + 
-                            0.15 * observed + 
-                            0.15 * empirical_target)
-                
-                # Allow some flexibility but keep close to empirical target
-                # Clip to ±0.15 of empirical target
-                new_value = np.clip(new_value, 
-                                  max(0.05, empirical_target - 0.15),
-                                  min(0.95, empirical_target + 0.15))
-            else:
-                # No empirical target - use standard update (shouldn't happen)
-                pred_error = prediction_errors[net]
-                update_factor = 0.1 if abs(pred_error) > 0.2 else 1.0
-                new_value = (1 - slow_rate * update_factor) * current_expect + (slow_rate * update_factor) * observed
-            
-            self.learned_network_profiles["state_network_expectations"][current_state][net] = new_value
-        self._state_expect_vectors[current_state] = self._build_state_expect_vector(current_state)
-    
-    def get_network_modulation(self, network_acts: Dict[str, float], current_state: str) -> Dict[str, float]:
-        """Calculate how current network activity modulates thoughtseed targets.
-        Example: High DMN activity increases 'pending_tasks' and 'aha_moment' (mind-wandering).
-        """
-        modulations = {ts: 0.0 for ts in self.thoughtseeds}
-        
-        mods = NETWORK_MODULATION
-
-        dmn_strength = network_acts.get('DMN', 0)
-        modulations['pending_tasks'] += mods['DMN']['pending_tasks'] * dmn_strength
-        modulations['aha_moment'] += mods['DMN']['aha_moment'] * dmn_strength
-        modulations['attend_breath'] += mods['DMN']['attend_breath'] * dmn_strength
-
-        van_strength = network_acts.get('VAN', 0)
-        modulations['pain_discomfort'] += mods['VAN']['pain_discomfort'] * van_strength
-        if current_state == "meta_awareness":
-            modulations['aha_moment'] += mods['VAN']['aha_moment_meta_awareness'] * van_strength
-
-        dan_strength = network_acts.get('DAN', 0)
-        modulations['attend_breath'] += mods['DAN']['attend_breath'] * dan_strength
-        modulations['pending_tasks'] += mods['DAN']['pending_tasks'] * dan_strength
-        modulations['pain_discomfort'] += mods['DAN']['pain_discomfort'] * dan_strength
-        
-        fpn_strength = network_acts.get('FPN', 0)
-        fpn_enhancement = self.fpn_enhancement
-        modulations['aha_moment'] += mods['FPN']['aha_moment'] * fpn_strength * fpn_enhancement
-        modulations['equanimity'] += mods['FPN']['equanimity'] * fpn_strength * fpn_enhancement
-                
-        return modulations
-
-    def get_transition_probabilities(self, activations: np.ndarray, network_acts: Dict[str, float], targets_by_state: Dict[str, np.ndarray]) -> Dict[str, float]:
-        """Calculate probability of transitioning to each mediative state.
-        Combines two evidence sources:
-        1. Network Similarity: How close current networks are to mediative state expectations.
-        2. Activation Similarity: How close current thoughtseeds are to mediative state targets.
-        """
-        scores = {}
-        temp = max(1e-6, self.softmax_temperature)
-
-        w_net = self.transition_weight_network
-        w_act = self.transition_weight_activation
-
-        net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
-        for state in self.states:
-            # Network expectation similarity (negative L2 distance)
-            expect_vec = self._state_expect_vectors[state]
-            net_dist = np.linalg.norm(net_vec - expect_vec)
-
-            # Activation similarity: compare to target activations for that state
-            target_ts = targets_by_state[state]
-            act_dist = np.linalg.norm(activations - target_ts)
-
-            # Combine scores (deterministic, weighted distances)
-            scores[state] = float(np.exp(-(w_net * net_dist + w_act * act_dist) / (temp * 1.0)))
-
-        # Normalize into probabilities (avoid division by zero)
-        total = sum(scores.values())
-        if total <= 0:
-            # Uniform over states as a safe fallback
-            n = len(self.states)
-            return {s: 1.0 / n for s in self.states}
-
-        return {s: v / total for s, v in scores.items()}
-
     def update_thoughtseed_dynamics(self, current_activations: np.ndarray, target_activations: np.ndarray, 
                                    current_state: str, current_dwell: int, dwell_limit: int,
                                    observed_networks: Optional[Dict[str, float]] = None,
                                    sensory_inference: Optional[np.ndarray] = None) -> np.ndarray:
         """
-        Evolve thoughtseed activations using Ornstein-Uhlenbeck dynamics with Bayesian blending.
+        Layer 2: Evolve thoughtseed activations using Ornstein-Uhlenbeck dynamics with Bayesian blending.
         
         Implements Prior-Likelihood blending:
         - Prior (μ_prior): target_activations from ThoughtseedParams (where agent wants to be)
@@ -524,13 +257,13 @@ class ActInfAgent(AgentConfig):
             bf_idx = self.thoughtseeds.index("attend_breath")
             mu[bf_idx] = max(0.1, mu[bf_idx] - (effective_fatigue_rate * progress))
 
-        # 2. Set Stochastic Parameters (Ornstein-Uhlenbeck)
+        # Set Stochastic Parameters (Ornstein-Uhlenbeck)
         # Theta (Reversion Speed)
         base_theta = self.base_theta
         # Sigma (Volatility)
         base_sigma = self.base_sigma
         
-        # 3. Apply OU Update
+        # Apply OU Update
         for i, ts in enumerate(self.thoughtseeds):
             x_prev = current_activations[i]
             target = mu[i]
@@ -554,3 +287,255 @@ class ActInfAgent(AgentConfig):
             
         from meditation_utils import clip_array
         return clip_array(updated_activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+
+    def get_network_modulation(self, network_acts: Dict[str, float], current_state: str) -> Dict[str, float]:
+        """
+        Layer 2: Calculate how current network activity modulates thoughtseed targets.
+        Helper method for update_thoughtseed_dynamics().
+        Example: High DMN activity increases 'pending_tasks' and 'aha_moment' (mind-wandering).
+        """
+        modulations = {ts: 0.0 for ts in self.thoughtseeds}
+        
+        mods = NETWORK_MODULATION
+
+        dmn_strength = network_acts.get('DMN', 0)
+        modulations['pending_tasks'] += mods['DMN']['pending_tasks'] * dmn_strength
+        modulations['aha_moment'] += mods['DMN']['aha_moment'] * dmn_strength
+        modulations['attend_breath'] += mods['DMN']['attend_breath'] * dmn_strength
+
+        van_strength = network_acts.get('VAN', 0)
+        modulations['pain_discomfort'] += mods['VAN']['pain_discomfort'] * van_strength
+        if current_state == "meta_awareness":
+            modulations['aha_moment'] += mods['VAN']['aha_moment_meta_awareness'] * van_strength
+
+        dan_strength = network_acts.get('DAN', 0)
+        modulations['attend_breath'] += mods['DAN']['attend_breath'] * dan_strength
+        modulations['pending_tasks'] += mods['DAN']['pending_tasks'] * dan_strength
+        modulations['pain_discomfort'] += mods['DAN']['pain_discomfort'] * dan_strength
+        
+        fpn_strength = network_acts.get('FPN', 0)
+        fpn_enhancement = self.fpn_enhancement
+        modulations['aha_moment'] += mods['FPN']['aha_moment'] * fpn_strength * fpn_enhancement
+        modulations['equanimity'] += mods['FPN']['equanimity'] * fpn_strength * fpn_enhancement
+                
+        return modulations
+
+    # ========================================================================
+    # LAYER 3: RECOGNITION/INFERENCE
+    # ========================================================================
+    # The agent's inference and learning mechanisms that minimize Variational
+    # Free Energy through perceptual inference, VFE calculation, and learning.
+    # ========================================================================
+
+    def perceptual_inference(self) -> np.ndarray:
+        """
+        Layer 3: Perceptual Inference (Bottom-Up Recognition).
+        Infers thoughtseed beliefs (z) from sensory states in the Markov Blanket.
+        Uses amortized inference via matrix-transpose projection.
+        """
+        # Get observations from blanket's sensory states
+        network_acts = self.blanket.sensory_states
+        if not network_acts:
+            # Fallback: return neutral inference if no sensory data
+            return np.array([0.2] * self.num_thoughtseeds)
+        """
+        Layer 3: Recognition/Inference.
+        
+        Infers thoughtseed beliefs (z) by inverting the generative mapping.
+        Uses matrix-transpose projection: z_inferred = (network_obs · W^T) / row_sums(W)
+        
+        This allows Layer 3 to recognize patterns:
+        - VAN spike (0.80) → high aha_moment activation (row has 0.80 in VAN)
+        - High FPN distinguishes aha_moment (0.70) from pain_discomfort (0.40)
+        
+        Args:
+            network_acts: Observed network activations {DMN, VAN, DAN, FPN}
+        
+        Returns:
+            Inferred thoughtseed activations (5×1 vector)
+        """
+        # Convert dictionary observation to vector
+        net_vec = np.array([network_acts.get(net, 0.0) for net in self.networks])
+        
+        # Sensory Inference (A-Matrix inversion): 
+        # Project network data back onto the Thoughtseed space
+        # Normalized by the row-sums of W to ensure activation scales are preserved
+        match_scores = net_vec @ self.W.T  # (1×4) @ (4×5) = (1×5)
+        row_sums = np.sum(self.W, axis=1)  # Sum across networks for each thoughtseed
+        inferred = np.where(row_sums > 0, match_scores / row_sums, 0.1)
+                
+        return clip_array(inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+    
+    def calculate_vfe(self, observed_networks: Dict[str, float], predicted_networks: Dict[str, float], 
+                     current_seeds: np.ndarray, prior_seeds: np.ndarray, meta_awareness: float) -> Tuple[float, float, float]:
+        """
+        Layer 3: Compute Variational Free Energy (VFE) using standard Active Inference formulation.
+        
+        VFE = Accuracy (NLL of prediction errors) + Complexity (KL divergence from prior)
+        
+        Args:
+            observed_networks: Observed network activations from generative process (Layer 1)
+            predicted_networks: Predicted network activations from generative model (Layer 2)
+            current_seeds: Current thoughtseed activations q(z)
+            prior_seeds: Prior thoughtseed targets p(z)
+            meta_awareness: Meta-awareness level for precision modulation
+        
+        Returns:
+            Tuple of (vfe, accuracy_nll, complexity_kl)
+        """
+        # 1. ACCURACY: Negative Log-Likelihood of prediction errors
+        # Use Beta/Bernoulli likelihood for activations in [0,1] range
+        # NLL = -sum(observed * log(predicted) + (1-observed) * log(1-predicted))
+        eps = 1e-9  # Small epsilon to avoid log(0)
+        accuracy_nll = 0.0
+        for net in self.networks:
+            observed = observed_networks.get(net, 0.0)
+            predicted = predicted_networks.get(net, 0.0)
+            # Clip predicted to valid range [eps, 1-eps]
+            predicted = np.clip(predicted, eps, 1.0 - eps)
+            # Bernoulli/Beta NLL: -log(p(observed | predicted))
+            accuracy_nll += -(observed * np.log(predicted) + (1.0 - observed) * np.log(1.0 - predicted))
+        
+        # 2. COMPLEXITY: KL divergence from prior
+        # KL(q(z) || p(z)) = sum(q(z) * log(q(z) / p(z)))
+        complexity_kl = np.sum(
+            current_seeds * np.log((current_seeds + eps) / (prior_seeds + eps)) + 
+            (1 - current_seeds) * np.log((1 - current_seeds + eps) / (1 - prior_seeds + eps))
+        )
+        
+        # 3. PRECISION (Simplified: base precision with meta-awareness modulation)
+        # Sensory precision: base + meta-awareness boost
+        pi_sensory = self.sensory_precision_base * (1.0 + meta_awareness * self.precision_weight)
+        
+        # Prior precision: base + meta-awareness boost  
+        pi_prior = self.prior_precision_base * (1.0 + meta_awareness * self.complexity_penalty)
+        
+        # 4. TOTAL VFE
+        vfe = (accuracy_nll * pi_sensory) + (complexity_kl * pi_prior)
+        
+        return vfe, accuracy_nll, complexity_kl
+
+    def prescriptive_action(self, z: np.ndarray, vfe: float, current_state: str) -> dict:
+        """
+        Layer 3: Prescriptive Action (Top-Down Policy Selection).
+        Selects Active State prescriptions based on internal beliefs and VFE.
+        Implements Expert Policy Table for downward causation.
+        
+        Policies:
+        1. Aha! Moment Short-Circuit: If aha_moment > 0.75, truncate MW dwell
+        2. Attentional Sharpening: If meta_awareness > 0.6, reduce noise
+        3. Equanimity Buffer: If equanimity > 0.6, reduce fatigue
+        4. Precision Reset: If in meta_awareness state, clear signal
+        
+        Args:
+            z: Current thoughtseed activations (from perceptual_inference)
+            vfe: Current Variational Free Energy
+            current_state: Current meditative state
+            
+        Returns:
+            Prescription dictionary for Markov Blanket
+        """
+        prescription = {
+            'noise_reduction': 1.0,  # 1.0 = no change; < 1.0 = clearer signal
+            'dwell_modifier': 1.0,   # 1.0 = no change; < 1.0 = shorter duration
+            'fatigue_buffer': 1.0    # 1.0 = no change; < 1.0 = less fatigue
+        }
+        
+        # Policy 1: Aha! Moment Short-Circuit (Immediate MW termination)
+        aha_idx = self.thoughtseeds.index('aha_moment')
+        if z[aha_idx] > 0.75:
+            prescription['dwell_modifier'] = 0.2  # Truncate to 20% of max dwell
+            prescription['noise_reduction'] = 0.5  # Strong attentional gain
+        
+        # Policy 2: Attentional Sharpening (Meta-Awareness → Noise Reduction)
+        meta_awareness = self.get_meta_awareness(current_state, z)
+        if meta_awareness > 0.6:
+            # Use minimum (strongest reduction wins) for noise
+            prescription['noise_reduction'] = min(prescription['noise_reduction'], 0.6)
+        
+        # Policy 3: Equanimity Buffer (Reduces fatigue/distraction)
+        equanimity_idx = self.thoughtseeds.index('equanimity')
+        if z[equanimity_idx] > 0.6:
+            prescription['fatigue_buffer'] = 0.5
+        
+        # Policy 4: Precision Reset (Meta-Awareness state → Signal clearing)
+        if current_state == 'meta_awareness':
+            prescription['noise_reduction'] = min(prescription['noise_reduction'], 0.4)
+        
+        # Update blanket's active states with temporal smoothing
+        self.blanket.update_active_states(prescription)
+        
+        return prescription
+
+    def compute_prediction_errors(self, predicted: Dict[str, float], observed: Dict[str, float]) -> Dict[str, float]:
+        """
+        Layer 3: Prediction Error: δ = observed - predicted
+        Explicit error signal for Active Inference learning.
+        """
+        return {net: observed[net] - predicted[net] for net in self.networks}
+   
+    def update_network_profiles(self, thoughtseed_activations: np.ndarray, network_activations: Dict[str, float], current_state: str, prediction_errors: Dict[str, float]):
+        """Update learned mappings (generative model) based on prediction errors.
+        
+        NOTE: W matrix is now fixed (Scientific Matrix Form). Only state expectations are learned.
+        This preserves the mathematically precise form while allowing state-specific learning.
+        
+        Implements a Hebbian-like associative learning rule modulated by precision.
+        """
+        if len(self.network_activations_history) < 10:
+            return
+        
+        # W matrix is fixed - no updates to thoughtseed contributions
+        # Learning now focuses only on state expectations (which are state-specific)
+        
+        # Update mediative state expectations (slower rate)
+        # Use empirical targets as anchors to prevent coupling effects from biasing learning
+        slow_rate = self.learning_rate * 0.3
+        
+        # Empirical targets from ACTIVE_INFERENCE_FRAMEWORK.md (user's table)
+        empirical_targets = {
+            "breath_focus": {
+                "expert": {"DMN": 0.30, "VAN": 0.45, "DAN": 0.60, "FPN": 0.45},
+                "novice": {"DMN": 0.55, "VAN": 0.50, "DAN": 0.60, "FPN": 0.65}
+            },
+            "mind_wandering": {
+                "expert": {"DMN": 0.60, "VAN": 0.65, "DAN": 0.40, "FPN": 0.65},
+                "novice": {"DMN": 0.75, "VAN": 0.40, "DAN": 0.35, "FPN": 0.40}
+            },
+            "meta_awareness": {
+                "expert": {"DMN": 0.40, "VAN": 0.80, "DAN": 0.50, "FPN": 0.70},
+                "novice": {"DMN": 0.50, "VAN": 0.60, "DAN": 0.50, "FPN": 0.55}
+            },
+            "redirect_breath": {
+                "expert": {"DMN": 0.35, "VAN": 0.55, "DAN": 0.65, "FPN": 0.55},
+                "novice": {"DMN": 0.45, "VAN": 0.50, "DAN": 0.65, "FPN": 0.70}
+            }
+        }
+        
+        for net in self.networks:
+            current_expect = self.learned_network_profiles["state_network_expectations"][current_state][net]
+            observed = network_activations[net]
+            empirical_target = empirical_targets.get(current_state, {}).get(self.experience_level, {}).get(net, None)
+            
+            if empirical_target is not None:
+                # Use empirical target as anchor - blend between current expectation, observed, and target
+                # Weight: 70% current, 15% observed, 15% empirical target
+                # This prevents runaway while allowing learning from observations
+                new_value = (0.70 * current_expect + 
+                            0.15 * observed + 
+                            0.15 * empirical_target)
+                
+                # Allow some flexibility but keep close to empirical target
+                # Clip to ±0.15 of empirical target
+                new_value = np.clip(new_value, 
+                                  max(0.05, empirical_target - 0.15),
+                                  min(0.95, empirical_target + 0.15))
+            else:
+                # No empirical target - use standard update (shouldn't happen)
+                pred_error = prediction_errors[net]
+                update_factor = 0.1 if abs(pred_error) > 0.2 else 1.0
+                new_value = (1 - slow_rate * update_factor) * current_expect + (slow_rate * update_factor) * observed
+            
+            self.learned_network_profiles["state_network_expectations"][current_state][net] = new_value
+        self._state_expect_vectors[current_state] = self._build_state_expect_vector(current_state)
+

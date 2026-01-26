@@ -19,9 +19,7 @@ from meditation_utils import ensure_directories, _save_json_outputs, compute_sta
 from config.meditation_config import DEFAULTS
 from meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
-    compute_dmn_dan_anticorrelation, detect_van_spike_transition,
-    detect_meta_awareness_transition, detect_redirect_transition,
-    validate_state_signature
+    compute_dmn_dan_anticorrelation
 )
 from generative_process import MeditationGenerativeProcess
 
@@ -87,7 +85,7 @@ class Trainer:
                 current_state, current_dwell, dwell_limit, activations, meta_awareness, 
                 network_acts, sensory_inference
             )
-            free_energy, sensory_nll = self._pass_bottom_up(
+            free_energy, accuracy_nll = self._pass_bottom_up(
                 current_state, activations, meta_awareness, targets_by_state[current_state], 
                 network_acts, sensory_inference, enable_learning
             )
@@ -97,7 +95,7 @@ class Trainer:
             # Note: prescription is already applied to blanket in prescriptive_action()
 
             # 2.5 Record History & Transitions (Now correct: VFE is ready)
-            self._record_history(current_state, activations, meta_awareness, network_acts, free_energy, sensory_nll)
+            self._record_history(current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll)
             
             if state_changed:
                 # Record transition with accurate VFE (computed above)
@@ -167,10 +165,7 @@ class Trainer:
         meta_awareness = smoothing * prev_meta_awareness + (1 - smoothing) * raw_meta
         self.agent.prev_meta_awareness = meta_awareness  # Update agent state
 
-        # B. Handle Transition Blending (if needed)
-        activations = self._apply_transition_blending(activations)
-
-        # C. Get Target Activations (L3 -> L2 Prior) once per timestep
+        # B. Get Target Activations (L3 -> L2 Prior) once per timestep
         targets_by_state = {
             state: self.agent.get_target_activations(state, meta_awareness)
             for state in self.agent.states
@@ -193,15 +188,6 @@ class Trainer:
             
         return meta_awareness, activations, targets_by_state
 
-    def _apply_transition_blending(self, activations: np.ndarray) -> np.ndarray:
-        """Apply smoothing to activations during state transitions.
-        
-        NOTE: State transitions are now handled by generative_process.py,
-        so this method is kept for backward compatibility but does minimal work.
-        """
-        # Transitions are handled by the process, so no blending needed here
-        return activations
-
     def _pass_bottom_up(self, current_state: str, activations: np.ndarray, meta_awareness: float, 
                        target_activations: np.ndarray, observed_networks: Dict[str, float],
                        sensory_inference: np.ndarray, enable_learning: bool = True) -> Tuple[float, float]:
@@ -212,30 +198,29 @@ class Trainer:
         """
         
         # A. Calculate VFE (L2 Belief Revision & L3 Monitoring)
-        vfe_trend = 0.0
-        if len(self.agent.free_energy_history) > 5:
-            vfe_trend = np.mean(np.diff(self.agent.free_energy_history[-5:]))
-
-        free_energy, sensory_nll, _ = self.agent.calculate_vfe(
-            activations, target_activations, sensory_inference, meta_awareness, vfe_trend
+        # Compute predictions for VFE calculation
+        predicted_networks = self.agent.compute_generative_predictions(activations, current_state, meta_awareness)
+        
+        # Calculate VFE using observed vs predicted networks (standard Active Inference)
+        free_energy, accuracy_nll, _ = self.agent.calculate_vfe(
+            observed_networks, predicted_networks, activations, target_activations, 
+            meta_awareness
         )
         
         # B. Update network profiles (Learning)
         if enable_learning:
             # Compute proper prediction errors: δ = observed - predicted
-            # Generative model predicts networks from thoughtseeds and state
-            predicted_networks = self.agent.compute_generative_predictions(activations, current_state, meta_awareness)
             prediction_errors = self.agent.compute_prediction_errors(predicted_networks, observed_networks)
             self.agent.update_network_profiles(activations, observed_networks, current_state, prediction_errors)
         
-        return free_energy, sensory_nll
+        return free_energy, accuracy_nll
 
     def _record_history(self, current_state: str, activations: np.ndarray, meta_awareness: float, 
-                       network_acts: Dict[str, float], free_energy: float, sensory_nll: float):
+                       network_acts: Dict[str, float], free_energy: float, accuracy_nll: float):
         """Record simulation data to agent history."""
         self.agent.network_activations_history.append(network_acts.copy())
         self.agent.free_energy_history.append(free_energy)
-        self.agent.prediction_error_history.append(sensory_nll)
+        self.agent.prediction_error_history.append(accuracy_nll)
         self.agent.precision_history.append(0.5 + self.agent.precision_weight * meta_awareness)
 
         dominant_ts = self.agent.thoughtseeds[np.argmax(activations)]
@@ -295,7 +280,6 @@ class Trainer:
         logging.info("Saved transition stats -> %s", os.path.relpath(out_path))
 
         logging.info("Active Inference training complete for %s.", self.agent.experience_level)
-        logging.info("  - Natural transitions: %d, Forced transitions: %d", self.agent.natural_transition_count, self.agent.forced_transition_count)
 
         # Generate consumer-ready JSONs
         _save_json_outputs(self.agent, output_dir=out_dir, aggregates=aggregates)
