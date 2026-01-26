@@ -1,7 +1,7 @@
 """
 meditation_trainer.py
 
-Trainer that orchestrates Active Inference training for an `ActInfAgent`.
+Trainer that orchestrates Active Inference training for a `GNWBottleneck`.
 This module pulls the training loop out of the agent to keep the agent focused
 on dynamics, inference and small learning steps.
 
@@ -60,9 +60,10 @@ class Trainer:
         transition_timestamps = []
         old_state = current_state  # Track for transitions
 
-        # 2. Training Loop (Russian Doll Enactive Inference)
+        # 2. Training Loop (Russian Doll Enactive Inference with Dual Markov Blankets)
         for t in range(self.agent.timesteps):
             # 2.1 Biology (Layer 1): Generate network signals with downward causation
+            # Reads from Blanket L1-L2 active states (prescriptions from L2)
             network_acts, process_state = self.process.update(self.agent.blanket.active_states)
             
             # Check if state transition occurred in process
@@ -75,24 +76,31 @@ class Trainer:
             else:
                 current_dwell += 1
             
-            # 2.2 Sensory Step: Update blanket's sensory states
+            # 2.2 Blanket L1-L2: Update sensory states (L1 → L2)
+            # Sensory: Network activations from Layer 1
             self.agent.blanket.update_sensory_states(network_acts)
             
-            # 2.3 Perception (Layer 3): Perceptual inference from blanket
+            # 2.3 Perception (Layer 2): Perceptual inference from Blanket L1-L2
             sensory_inference = self.agent.perceptual_inference()
             
+            # 2.4 Top-Down: Update thoughtseed dynamics (Layer 2)
             meta_awareness, activations, targets_by_state = self._pass_top_down(
                 current_state, current_dwell, dwell_limit, activations, meta_awareness, 
                 network_acts, sensory_inference
             )
+            
+            # 2.5 Bottom-Up: VFE calculation (Layer 2 → Layer 3 via Blanket L2-L3)
+            # Note: calculate_vfe() writes to Blanket_2 sensory states and delegates to Monitor
             free_energy, accuracy_nll = self._pass_bottom_up(
                 current_state, activations, meta_awareness, targets_by_state[current_state], 
                 network_acts, sensory_inference, enable_learning
             )
             
-            # 2.4 Action (Layer 3): Prescriptive action based on beliefs and VFE
+            # 2.6 Action (Layer 3 → Layer 2 → Layer 1): Prescriptive action via dual blankets
+            # Note: prescriptive_action() writes to Blanket_2, delegates to Monitor,
+            #       Monitor writes L2-L3 active states, returns L1-L2 prescriptions
             prescription = self.agent.prescriptive_action(activations, free_energy, current_state)
-            # Note: prescription is already applied to blanket in prescriptive_action()
+            # L1-L2 prescriptions are already applied to Blanket L1-L2 in prescriptive_action()
 
             # 2.5 Record History & Transitions (Now correct: VFE is ready)
             self._record_history(current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll)
@@ -140,8 +148,11 @@ class Trainer:
         network_acts, _ = self.process.update(self.agent.blanket.active_states)
         self.agent.prev_network_acts = network_acts.copy()
         
-        # Initialize blanket's sensory states
+        # Initialize Blanket L1-L2: Update sensory states (L1 → L2)
         self.agent.blanket.update_sensory_states(network_acts)
+        
+        # Initialize Blanket L2-L3: Reset to default (will be populated during training)
+        self.agent.blanket_l2l3.reset()
 
         # Initialize meta-awareness and VFE accumulator
         meta_awareness = self.agent.get_meta_awareness(current_state, activations)
@@ -193,15 +204,17 @@ class Trainer:
                        sensory_inference: np.ndarray, enable_learning: bool = True) -> Tuple[float, float]:
         """Execute Bottom-Up dynamics: VFE calculation and Learning.
         
-        NOTE: Sensory inference is now computed before _pass_top_down for Bayesian blending.
+        Flow: L2 computes predictions → writes to Blanket_2 → L3 Monitor computes VFE
+        NOTE: Sensory inference is computed before _pass_top_down for Bayesian blending.
         Network activations are provided from generative_process (Layer 1).
         """
         
-        # A. Calculate VFE (L2 Belief Revision & L3 Monitoring)
-        # Compute predictions for VFE calculation
+        # A. Layer 2: Compute generative predictions
         predicted_networks = self.agent.compute_generative_predictions(activations, current_state, meta_awareness)
         
-        # Calculate VFE using observed vs predicted networks (standard Active Inference)
+        # B. Layer 2 → Layer 3: Calculate VFE via Blanket L2-L3
+        # calculate_vfe() writes sensory data to Blanket_2 and delegates to Monitor
+        # Monitor reads from Blanket_2, computes VFE, and returns result
         free_energy, accuracy_nll, _ = self.agent.calculate_vfe(
             observed_networks, predicted_networks, activations, target_activations, 
             meta_awareness

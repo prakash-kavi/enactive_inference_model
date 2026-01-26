@@ -5,7 +5,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import json
 import numpy as np
 from pathlib import Path
-from meditation_model import ActInfAgent
+from meditation_model import GNWBottleneck
 from meditation_utils import ensure_directories
 from meditation_trainer import Trainer
 
@@ -21,7 +21,7 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
         logging.info(f"Training {level} - Seed {seed}")
         
         # Create agent
-        agent = ActInfAgent(experience_level=level, timesteps_per_cycle=timesteps)
+        agent = GNWBottleneck(experience_level=level, timesteps_per_cycle=timesteps)
         
         # Save full outputs only for Seed 42 (for plotting purposes)
         save_output = (seed == 42)

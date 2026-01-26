@@ -5,7 +5,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import json
 import numpy as np
 from pathlib import Path
-from meditation_model import ActInfAgent
+from meditation_model import GNWBottleneck
 from meditation_utils import ensure_directories
 from meditation_trainer import Trainer
 
@@ -24,7 +24,7 @@ def load_trained_attractors(level: str, training_dir: str = "data/training") -> 
     
     return summary['network_profiles_mean']
 
-def initialize_agent_with_attractors(agent: ActInfAgent, attractors: dict):
+def initialize_agent_with_attractors(agent: GNWBottleneck, attractors: dict):
     """Initialize agent's state-network expectations with trained attractors."""
     # Validate that all states are present in attractors
     missing_states = [state for state in agent.states if state not in attractors]
@@ -71,7 +71,7 @@ def run_simulation():
 
     # Run Novice Simulation
     logging.info("\n--- Running Novice Simulation ---")
-    agent_novice = ActInfAgent(experience_level='novice', timesteps_per_cycle=T)
+    agent_novice = GNWBottleneck(experience_level='novice', timesteps_per_cycle=T)
     initialize_agent_with_attractors(agent_novice, novice_attractors)
     logging.info("Novice seed: %d", seed)
     Trainer(agent_novice).train(
@@ -83,7 +83,7 @@ def run_simulation():
 
     # Run Expert Simulation
     logging.info("\n--- Running Expert Simulation ---")
-    agent_expert = ActInfAgent(experience_level='expert', timesteps_per_cycle=T)
+    agent_expert = GNWBottleneck(experience_level='expert', timesteps_per_cycle=T)
     initialize_agent_with_attractors(agent_expert, expert_attractors)
     logging.info("Expert seed: %d", seed)
     Trainer(agent_expert).train(
