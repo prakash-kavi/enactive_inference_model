@@ -60,18 +60,17 @@ class Trainer:
         
         state_transition_patterns = []
         transition_timestamps = []
-        old_state_abbrev = self.agent.map_state_full_to_abbrev(current_state)  # Track for transitions
+        old_state = current_state  # Track for transitions
 
         # 2. Training Loop (Russian Doll Enactive Inference)
         for t in range(self.agent.timesteps):
             # 2.1 Biology (Layer 1): Generate network signals with downward causation
-            network_acts, process_state_abbrev = self.process.update(self.agent.blanket.active_states)
-            process_state = self.agent.map_state_abbrev_to_full(process_state_abbrev)
+            network_acts, process_state = self.process.update(self.agent.blanket.active_states)
             
             # Check if state transition occurred in process
             state_changed = (process_state != current_state)
             if state_changed:
-                old_state_abbrev = self.agent.map_state_full_to_abbrev(current_state)
+                old_state = current_state
                 current_state = process_state
                 current_dwell = 0
                 dwell_limit = self.process.current_max_dwell
@@ -103,15 +102,15 @@ class Trainer:
             if state_changed:
                 # Record transition with accurate VFE (computed above)
                 pattern = (
-                    old_state_abbrev,  # from
-                    process_state_abbrev,  # to
+                    old_state,  # from
+                    process_state,  # to
                     {ts: activations[i] for i, ts in enumerate(self.agent.thoughtseeds)},
                     {net: val for net, val in network_acts.items()},
                     free_energy,  # Now contains the actual VFE for this transition
                 )
                 state_transition_patterns.append(pattern)
                 transition_timestamps.append(t)
-                old_state_abbrev = process_state_abbrev  # Update for next potential transition
+                old_state = process_state  # Update for next potential transition
             
             # Update previous network activations for next step
             self.agent.prev_network_acts = network_acts.copy()
@@ -125,11 +124,10 @@ class Trainer:
     def _initialize_simulation(self) -> Tuple[str, int, int, np.ndarray, Dict[str, float], float]:
         """Initialize simulation state, dwell times, and activations."""
         # Reset generative process
-        self.process.reset(state='BF')
+        self.process.reset(state='breath_focus')
         
-        # Get initial state from process (abbreviation)
-        process_state_abbrev = self.process.current_state
-        current_state = self.agent.map_state_abbrev_to_full(process_state_abbrev)
+        # Get initial state from process
+        current_state = self.process.current_state
         current_dwell = 0
         # Dwell times are now handled by generative process, but we track for compatibility
         dwell_limit = self.process.current_max_dwell

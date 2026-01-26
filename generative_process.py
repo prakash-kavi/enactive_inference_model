@@ -16,6 +16,7 @@ Key Features:
 
 import numpy as np
 from typing import Dict, Tuple, Optional
+from config.meditation_config import STATES
 
 class MeditationGenerativeProcess:
     """
@@ -37,14 +38,14 @@ class MeditationGenerativeProcess:
         self.smoothing_alpha = 0.7
         self.smoothed_x = self.x.copy()
         
-        # Canonical Cycle Logic: BF -> MW -> MA -> RA -> BF
-        self.current_state = 'BF'
+        # Canonical Cycle Logic: breath_focus -> mind_wandering -> meta_awareness -> redirect_breath -> breath_focus
+        self.current_state = 'breath_focus'
         self.state_timer = 0
         
-        # Empirical Dwell Time Ranges (seconds)
+        # Empirical Dwell Time Ranges (seconds) - using full state names from config
         self.dwell_configs = {
-            'expert': {'BF': (15, 30), 'MW': (10, 20), 'MA': (1, 4), 'RA': (1, 4)},
-            'novice': {'BF': (5, 15), 'MW': (20, 40), 'MA': (2, 6), 'RA': (2, 5)}
+            'expert': {'breath_focus': (15, 30), 'mind_wandering': (10, 20), 'meta_awareness': (1, 4), 'redirect_breath': (1, 4)},
+            'novice': {'breath_focus': (5, 15), 'mind_wandering': (20, 40), 'meta_awareness': (2, 6), 'redirect_breath': (2, 5)}
         }[self.level]
         
         self.current_max_dwell = self._sample_weibull_dwell()
@@ -74,7 +75,12 @@ class MeditationGenerativeProcess:
         Args:
             active_states: Optional modulation from Markov Blanket (for dwell modifier)
         """
-        flow = {'BF': 'MW', 'MW': 'MA', 'MA': 'RA', 'RA': 'BF'}
+        flow = {
+            'breath_focus': 'mind_wandering', 
+            'mind_wandering': 'meta_awareness', 
+            'meta_awareness': 'redirect_breath', 
+            'redirect_breath': 'breath_focus'
+        }
         self.current_state = flow[self.current_state]
         self.state_timer = 0
         
@@ -83,8 +89,8 @@ class MeditationGenerativeProcess:
         
         # Apply volitional control (dwell modifier) only at transition to avoid mid-cycle disruption
         if active_states and 'dwell_modifier' in active_states:
-            # Only apply to distraction states (MW) - allow agent to "short-circuit" wandering
-            if self.current_state == 'MW':
+            # Only apply to distraction states (mind_wandering) - allow agent to "short-circuit" wandering
+            if self.current_state == 'mind_wandering':
                 self.current_max_dwell = int(self.current_max_dwell * active_states['dwell_modifier'])
                 self.current_max_dwell = max(1, self.current_max_dwell)  # Ensure at least 1 timestep
 
@@ -93,19 +99,23 @@ class MeditationGenerativeProcess:
         # 1. MEAN TARGETS (mu)
         mu_map = {
             'expert': {
-                'BF': [0.30, 0.45, 0.60, 0.45], 'MW': [0.60, 0.65, 0.40, 0.65],
-                'MA': [0.40, 0.80, 0.50, 0.70], 'RA': [0.35, 0.55, 0.65, 0.55]
+                'breath_focus': [0.30, 0.45, 0.60, 0.45], 
+                'mind_wandering': [0.60, 0.65, 0.40, 0.65],
+                'meta_awareness': [0.40, 0.80, 0.50, 0.70], 
+                'redirect_breath': [0.35, 0.55, 0.65, 0.55]
             },
             'novice': {
-                'BF': [0.55, 0.50, 0.60, 0.65], 'MW': [0.75, 0.40, 0.35, 0.40],
-                'MA': [0.50, 0.60, 0.50, 0.55], 'RA': [0.45, 0.50, 0.65, 0.70]
+                'breath_focus': [0.55, 0.50, 0.60, 0.65], 
+                'mind_wandering': [0.75, 0.40, 0.35, 0.40],
+                'meta_awareness': [0.50, 0.60, 0.50, 0.55], 
+                'redirect_breath': [0.45, 0.50, 0.65, 0.70]
             }
         }
         mu = np.array(mu_map[self.level][self.current_state])
 
         # 2. DRIFT MATRICES (Theta) 
         # Expert stability base: 0.50. Meta-Awareness 'Aha' Spike: 0.80
-        diag_val = 0.80 if (self.level == 'expert' and self.current_state == 'MA') else (0.50 if self.level == 'expert' else 0.15)
+        diag_val = 0.80 if (self.level == 'expert' and self.current_state == 'meta_awareness') else (0.50 if self.level == 'expert' else 0.15)
         theta = np.eye(4) * diag_val
 
         # Exact Off-diagonal Coupling
@@ -114,32 +124,32 @@ class MeditationGenerativeProcess:
         # NOTE: Values are hardcoded based on empirical neuroscience, not from COUPLING_MATRICES.
         # This allows fine-tuning beyond the config values.
         if self.level == 'expert':
-            if self.current_state == 'BF':
+            if self.current_state == 'breath_focus':
                 theta[0, 2] = theta[2, 0] = 0.70  # DMN-DAN competition
                 theta[0, 3] = theta[3, 0] = 0.60  # DMN-FPN anti-correlation
                 theta[2, 3] = theta[3, 2] = -0.50 # DAN-FPN coordination
-            elif self.current_state == 'MW':
+            elif self.current_state == 'mind_wandering':
                 theta[0, 1] = theta[1, 0] = -0.30 # DMN-VAN monitoring
                 theta[0, 3] = theta[3, 0] = -0.20 # DMN-FPN positive coupling
                 theta[1, 3] = theta[3, 1] = -0.40 # VAN-FPN monitoring
-            elif self.current_state == 'MA':
+            elif self.current_state == 'meta_awareness':
                 theta[1, 3] = theta[3, 1] = -0.70 # Peak VAN-FPN salience peak
-            elif self.current_state == 'RA':
-                # RA = Focus-Reacquisition: Positive off-diagonals suppress DMN, driving return to focus
+            elif self.current_state == 'redirect_breath':
+                # Redirect = Focus-Reacquisition: Positive off-diagonals suppress DMN, driving return to focus
                 theta[0, 2] = theta[2, 0] = 0.60  # DMN-DAN suppression (Crucial for Return)
                 theta[0, 3] = theta[3, 0] = 0.50  # DMN-FPN suppression
                 theta[2, 3] = theta[3, 2] = -0.70 # DAN-FPN coordination
         else:  # Novice coupling (weaker stability, higher competition effort)
-            if self.current_state == 'BF':
+            if self.current_state == 'breath_focus':
                 theta[0, 2] = theta[2, 0] = 0.50
                 theta[2, 3] = theta[3, 2] = -0.40
-            elif self.current_state == 'MW':
+            elif self.current_state == 'mind_wandering':
                 theta[0, 2] = theta[2, 0] = 0.60
                 theta[0, 3] = theta[3, 0] = 0.60
-            elif self.current_state == 'MA':
+            elif self.current_state == 'meta_awareness':
                 theta[1, 3] = theta[3, 1] = -0.50
-            elif self.current_state == 'RA':
-                # RA = Focus-Reacquisition: Positive off-diagonals suppress DMN
+            elif self.current_state == 'redirect_breath':
+                # Redirect = Focus-Reacquisition: Positive off-diagonals suppress DMN
                 theta[0, 2] = theta[2, 0] = 0.55
                 theta[0, 3] = theta[3, 0] = 0.45
                 theta[2, 3] = theta[3, 2] = -0.60
@@ -161,7 +171,7 @@ class MeditationGenerativeProcess:
             active_states: Optional modulation from Markov Blanket for attentional gain and volitional control
         
         Returns:
-            Tuple of (network_activations_dict, state_abbreviation)
+            Tuple of (network_activations_dict, state_name)
         """
         self.state_timer += 1
         if self.state_timer >= self.current_max_dwell:
@@ -208,7 +218,7 @@ class MeditationGenerativeProcess:
         
         return dict(zip(self.networks, self.smoothed_x)), self.current_state
 
-    def reset(self, state: str = 'BF'):
+    def reset(self, state: str = 'breath_focus'):
         """Reset the unconscious process."""
         self.current_state = state
         self.state_timer = 0

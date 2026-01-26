@@ -147,13 +147,6 @@ class ActInfAgent(AgentConfig):
             state: self._build_state_expect_vector(state) for state in self.states
         }
         
-        # State abbreviation mapping (generative_process uses BF/MW/MA/RA)
-        self._state_abbrev_map = {
-            'BF': 'breath_focus', 'MW': 'mind_wandering',
-            'MA': 'meta_awareness', 'RA': 'redirect_breath'
-        }
-        self._state_full_to_abbrev = {v: k for k, v in self._state_abbrev_map.items()}
-        
         # Markov Blanket: The agent's statistical boundary (Russian Doll architecture)
         self.blanket = MarkovBlanket(smoothing=0.9)
 
@@ -161,14 +154,6 @@ class ActInfAgent(AgentConfig):
         """Build a dense vector of network expectations for a given state."""
         expect = self.learned_network_profiles["state_network_expectations"][state]
         return np.array([expect[net] for net in self.networks])
-
-    def map_state_abbrev_to_full(self, abbrev_state: str) -> str:
-        """Map state abbreviation (BF/MW/MA/RA) to full state name."""
-        return self._state_abbrev_map.get(abbrev_state, abbrev_state)
-    
-    def map_state_full_to_abbrev(self, full_state: str) -> str:
-        """Map full state name to abbreviation (BF/MW/MA/RA)."""
-        return self._state_full_to_abbrev.get(full_state, full_state)
 
     def compute_generative_predictions(self, thoughtseed_activations: np.ndarray, current_state: str, meta_awareness: float) -> Dict[str, float]:
         """
@@ -179,16 +164,12 @@ class ActInfAgent(AgentConfig):
         
         Args:
             thoughtseed_activations: z vector (5×1) of thoughtseed strengths
-            current_state: Mediative state (full name or abbreviation)
+            current_state: Mediative state (full name from STATES)
             meta_awareness: Meta-awareness level (modulates state expectation bias)
         
         Returns:
             Dictionary of predicted network activations {DMN, VAN, DAN, FPN}
         """
-        # Normalize state name (handle both full and abbrev)
-        if current_state in self._state_abbrev_map:
-            current_state = self.map_state_abbrev_to_full(current_state)
-        
         # 1. Prediction based strictly on latent thoughtseed strength
         # μ_pred is a 1×4 vector of [DMN, VAN, DAN, FPN]
         mu_pred = thoughtseed_activations @ self.W
@@ -500,12 +481,7 @@ class ActInfAgent(AgentConfig):
         # Apply Network Modulation to Prior (use observed networks if provided)
         networks_for_modulation = observed_networks if observed_networks is not None else self.prev_network_acts
         if networks_for_modulation:
-            # Normalize state name for modulation lookup
-            mod_state = current_state
-            if current_state in self._state_abbrev_map:
-                mod_state = self.map_state_abbrev_to_full(current_state)
-            
-            modulations = self.get_network_modulation(networks_for_modulation, mod_state)
+            modulations = self.get_network_modulation(networks_for_modulation, current_state)
             for i, ts in enumerate(self.thoughtseeds):
                 mu_prior[i] += modulations[ts]
                 
