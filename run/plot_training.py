@@ -160,7 +160,63 @@ def plot_convergence_history(level, results_dir="data/training", output_dir="plo
     save_figure(fig, os.path.join(output_dir, f"FigS1_Convergence_{level.capitalize()}.png"), "Convergence")
     plt.close()
 
-def plot_radar_comparison(novice_summary, expert_summary, output_dir="plots/training"):
+def _load_training_series(level, results_dir):
+    plots_data_dir = Path(results_dir) / "convergence_plots_data"
+    history_file = plots_data_dir / f"thoughtseed_params_{level}.json"
+    if not history_file.exists():
+        return {}
+    try:
+        with open(history_file) as f:
+            payload = json.load(f)
+            return payload.get("time_series", {})
+    except Exception:
+        return {}
+
+def _network_means_dwell_window(series, warmup_frac=0.2, tail_frac=0.5, min_samples_per_dwell=1):
+    state_history = series.get("state_history", [])
+    net_hist = series.get("network_activations_history", [])
+    if not state_history or not net_hist:
+        return {}
+
+    n = min(len(state_history), len(net_hist))
+    state_history = state_history[-n:]
+    net_hist = net_hist[-n:]
+
+    acc = {s: {net: [] for net in NETWORKS} for s in STATES}
+    counts = {s: 0 for s in STATES}
+
+    start_idx = 0
+    current_state = state_history[0]
+    for i in range(1, n + 1):
+        end_segment = (i == n) or (state_history[i] != current_state)
+        if end_segment:
+            end_idx = i
+            seg_len = end_idx - start_idx
+            if seg_len > 0:
+                start_frac = max(warmup_frac, 1.0 - tail_frac)
+                seg_start = start_idx + int(seg_len * start_frac)
+                if seg_start >= end_idx:
+                    seg_start = max(start_idx, end_idx - min_samples_per_dwell)
+                for j in range(seg_start, end_idx):
+                    row = net_hist[j]
+                    for net in NETWORKS:
+                        acc[current_state][net].append(float(row.get(net, 0.0)))
+                    counts[current_state] += 1
+            if i < n:
+                current_state = state_history[i]
+                start_idx = i
+
+    means = {}
+    for s in STATES:
+        if counts[s] == 0:
+            continue
+        means[s] = {}
+        for net in NETWORKS:
+            vals = acc[s][net]
+            means[s][net] = float(np.mean(vals)) if vals else 0.0
+    return means
+
+def plot_radar_comparison(novice_summary, expert_summary, output_dir="plots/training", results_dir="data/training"):
     """
     Fig3B: Network Activation Profiles (radar plots showing network expectations for each state)
     Matches user's reference style:
@@ -172,9 +228,14 @@ def plot_radar_comparison(novice_summary, expert_summary, output_dir="plots/trai
     """
     set_plot_style()
     
-    # Map summaries to data access pattern
-    nov_data = novice_summary['network_profiles_mean']
-    exp_data = expert_summary['network_profiles_mean']
+    # Prefer dwell-window means from training time series when available
+    nov_series = _load_training_series("novice", results_dir)
+    exp_series = _load_training_series("expert", results_dir)
+    nov_data = _network_means_dwell_window(nov_series)
+    exp_data = _network_means_dwell_window(exp_series)
+    if not nov_data or not exp_data:
+        logging.warning("Radar: missing dwell-window data for novice/expert; skipping plot.")
+        return
 
     fig = plt.figure(figsize=(14, 12))
     fig.suptitle('Learned Network Activation Profiles', fontsize=18, fontweight='bold')

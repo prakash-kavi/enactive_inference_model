@@ -16,7 +16,7 @@ import torch.optim as optim
 from typing import Tuple, Dict, Any, Optional
 
 from utils.meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates, build_transition_stats
-from config.meditation_config import DEFAULTS
+from config.meditation_config import DEFAULTS, NETWORK_PROFILES
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
     compute_dmn_dan_anticorrelation
@@ -268,9 +268,17 @@ class Trainer:
             (1 - z) * torch.log((1 - z) / (1 - prior))
         )
 
+        # C. Network target regularizer (lightweight)
+        reg_weight = getattr(self.agent.params, "network_target_reg", 0.0)
+        target_loss = torch.tensor(0.0, device=device)
+        if reg_weight > 0.0 and current_state in NETWORK_PROFILES:
+            prof = NETWORK_PROFILES[current_state][self.agent.experience_level]
+            target_vec = torch.tensor([prof[n] for n in self.agent.networks], device=device, dtype=torch.float32)
+            target_loss = torch.nn.functional.mse_loss(x, target_vec, reduction='sum')
+
         # Total loss
         beta = 1.0
-        loss = recon_loss + beta * kl_div
+        loss = recon_loss + beta * kl_div + (reg_weight * target_loss)
         
         # We treat VAE loss as "Free Energy"
         free_energy = loss

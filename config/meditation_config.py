@@ -203,6 +203,7 @@ class ActInfParams:
     # State expectations and modulation
     fpn_enhancement: float
     expert_meta_scalar: float
+    network_target_reg: float
 
     _BASE_DEFAULTS = {
         "precision_weight": 0.4,
@@ -223,6 +224,7 @@ class ActInfParams:
         "sensory_precision_base": 0.1,
         "prior_precision_base": 1.0,
         "expert_meta_scalar": 1.0,
+        "network_target_reg": 0.05,
     }
 
     @classmethod
@@ -244,6 +246,7 @@ class ActInfParams:
             smoothing=0.8,
             base_theta=0.5, # Increased from 0.25 to 0.5 (Stiff Attractor)
             base_sigma=0.035,
-            expert_meta_scalar=1.05
+            expert_meta_scalar=1.05,
+            network_target_reg=0.05
         )
         return cls(**base)
