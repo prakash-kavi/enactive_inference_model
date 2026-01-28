@@ -28,16 +28,18 @@ TS_BF = THOUGHTSEEDS.index("attend_breath")
 TS_PT = THOUGHTSEEDS.index("pending_tasks")
 TS_PD = THOUGHTSEEDS.index("pain_discomfort")
 
-def _load_cohort_series(cohort: str, tail: int | None = 200) -> Dict[str, np.ndarray]:
-    ts_data, _, stats_data = pu.load_json_data(cohort)
-    
-    # Use pu.get_tail_stats to slice
+def load_cohort_series(
+    cohort: str,
+    tail: int | None = 200,
+    data_dir: Path | None = None,
+) -> Dict[str, np.ndarray]:
+    ts_data, _, stats_data = pu.load_json_data_from(data_dir or pu.DATA_DIR, cohort)
     tail_stats = pu.get_tail_stats(stats_data, tail=tail)
-    
+
     activations = np.asarray(tail_stats.get("activations_history", []), dtype=float)
     free_energy = np.asarray(tail_stats.get("free_energy_history", []), dtype=float)
     states = tail_stats.get("state_history", [])
-    
+
     if activations.ndim != 2 or activations.shape[0] == 0:
         raise ValueError(f"Activation history missing or malformed for {cohort}")
 
@@ -358,20 +360,25 @@ def plot_attractor_landscape_3d(
     pu.save_figure(fig, out_path, "Attractor 3D")
     plt.close(fig)
 
-def generate_plots(tail: int | None = 500) -> None:
-    novice = _load_cohort_series("novice", tail=tail)
-    expert = _load_cohort_series("expert", tail=tail)
+def generate_plots(
+    tail: int | None = pu.TAIL_STEPS,
+    data_dir: Path | None = None,
+    output_dir: Path | None = None,
+) -> None:
+    novice = load_cohort_series("novice", tail=tail, data_dir=data_dir)
+    expert = load_cohort_series("expert", tail=tail, data_dir=data_dir)
     
     # Figure 5A: 2D Attractor
+    out_dir = output_dir or Path(pu.PLOT_DIR)
     plot_attractor_2d(
         novice, expert, 
-        save_path=Path(pu.PLOT_DIR) / "Fig5A_Attractor2D.png"
+        save_path=out_dir / "Fig5A_Attractor2D.png"
     )
     
     # Figure 5B: 3D Landscape
     plot_attractor_landscape_3d(
         novice, expert, 
-        save_path=Path(pu.PLOT_DIR) / "Fig5B_Attractor3D.png"
+        save_path=out_dir / "Fig5B_Attractor3D.png"
     )
 
     # save_figure already logs file paths

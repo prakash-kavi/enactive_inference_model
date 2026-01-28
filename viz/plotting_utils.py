@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import copy
 from pathlib import Path
 
-TAIL_STEPS = 200
+TAIL_STEPS = 1000
 
 STATE_DISPLAY_NAMES = {
     "breath_focus": "Breath Focus",
@@ -36,7 +36,9 @@ STATE_COLORS = {
     "redirect_breath": "#ff7f0e",
 }
 
-NETWORK_KEYS = ["DMN", "VAN", "DAN", "FPN"]
+from config.meditation_config import NETWORKS
+
+NETWORK_KEYS = NETWORKS
 
 NETWORK_COLORS = {
     'DMN': '#CA3542',
@@ -93,16 +95,20 @@ def load_time_series(cohort):
     return payload.get("time_series", {})
 
 def load_json_data(cohort):
+    """Load all JSON data for a cohort from the default data dir."""
+    return load_json_data_from(DATA_DIR, cohort)
+
+def load_json_data_from(data_dir, cohort):
     """
-    Load all JSON data for a specific cohort ('novice' or 'expert').
+    Load all JSON data for a specific cohort ('novice' or 'expert') from a base directory.
     Returns a tuple: (thoughtseed_params, active_inference_params, transition_stats)
     """
-    ts_path = os.path.join(DATA_DIR, f"thoughtseed_params_{cohort}.json")
-    ai_path = os.path.join(DATA_DIR, f"active_inference_params_{cohort}.json")
-    stats_path = os.path.join(DATA_DIR, f"transition_stats_{cohort}.json")
-    frozen_path = os.path.join(DATA_DIR, f"frozen_params_{cohort}.json")
+    base = os.fspath(data_dir)
+    ts_path = os.path.join(base, f"thoughtseed_params_{cohort}.json")
+    ai_path = os.path.join(base, f"active_inference_params_{cohort}.json")
+    stats_path = os.path.join(base, f"transition_stats_{cohort}.json")
+    frozen_path = os.path.join(base, f"frozen_params_{cohort}.json")
 
-    # Try loading frozen params first as it often contains the time series snapshot
     frozen_data = {}
     if os.path.exists(frozen_path):
         with open(frozen_path, 'r') as f:
@@ -112,23 +118,21 @@ def load_json_data(cohort):
     if os.path.exists(ts_path):
         with open(ts_path, 'r') as f:
             ts_data = json.load(f)
-            
+
     ai_data = {}
     if os.path.exists(ai_path):
         with open(ai_path, 'r') as f:
             ai_data = json.load(f)
-            
+
     stats_data = {}
     if os.path.exists(stats_path):
         with open(stats_path, 'r') as f:
             stats_data = json.load(f)
 
-    # Merge frozen time series into stats if missing (backwards compatibility)
     if "state_history" not in stats_data and "time_series_snapshot" in frozen_data:
         logging.info("Merging time_series_snapshot from frozen_params into stats for %s", cohort)
         stats_data.update(frozen_data["time_series_snapshot"])
 
-    # Also check thoughtseed_params for time_series
     if "state_history" not in stats_data and "time_series" in ts_data:
         logging.info("Merging time_series from thoughtseed_params into stats for %s", cohort)
         stats_data.update(ts_data["time_series"])
@@ -160,7 +164,33 @@ def get_tail_stats(stats_data, tail=TAIL_STEPS):
     for key in keys:
         if key in trimmed:
             trimmed[key] = slice_tail(trimmed[key], tail)
-    return trimmed
+    return align_time_series(trimmed, keys)
+
+def align_time_series(stats_data, keys):
+    """Align time-series fields to the same length (tail-aligned)."""
+    lengths = []
+    for key in keys:
+        seq = stats_data.get(key)
+        if seq is None:
+            continue
+        try:
+            lengths.append(len(seq))
+        except Exception:
+            continue
+    if not lengths:
+        return stats_data
+    min_len = min(lengths)
+    if min_len <= 0:
+        return stats_data
+    for key in keys:
+        seq = stats_data.get(key)
+        if seq is None:
+            continue
+        try:
+            stats_data[key] = seq[-min_len:]
+        except Exception:
+            continue
+    return stats_data
 
 def smooth_series(values, alpha=0.5):
     """Exponential moving average smoothing."""

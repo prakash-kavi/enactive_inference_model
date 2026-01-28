@@ -1,0 +1,88 @@
+"""Layer 3: Monitoring and policy layer.
+
+Observes Layer 2 summary signals and emits lightweight control policies.
+"""
+
+import torch
+import torch.nn as nn
+import numpy as np
+
+class WitnessingLayer(nn.Module):
+    """Layer 3 monitoring + policy module."""
+    
+    def __init__(self, networks: list, thoughtseeds: list, 
+                 sensory_precision_base: float, prior_precision_base: float,
+                 precision_weight: float, complexity_penalty: float,
+                 get_meta_awareness_fn=None, blanket_l2l3=None):
+        super().__init__()
+        
+        self.networks = networks
+        self.thoughtseeds = thoughtseeds
+        self.sensory_precision_base = sensory_precision_base
+        self.prior_precision_base = prior_precision_base
+        self.precision_weight = precision_weight
+        self.complexity_penalty = complexity_penalty
+        self.get_meta_awareness_fn = get_meta_awareness_fn
+        self.blanket_l2l3 = blanket_l2l3
+    
+    def compute_meta_metrics(self) -> dict:
+        """Monitor internal state metrics (logging only)."""
+        if not self.blanket_l2l3 or not self.blanket_l2l3.sensory_states:
+            return {}
+            
+        return {
+            "meta_awareness": self.blanket_l2l3.sensory_states.get('meta_awareness', 0.0),
+            "van_spike": self.blanket_l2l3.sensory_states.get('van_spike_detected', False)
+        }
+
+    def evaluate_policies(self) -> dict:
+        """Evaluate policies and return prescriptions (non-differentiable)."""
+        sensory = self.blanket_l2l3.sensory_states
+        z = sensory['thoughtseed_activations'] # Tensor
+        current_state = sensory['current_state']
+        
+        z_vals = z.detach().cpu().numpy() if isinstance(z, torch.Tensor) else np.array(z)
+        
+        prescription_l1l2 = {
+            'noise_reduction': 1.0,
+            'dwell_modifier': 1.0,
+            'fatigue_buffer': 1.0
+        }
+        
+        prescription_l2l3 = {
+            'precision_modulation': 1.0
+        }
+        
+        aha_idx = self.thoughtseeds.index('aha_moment')
+        van_spike = sensory.get('van_spike_detected', False)
+        aha_accum = sensory.get('aha_accumulator_value', 0.0)
+        
+        recognition = sensory.get('recognition_signal', None)
+        if recognition is None:
+            recognition = max(z_vals[aha_idx], 0.0) * 0.7 + max(float(aha_accum), 0.0) * 0.3
+
+        if recognition > 0.7 or van_spike:
+            prescription_l1l2['dwell_modifier'] = 0.2
+            prescription_l1l2['noise_reduction'] = 0.5
+            prescription_l2l3['precision_modulation'] = 1.5
+             
+        # Policy 2: Attentional sharpening
+        ma = sensory.get('meta_awareness', None)
+        if ma is None and self.get_meta_awareness_fn:
+             ma = self.get_meta_awareness_fn(current_state, z) # Returns float
+        if ma is not None and ma > 0.6:
+             prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.6)
+             prescription_l2l3['precision_modulation'] = 1.2
+                 
+        eq_idx = self.thoughtseeds.index('equanimity')
+        if z_vals[eq_idx] > 0.6:
+            prescription_l1l2['fatigue_buffer'] = 0.5
+            
+        if current_state == 'meta_awareness':
+            prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.4)
+            prescription_l2l3['precision_modulation'] = 1.3
+            
+        if self.blanket_l2l3:
+            self.blanket_l2l3.update_active_states(prescription_l2l3)
+            
+        return prescription_l1l2

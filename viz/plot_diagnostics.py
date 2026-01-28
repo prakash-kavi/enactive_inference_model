@@ -20,11 +20,11 @@ from .plotting_utils import (
     set_plot_style, load_json_data, get_tail_stats, smooth_series,
     PLOT_DIR, TAIL_STEPS, STATE_COLORS, NETWORK_COLORS,
     STATE_SHORT_NAMES, STATE_DISPLAY_NAMES, THOUGHTSEED_COLORS,
-    save_figure
+    save_figure, NETWORK_KEYS
 )
 from config.meditation_config import STATES, THOUGHTSEEDS
 
-NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
+NETWORKS = NETWORK_KEYS  # Use centralized constant
 
 def plot_hierarchy(data, save_path=None):
     """
@@ -40,7 +40,9 @@ def plot_hierarchy(data, save_path=None):
             print(f"ERROR: Required data '{field}' missing for hierarchy plot")
             return
     
-    time_steps = np.arange(len(data['state_history']))
+    from config.meditation_config import DEFAULTS
+    dt = DEFAULTS['DEFAULT_DT']
+    time_steps = np.arange(len(data['state_history'])) * dt
     
     fig = plt.figure(figsize=(14, 10))
     gs = GridSpec(3, 1, height_ratios=[1, 1, 1.5], figure=fig)
@@ -75,19 +77,20 @@ def plot_hierarchy(data, save_path=None):
     # Create categorical scatter plot
     prev_ts = None
     prev_y = None
-    prev_i = None
+    prev_x = None
     for i, ts in enumerate(data['dominant_ts_history']):
         if ts not in ts_mapping:
             continue
-        ax2.scatter(i, ts_mapping[ts], color=THOUGHTSEED_COLORS[ts], s=25, 
+        x_val = time_steps[i]
+        ax2.scatter(x_val, ts_mapping[ts], color=THOUGHTSEED_COLORS[ts], s=25, 
                    edgecolors='white', linewidth=0.5, alpha=0.8)
         curr_y = ts_mapping[ts]
         if prev_ts is not None and ts != prev_ts:
-            ax2.plot([prev_i, i], [prev_y, curr_y], color='#aaaaaa', 
+            ax2.plot([prev_x, x_val], [prev_y, curr_y], color='#aaaaaa', 
                     linestyle='-', linewidth=0.5, alpha=0.4)
         prev_ts = ts
         prev_y = curr_y
-        prev_i = i
+        prev_x = x_val
     
     ax2.set_yticks(range(len(thoughtseeds)))
     ax2.set_yticklabels(thoughtseeds)
@@ -123,12 +126,13 @@ def plot_hierarchy(data, save_path=None):
     for i, state in enumerate(data['state_history']):
         if state != prev_state:
             state_boundaries.append(i)
-            ax1.axvline(x=i, color='#bbbbbb', linestyle='--', alpha=0.5, zorder=0)
-            ax2.axvline(x=i, color='#bbbbbb', linestyle='--', alpha=0.5, zorder=0)
-            ax3.axvline(x=i, color='#bbbbbb', linestyle='--', alpha=0.5, zorder=0)
+            x_val = time_steps[i]
+            ax1.axvline(x=x_val, color='#bbbbbb', linestyle='--', alpha=0.5, zorder=0)
+            ax2.axvline(x=x_val, color='#bbbbbb', linestyle='--', alpha=0.5, zorder=0)
+            ax3.axvline(x=x_val, color='#bbbbbb', linestyle='--', alpha=0.5, zorder=0)
             
             # Add state label to top plot (ax1) instead of bottom plot
-            ax1.text(i, -0.05, STATE_SHORT_NAMES[state], 
+            ax1.text(x_val, -0.05, STATE_SHORT_NAMES[state], 
                 rotation=90, fontsize=9, color=STATE_COLORS[state],
                 transform=ax1.get_xaxis_transform(), ha='center', va='top')
             
@@ -144,7 +148,7 @@ def plot_hierarchy(data, save_path=None):
     state_legend = fig.legend(handles=state_legend_elements, loc='lower center', 
                             fontsize=10, frameon=False, ncol=4, bbox_to_anchor=(0.5, 0.01))
     
-    ax3.set_xlabel('Timestep', fontsize=12)
+    ax3.set_xlabel('Time (seconds)', fontsize=12)
     ax3.set_ylabel('Network Activation', fontsize=12)
     ax3.set_title('Level 1: Network Dynamics', fontsize=14, fontweight='bold', pad =-25)
     ax3.set_ylim(0, 1.05)
@@ -178,7 +182,9 @@ def plot_time_series(novice_stats, expert_stats, save_path=None):
         state_history = stats['state_history']
         net_hist = stats['network_activations_history']
         fe_raw = np.array(stats.get('free_energy_history', []))
-        time_steps = np.arange(len(state_history))
+        from config.meditation_config import DEFAULTS
+        dt = DEFAULTS['DEFAULT_DT']
+        time_steps = np.arange(len(state_history)) * dt
 
         # 1. Network Activations
         ax1 = fig.add_subplot(gs[0, col])
@@ -191,9 +197,10 @@ def plot_time_series(novice_stats, expert_stats, save_path=None):
         for i, state in enumerate(state_history):
             if state != prev_state:
                 state_label = STATE_SHORT_NAMES.get(state, state)
-                ax1.axvline(x=i, color='gray', linestyle='--', alpha=0.5)
+                x_val = time_steps[i]
+                ax1.axvline(x=x_val, color='gray', linestyle='--', alpha=0.5)
                 if i < len(state_history) - 5: # Avoid label at very end
-                    ax1.text(i, 1.05, state_label, rotation=90, fontsize=9, 
+                    ax1.text(x_val, 1.05, state_label, rotation=90, fontsize=9, 
                              color=STATE_COLORS.get(state, '#000000'),
                              transform=ax1.get_xaxis_transform(), ha='center')
                 prev_state = state
@@ -217,12 +224,14 @@ def plot_time_series(novice_stats, expert_stats, save_path=None):
         start_idx = 0
         for i, state in enumerate(state_history):
             if state != prev_state or i == len(state_history)-1:
-                ax2.axvspan(start_idx, i, alpha=0.1, color=STATE_COLORS.get(prev_state, '#cccccc'))
+                start_t = time_steps[start_idx]
+                end_t = time_steps[i] + (dt if i == len(state_history) - 1 else 0.0)
+                ax2.axvspan(start_t, end_t, alpha=0.1, color=STATE_COLORS.get(prev_state, '#cccccc'))
                 start_idx = i
                 prev_state = state
 
         ax2.set_title(f"Free Energy ({level})", fontsize=14, fontweight='bold')
-        ax2.set_xlabel('Timestep (Tail Window)', fontsize=12)
+        ax2.set_xlabel('Time (seconds) (Tail Window)', fontsize=12)
         ax2.set_ylabel('Free Energy', fontsize=12)
         ax2.grid(True, alpha=0.3)
         axes.append(ax2)
@@ -262,7 +271,9 @@ def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
         meta_hist = stats.get('meta_awareness_history', []) # Level 3
         fe_raw = np.array(stats.get('free_energy_history', []))
         
-        time_steps = np.arange(len(state_history))
+        from config.meditation_config import DEFAULTS
+        dt = DEFAULTS['DEFAULT_DT']
+        time_steps = np.arange(len(state_history)) * dt
 
         # --- ROW 1: Diagnostics (Free Energy) ---
         ax1 = fig.add_subplot(gs[0, col])
@@ -317,7 +328,7 @@ def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
         
         ax4.set_ylim(0, 1.15)
         ax4.set_title(f"Level 1: Network Dynamics ({level})", fontsize=14, fontweight='bold')
-        ax4.set_xlabel('Timestep (Tail Window)', fontsize=12)
+        ax4.set_xlabel('Time (seconds) (Tail Window)', fontsize=12)
         ax4.set_ylabel('Activation', fontsize=11)
         if col == 1: ax4.legend(loc='upper right', framealpha=0.9, fancybox=True, fontsize=10)
         ax4.grid(True, alpha=0.3)
@@ -331,11 +342,11 @@ def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
             if state != prev_state:
                 state_label = STATE_SHORT_NAMES.get(state, state)
                 for ax in subplots:
-                    ax.axvline(x=i, color='gray', linestyle='--', alpha=0.3)
+                    ax.axvline(x=time_steps[i], color='gray', linestyle='--', alpha=0.3)
                 
                 # Only add text label to top plot
                 if i < len(state_history) - 5: 
-                    ax1.text(i, 1.15, state_label, rotation=90, fontsize=9, 
+                    ax1.text(time_steps[i], 1.15, state_label, rotation=90, fontsize=9, 
                              color=STATE_COLORS.get(state, '#000000'),
                              transform=ax1.get_xaxis_transform(), ha='center')
                 prev_state = state
@@ -346,8 +357,10 @@ def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
         for i, state in enumerate(state_history):
             if state != prev_state or i == len(state_history)-1:
                 color = STATE_COLORS.get(prev_state, '#cccccc')
+                start_t = time_steps[start_idx]
+                end_t = time_steps[i] + (dt if i == len(state_history) - 1 else 0.0)
                 for ax in subplots:
-                    ax.axvspan(start_idx, i, alpha=0.08, color=color)
+                    ax.axvspan(start_t, end_t, alpha=0.08, color=color)
                 start_idx = i
                 prev_state = state
 
@@ -501,10 +514,13 @@ def plot_dwell_times(novice_stats, expert_stats, save_path=None):
     nov_dwells = get_dwell_times(novice_stats)
     exp_dwells = get_dwell_times(expert_stats)
 
-    nov_means = [np.mean(nov_dwells[s]) if nov_dwells[s] else 0 for s in STATES]
-    exp_means = [np.mean(exp_dwells[s]) if exp_dwells[s] else 0 for s in STATES]
-    nov_err = [np.std(nov_dwells[s]) if nov_dwells[s] else 0 for s in STATES]
-    exp_err = [np.std(exp_dwells[s]) if exp_dwells[s] else 0 for s in STATES]
+    from config.meditation_config import DEFAULTS
+    dt = DEFAULTS['DEFAULT_DT']
+
+    nov_means = [np.mean(nov_dwells[s]) * dt if nov_dwells[s] else 0 for s in STATES]
+    exp_means = [np.mean(exp_dwells[s]) * dt if exp_dwells[s] else 0 for s in STATES]
+    nov_err = [np.std(nov_dwells[s]) * dt if nov_dwells[s] else 0 for s in STATES]
+    exp_err = [np.std(exp_dwells[s]) * dt if exp_dwells[s] else 0 for s in STATES]
 
     x = np.arange(len(STATES))
     width = 0.35
@@ -515,7 +531,7 @@ def plot_dwell_times(novice_stats, expert_stats, save_path=None):
     exp_bars = ax.bar(x + width/2, exp_means, width, yerr=exp_err, capsize=5, label='Expert', 
                       color=[STATE_COLORS[s] for s in STATES], alpha=0.4, hatch='//', edgecolor='black', linewidth=1)
 
-    ax.set_ylabel('Average Dwell Time (Timesteps)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Average Dwell Time (Seconds)', fontsize=12, fontweight='bold')
     ax.set_title('Average Dwell Time per State', fontsize=14, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels([STATE_DISPLAY_NAMES[s] for s in STATES], fontsize=11)

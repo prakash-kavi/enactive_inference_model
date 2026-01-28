@@ -1,40 +1,34 @@
-"""Configuration for the Vipassana Entropy meditation simulation.
+"""Configuration for the Vipassana meditation simulation.
 Defines thoughtseed/network profiles, mediative states, and tunable parameters.
-
-Architecture:
-- Layer 1 (Generative Process): generative_process.py - MVOU dynamics, dwell times, Θ matrices
-- Layers 2 & 3 (Agent): meditation_model.py - W matrix, learns state expectations
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
 
-# Core thoughtseed and mediative state definitions
-THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
+# Core mediative states, networks and thoughtseed definitions
 STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
+NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
+THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
 # Network profiles for mediative states (used for agent learning initialization)
 NETWORK_PROFILES = {
-    "state_expected_profiles": {
-        "breath_focus": {
-            "novice": {"DMN": 0.55, "VAN": 0.50, "DAN": 0.60, "FPN": 0.65},
-            "expert": {"DMN": 0.30, "VAN": 0.45, "DAN": 0.60, "FPN": 0.45}
-        },
-        "mind_wandering": {
-            "novice": {"DMN": 0.75, "VAN": 0.40, "DAN": 0.35, "FPN": 0.40},
-            "expert": {"DMN": 0.60, "VAN": 0.65, "DAN": 0.40, "FPN": 0.65}
-        },
-        "meta_awareness": {
-            "novice": {"DMN": 0.50, "VAN": 0.60, "DAN": 0.50, "FPN": 0.55},
-            "expert": {"DMN": 0.40, "VAN": 0.80, "DAN": 0.50, "FPN": 0.70}
-        },
-        "redirect_breath": {
-            "novice": {"DMN": 0.45, "VAN": 0.50, "DAN": 0.65, "FPN": 0.70},
-            "expert": {"DMN": 0.35, "VAN": 0.55, "DAN": 0.65, "FPN": 0.55}
-        }
+    "breath_focus": {
+        "novice": {"DMN": 0.55, "VAN": 0.50, "DAN": 0.50, "FPN": 0.55},
+        "expert": {"DMN": 0.40, "VAN": 0.45, "DAN": 0.60, "FPN": 0.65}
+    },
+    "mind_wandering": {
+        "novice": {"DMN": 0.75, "VAN": 0.40, "DAN": 0.35, "FPN": 0.40},
+        "expert": {"DMN": 0.65, "VAN": 0.50, "DAN": 0.40, "FPN": 0.50}
+    },
+    "meta_awareness": {
+        "novice": {"DMN": 0.50, "VAN": 0.70, "DAN": 0.40, "FPN": 0.45},
+        "expert": {"DMN": 0.40, "VAN": 0.70, "DAN": 0.45, "FPN": 0.50}
+    },
+    "redirect_breath": {
+        "novice": {"DMN": 0.45, "VAN": 0.50, "DAN": 0.65, "FPN": 0.70},
+        "expert": {"DMN": 0.35, "VAN": 0.55, "DAN": 0.70, "FPN": 0.75}
     }
 }
-
 NETWORK_MODULATION = {
     "DMN": {
         "pending_tasks": 0.15,
@@ -57,14 +51,25 @@ NETWORK_MODULATION = {
 }
 
 DEFAULTS = {
-    'TARGET_CLIP_MIN': 0.05,
-    'TARGET_CLIP_MAX': 1.0,
-    'ACTIVATION_CLIP_MIN': 0.01,
-    'ACTIVATION_CLIP_MAX': 0.99,
-    'NETWORK_CLIP_MIN': 0.05,
-    'NETWORK_CLIP_MAX': 0.9,
-    'DEFAULT_DT': 1.0,
-    'MIN_HISTORY_FOR_LEARNING': 10,
+    'ACTIVATION_CLIP_MIN': 0.05,
+    'ACTIVATION_CLIP_MAX': 0.9,
+    'DEFAULT_DT': 0.2,
+}
+
+# Dwell Times (Seconds) for State Machine
+DWELL_TIMES = {
+    'expert': {
+        'breath_focus': (15, 30),
+        'mind_wandering': (10, 20),
+        'meta_awareness': (1, 4),
+        'redirect_breath': (1, 4)
+    },
+    'novice': {
+        'breath_focus': (5, 15),
+        'mind_wandering': (20, 40),
+        'meta_awareness': (2, 6),
+        'redirect_breath': (2, 5)
+    }
 }
 
 @dataclass
@@ -183,8 +188,6 @@ class ActInfParams:
     base_sigma: float
     
     # Aha moment dynamics
-    aha_threshold: float
-    aha_slope: float
     aha_target_gain: float
     aha_accum_decay: float
     aha_accum_inc: float
@@ -195,6 +198,7 @@ class ActInfParams:
     # Precision parameters
     sensory_precision_base: float
     prior_precision_base: float
+    
     
     # State expectations and modulation
     fpn_enhancement: float
@@ -209,12 +213,10 @@ class ActInfParams:
         "distraction_pressure": 1.30,
         "fatigue_rate": 0.30,
         "smoothing": 0.6,
-        "base_theta": 0.2,
+        "base_theta": 0.3, # Increased from 0.2 to reach attractors faster
         "base_sigma": 0.05,
         "vfe_accum_decay": 0.9,
         "fpn_enhancement": 1.0,
-        "aha_threshold": 0.6,
-        "aha_slope": 10.0,
         "aha_target_gain": 0.2,
         "aha_accum_decay": 0.95,
         "aha_accum_inc": 0.05,
@@ -240,7 +242,7 @@ class ActInfParams:
             distraction_pressure=0.62,
             fatigue_rate=0.15,
             smoothing=0.8,
-            base_theta=0.25,
+            base_theta=0.5, # Increased from 0.25 to 0.5 (Stiff Attractor)
             base_sigma=0.035,
             expert_meta_scalar=1.05
         )

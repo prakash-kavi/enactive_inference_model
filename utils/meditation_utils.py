@@ -4,6 +4,7 @@ import os
 import logging
 import numpy as np
 import json
+import torch
 
 
 def clip_array(x, vmin, vmax):
@@ -13,17 +14,6 @@ def clip_array(x, vmin, vmax):
     if clipped.shape == ():
         return float(clipped)
     return clipped
-
-def ou_update(x_prev, mu, theta, sigma, dt=1.0, rng=None):
-    """Ornstein–Uhlenbeck update (mean reversion + Gaussian noise).
-    Uses `np.random.RandomState` (agent.rng) for randomness.
-    """
-    x_prev_arr = np.asarray(x_prev)
-    mu_arr = np.asarray(mu)
-    rng_to_use = rng if rng is not None else np.random
-    noise = rng_to_use.normal(0, 1, size=x_prev_arr.shape)
-    dx = theta * (mu_arr - x_prev_arr) * dt + sigma * noise
-    return x_prev_arr + dx
 
 def ensure_directories(base_dir=None):
     """Create `data/` and `plots/` under `base_dir` (or package root)."""
@@ -81,11 +71,15 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
     activations_history = learner.activations_history or []
     network_activations_history = learner.network_activations_history or []
 
+    learned_profiles = {}
+    if hasattr(learner, 'learned_network_profiles'):
+        learned_profiles = convert(learner.learned_network_profiles)
+
     thoughtseed_params = {
         "agent_parameters": {},
         "activation_means_by_state": aggregates.get("activation_means_by_state", {}),
         "network_activations_by_state": aggregates.get("average_network_activations_by_state", {}),
-        "learned_network_profiles": convert(learner.learned_network_profiles),
+        "learned_network_profiles": learned_profiles,
     }
 
     for i, ts in enumerate(learner.thoughtseeds):
@@ -96,13 +90,30 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
             base_activation = 0.0
             responsiveness = 1.0
 
-        # Extract network profile from W matrix (Scientific Matrix Form)
-        # W matrix: rows = thoughtseeds, cols = networks [DMN, VAN, DAN, FPN]
+        # Extract network profile from VAE decoder (replaces old W matrix)
+        # Decode a one-hot thoughtseed vector to get predicted network activations
         ts_idx = learner.thoughtseeds.index(ts)
-        network_profile = {
-            net: float(learner.W[ts_idx, net_idx]) 
-            for net_idx, net in enumerate(learner.networks)
-        }
+        
+        # Create one-hot vector for this thoughtseed
+        device = next(learner.vae.parameters()).device
+        one_hot = torch.zeros(1, len(learner.thoughtseeds), device=device)
+        one_hot[0, ts_idx] = 1.0
+        
+        # Decode to get network profile (temporarily set to eval mode for consistent outputs)
+        was_training = learner.vae.training
+        learner.vae.eval()
+        try:
+            with torch.no_grad():
+                network_pred = learner.vae.decode(one_hot)  # Shape: (1, 4)
+                network_pred = network_pred.squeeze(0)  # Shape: (4,)
+        finally:
+            # Restore original training mode
+            learner.vae.train(was_training)
+        
+        network_profile = {}
+        for net_idx, net in enumerate(learner.networks):
+            val = network_pred[net_idx].detach().cpu().item()
+            network_profile[net] = float(val)
         
         thoughtseed_params["agent_parameters"][ts] = {
             "base_activation": base_activation,
@@ -130,7 +141,7 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
         "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
         "average_prediction_error_by_state": aggregates.get("average_prediction_error_by_state", {}),
         "average_precision_by_state": aggregates.get("average_precision_by_state", {}),
-        "network_expectations": learner.learned_network_profiles.get("state_network_expectations", {}),
+        "network_expectations": learned_profiles.get("state_network_expectations", {}),
     }
 
     out_path_ai = os.path.join(output_dir, f"active_inference_params_{learner.experience_level}.json")

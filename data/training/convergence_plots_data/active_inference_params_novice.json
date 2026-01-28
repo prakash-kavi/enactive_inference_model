@@ -1,49 +1,24 @@
 {
-  "precision_weight": 0.4,
-  "complexity_penalty": 0.4,
+  "precision_weight": null,
+  "complexity_penalty": null,
   "learning_rate": 0.01,
   "average_free_energy_by_state": {
-    "breath_focus": 3.2929805975944157,
-    "mind_wandering": 1.2574760734376396,
-    "meta_awareness": 1.8320072071083355,
-    "redirect_breath": 2.740678315444097
+    "breath_focus": 0.2676344543664348,
+    "mind_wandering": 0.14568451885963932,
+    "meta_awareness": 0.18346042001053794,
+    "redirect_breath": 0.30088540264818936
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 5.744678963656947,
-    "mind_wandering": 3.0035703721511195,
-    "meta_awareness": 3.1289834769438154,
-    "redirect_breath": 5.149822681225265
+    "breath_focus": 0.08793043818260873,
+    "mind_wandering": 0.021501778238209913,
+    "meta_awareness": 0.042362381906730494,
+    "redirect_breath": 0.15768338083142794
   },
   "average_precision_by_state": {
-    "breath_focus": 0.7082127664499058,
-    "mind_wandering": 0.6148122254187137,
-    "meta_awareness": 0.7176390314806064,
-    "redirect_breath": 0.7399359280270852
+    "breath_focus": 0.7026242446500864,
+    "mind_wandering": 0.6197107279021424,
+    "meta_awareness": 0.7690032743552551,
+    "redirect_breath": 0.7487466442941183
   },
-  "network_expectations": {
-    "breath_focus": {
-      "DMN": 0.5655226323715384,
-      "VAN": 0.48232093078262095,
-      "DAN": 0.5713812378928701,
-      "FPN": 0.6120814853513847
-    },
-    "mind_wandering": {
-      "DMN": 0.678158737242019,
-      "VAN": 0.36518023325893484,
-      "DAN": 0.40229563217807174,
-      "FPN": 0.4872138520896347
-    },
-    "meta_awareness": {
-      "DMN": 0.5413291262806784,
-      "VAN": 0.5234214344285086,
-      "DAN": 0.47510039673787857,
-      "FPN": 0.4933280423051219
-    },
-    "redirect_breath": {
-      "DMN": 0.5284644080365821,
-      "VAN": 0.4781399716163722,
-      "DAN": 0.5648770716481091,
-      "FPN": 0.6081348111256921
-    }
-  }
+  "network_expectations": {}
 }

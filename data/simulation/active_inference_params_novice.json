@@ -1,49 +1,24 @@
 {
-  "precision_weight": 0.4,
-  "complexity_penalty": 0.4,
+  "precision_weight": null,
+  "complexity_penalty": null,
   "learning_rate": 0.01,
   "average_free_energy_by_state": {
-    "breath_focus": 3.3124418945132588,
-    "mind_wandering": 1.2604726606156995,
-    "meta_awareness": 1.8360770020763044,
-    "redirect_breath": 2.7463631939142883
+    "breath_focus": 0.34321577799816927,
+    "mind_wandering": 0.3696883315330637,
+    "meta_awareness": 0.29582895546713295,
+    "redirect_breath": 0.21008551771796885
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 5.906247180946557,
-    "mind_wandering": 3.0300922382801967,
-    "meta_awareness": 3.162178499702742,
-    "redirect_breath": 5.196260791624146
+    "breath_focus": 0.03280374064308557,
+    "mind_wandering": 0.0689738172862418,
+    "meta_awareness": 0.10303965712185292,
+    "redirect_breath": 0.030347206094856596
   },
   "average_precision_by_state": {
-    "breath_focus": 0.7082127664499058,
-    "mind_wandering": 0.6148122254187137,
-    "meta_awareness": 0.7176390314806064,
-    "redirect_breath": 0.7399359280270852
+    "breath_focus": 0.7031197213100242,
+    "mind_wandering": 0.6117614168978349,
+    "meta_awareness": 0.767982639252683,
+    "redirect_breath": 0.7510696862065183
   },
-  "network_expectations": {
-    "breath_focus": {
-      "DMN": 0.5643778038065105,
-      "VAN": 0.48333831994251936,
-      "DAN": 0.5762699033075821,
-      "FPN": 0.6301832386344691
-    },
-    "mind_wandering": {
-      "DMN": 0.626616239897815,
-      "VAN": 0.38637221138220407,
-      "DAN": 0.4674318773926906,
-      "FPN": 0.528945084127251
-    },
-    "meta_awareness": {
-      "DMN": 0.5196717774017202,
-      "VAN": 0.554459718434618,
-      "DAN": 0.5009914299105575,
-      "FPN": 0.5215356984234396
-    },
-    "redirect_breath": {
-      "DMN": 0.5213210776304563,
-      "VAN": 0.5038101693076292,
-      "DAN": 0.5737224861990595,
-      "FPN": 0.6251117460108025
-    }
-  }
+  "network_expectations": {}
 }

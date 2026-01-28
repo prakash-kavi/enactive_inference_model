@@ -1,49 +1,24 @@
 {
-  "precision_weight": 0.5,
-  "complexity_penalty": 0.2,
+  "precision_weight": null,
+  "complexity_penalty": null,
   "learning_rate": 0.02,
   "average_free_energy_by_state": {
-    "breath_focus": 1.5603901813376961,
-    "mind_wandering": 7.841700434762086,
-    "meta_awareness": 2.5678189748779827,
-    "redirect_breath": 8.729488337488862
+    "breath_focus": 0.17613939078845933,
+    "mind_wandering": 0.10990871148960348,
+    "meta_awareness": 0.10742749874630282,
+    "redirect_breath": 0.13611258645326096
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 3.725127093876332,
-    "mind_wandering": 3.363717245546202,
-    "meta_awareness": 3.271255832539858,
-    "redirect_breath": 3.471100821769965
+    "breath_focus": 0.011286437674876023,
+    "mind_wandering": 0.009616415272620617,
+    "meta_awareness": 0.01108820187754088,
+    "redirect_breath": 0.005933493251653253
   },
   "average_precision_by_state": {
-    "breath_focus": 0.7484307957820235,
-    "mind_wandering": 0.6668299148522948,
-    "meta_awareness": 0.7038542187024112,
-    "redirect_breath": 0.7404653892031043
+    "breath_focus": 0.7533104491181822,
+    "mind_wandering": 0.6495372780154987,
+    "meta_awareness": 0.7930345195871736,
+    "redirect_breath": 0.8238032789963596
   },
-  "network_expectations": {
-    "breath_focus": {
-      "DMN": 0.293600529024439,
-      "VAN": 0.46008469896401455,
-      "DAN": 0.6080077597576579,
-      "FPN": 0.45969812637304486
-    },
-    "mind_wandering": {
-      "DMN": 0.4706373073904198,
-      "VAN": 0.5339507190478385,
-      "DAN": 0.4238979307001883,
-      "FPN": 0.5386302078848485
-    },
-    "meta_awareness": {
-      "DMN": 0.3971577077264437,
-      "VAN": 0.6623066270516414,
-      "DAN": 0.4865277118817883,
-      "FPN": 0.5708087192798882
-    },
-    "redirect_breath": {
-      "DMN": 0.40661981632332916,
-      "VAN": 0.5461879603676665,
-      "DAN": 0.5842154541873308,
-      "FPN": 0.4904029764314728
-    }
-  }
+  "network_expectations": {}
 }

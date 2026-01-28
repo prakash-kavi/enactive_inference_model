@@ -1,193 +1,65 @@
-# Vipassana-TS2: Thoughtseeds Framework Implementation
+# Enactive Inference Model of Neurocomputational Phenomenology for Studying Meditative States 
 
-This repository contains the reference implementation of the **Thoughtseeds Framework** for modeling Vipassana meditation dynamics.
+## Architecture
+![ThoughtseedsFramework](utils/Thoughtseeds_Framework.jpg)
 
-![Mediative Cycle](Mediative_cycle.jpg)
+The system is composed of three nested differentiable layers: 
 
-This is a stochastic simulation using coupled Ornstein–Uhlenbeck dynamics as an initial Active Inference formulation, serving as a scaffold for future full Active Inference implementations. It is a computational simulation and does not do empirical data fitting or neuroimaging data analysis.
+1.  **Layer 1 **: `layer1_brain_networks.py`
+    - Stochastic Differential Equation (SDE) modeling neural dynamics.
+    - Receives `agent_bias` from Layer 2.
 
-## Conceptual Overview
+2.  **Layer 2 **: `layer2_gnw_bottleneck.py`
+    - Global Workspace Bottleneck.
+    - Generates `agent_bias` (Action).
+    - Performs Precision-Weighted Inference (Perception).
 
-![Thoughtseeds Framework](Thoughtseeds%20Framework.jpg)
+3.  **Layer 3 **: `layer3_phenomenological_monitor.py`
+    - Meta-Cognitive Monitor.
+    - Computes Meta-VFE.
 
-- **Level 1**: Attentional networks (DMN, VAN, DAN, FPN)
-- **Level 2**: Thoughtseed dynamics (competing markov-blanketed atentional agents activations)
-- **Level 3**: Meta-cognition (precision modulation and policy based switching)
+This repository contains the **Differentiable Hierarchical Engine ** for identifying and simulating the control-theoretic dynamics of meditation.
 
-The model minimizes Variational Free Energy (VFE) through perception–action–learning cycles and captures qualitative expert–novice differences via parameterized priors and precision settings.
+![Mediative Cycle](utils/Mediative_cycle.jpg)
 
-## Project Structure
+## Key Features (v3.2)
 
-### Core Implementation Files
+### 1. Control Theoretic Architecture
+Move beyond passive predictive coding. The engine now implements **Active Control**:
+- **Continuous Top-Down Steering**: The Agent (Layer 2) calculates a continuous `agent_bias` vector based on its intent and actively steers the Biology (Layer 1).
+- **Precision-Weighted Updates**: The Agent dynamically balances "Trust in Self" vs "Trust in Senses" using a Kalman-like update rule driven by Meta-Awareness.
+- **Guaranteed Stability**: Layer 1 uses **Automatic Spectral Scaling** to enforce mathematical stability regardless of parameter choices.
 
-- **`meditation_model.py`**: Core agent implementation (`AgentConfig`, `ActInfAgent`) — dynamics, inference, and learning updates.
-- **`meditation_trainer.py`**: `Trainer` class that orchestrates experiment runs (extracted from the agent for testability and CI).
-- **`meditation_utils.py`**: I/O helpers, `ou_update`, JSON serialization, and aggregate computations.
-- **`config/meditation_config.py`**: Parameter profiles, thoughtseeds, states, network profiles, and tunable parameters.
+### 2. Biological Rigor
+Strict adherence to neuroscientific profiles for:
+- **Breath Focus**: Tonic maintenance (High DAN/FPN, Low VAN).
+- **Mind Wandering**: Default mode dominance (High DMN).
+- **Meta-Awareness**: Salience spike (Peak VAN).
+- **Redirect**: Phasic control burst (Peak DAN/FPN).
 
-### Pipeline Scripts
+### 3. Deep Learning "Parsimony"
+Implements **Contrastive Regularization** during training to force the agent to learn high-contrast, logically distinct internal states even from noisy data.
 
-- **`run_training.py`**: Multi-seed convergence study for learning stable attractors (state-network expectations). Runs training across multiple seeds (42, 43, 44) and computes mean attractors for use in simulation.
-- **`run_simulation.py`**: Runs simulations using recalibrated attractors from training. Loads mean network profiles and runs the model with fixed attractors (learning disabled).
-- **`plot_training.py`**: Visualizes training results:
-  - `FigS1_Convergence_{Level}.png`: Convergence diagnostics (Free Energy & State Occupancy) for Seed 42
-  - `Fig3A_Radar_Comparison.png`: Learned Network Activation Profiles (Novice vs Expert)
-- **`plot_simulation.py`**: Generates all diagnostic and attractor plots from simulation data:
-  - `FigS1C_Hierarchy_TimeSeries.png`: Cognitive Hierarchy Time Series
-  - `Fig3B_FreeEnergy.png`: Free Energy Bar Chart
-  - `Fig3C_DwellTime.png`: Dwell Times
-  - `Fig4A_Hierarchy_Novice.png` / `Fig4B_Hierarchy_Expert.png`: Individual Hierarchy Plots
-  - `Fig5A_Attractor2D.png` / `Fig5B_Attractor3D.png`: Attractor Landscapes
 
-### Visualization Module (`viz/`)
+## Workflow
 
-- **`plot_diagnostics.py`**: Diagnostic plotting functions (hierarchy, free energy, dwell times)
-- **`plot_attractors.py`**: Attractor landscape visualizations (2D and 3D)
-- **`plot_convergence.py`**: Convergence diagnostic utilities
-- **`plotting_utils.py`**: Shared utilities (style settings, data loading, constants)
-
-### Data Structure
-
-```
-data/
-├── training/                          # Training outputs
-│   ├── convergence_summary_{level}.json    # Mean attractors across seeds
-│   ├── learned_weights_{level}_seed{seed}.json  # Individual seed results
-│   └── convergence_plots_data/        # Full outputs for seed 42 (for plotting)
-│       ├── thoughtseed_params_{level}.json
-│       ├── active_inference_params_{level}.json
-│       └── transition_stats_{level}.json
-│
-└── simulation/                        # Simulation outputs (using fixed attractors)
-    ├── thoughtseed_params_{level}.json
-    ├── active_inference_params_{level}.json
-    └── transition_stats_{level}.json
-
-plots/
-├── training/                          # Training visualizations
-│   ├── FigS1_Convergence_Novice.png
-│   ├── FigS1_Convergence_Expert.png
-│   └── Fig3A_Radar_Comparison.png
-│
-└── simulation/                        # Simulation visualizations
-    ├── FigS1C_Hierarchy_TimeSeries.png
-    ├── Fig3B_FreeEnergy.png
-    ├── Fig3C_DwellTime.png
-    ├── Fig4A_Hierarchy_Novice.png
-    ├── Fig4B_Hierarchy_Expert.png
-    ├── Fig5A_Attractor2D.png
-    └── Fig5B_Attractor3D.png
-```
-
-## Workflow: Training → Simulation
-
-The project follows a two-stage pipeline:
-
-### Stage 1: Training (Calibration)
-
-**Purpose**: Learn stable state-network attractors through multi-seed convergence study.
-
+### 1. Training (Learn Attractors)
+Learns stable internal models (priors) from the biological dynamics, enforcing contrastive separation.
 ```bash
-python run_training.py
+python run/run_training.py
 ```
 
-**What it does**:
-- Runs training for both novice and expert levels across 3 seeds (42, 43, 44)
-- For each seed, trains the agent with learning enabled (`enable_learning=True`)
-- Extracts final learned `state_network_expectations` for each seed
-- Computes mean and standard deviation across seeds
-- Saves convergence summaries to `data/training/convergence_summary_{level}.json`
-- Saves full time-series outputs for seed 42 to `data/training/convergence_plots_data/` (for plotting)
-
-**Outputs**:
-- `data/training/convergence_summary_{level}.json`: Contains `network_profiles_mean` (the recalibrated attractors)
-- `data/training/learned_weights_{level}_seed{seed}.json`: Individual seed results
-- `data/training/convergence_plots_data/*`: Full outputs for seed 42
-
-**Visualization**:
+### 2. Simulation (Active Control)
+Runs the full Active Inference loop where the Agent actively steers the Biology using the learned priors.
 ```bash
-python plot_training.py
+python run/run_simulation.py
 ```
-Generates convergence diagnostics and radar comparison plots in `plots/training/`.
 
-### Stage 2: Simulation (Application)
-
-**Purpose**: Run simulations using the fixed, learned attractors from training.
-
+### 3. Visualization
+Generates plots showing the DMN-DAN gap, Phase Transitions, and Free Energy landscapes.
 ```bash
-python run_simulation.py
+python run/plot_simulation.py
 ```
 
-**What it does**:
-- Loads mean network profiles from `data/training/convergence_summary_{level}.json`
-- Initializes agents with these trained attractors (overrides default expectations)
-- Runs simulations with learning disabled (`enable_learning=False`)
-- Saves simulation outputs to `data/simulation/`
+## Documentation
 
-**Outputs**:
-- `data/simulation/thoughtseed_params_{level}.json`
-- `data/simulation/active_inference_params_{level}.json`
-- `data/simulation/transition_stats_{level}.json`
-
-**Visualization**:
-```bash
-python plot_simulation.py
-```
-Generates all diagnostic and attractor plots in `plots/simulation/`.
-
-## Reproducibility & Outputs
-
-- The `Trainer.train()` method accepts optional `seed` (sets NumPy RNG) and `output_dir` (path for JSON outputs).
-- Default numeric constants and thresholds are centralized in `config/meditation_config.py` for maintainability.
-- Random number seed is set to 42 by default for simulations.
-- Training uses seeds [42, 43, 44] for convergence study.
-
-## Key Concepts
-
-### Attractors (State-Network Expectations)
-
-During training, the model learns **state-network attractors**: expected network activation profiles for each meditative state. These are stored as `state_network_expectations` in the agent's `learned_network_profiles`.
-
-- **Training**: Attractors are learned and updated during training runs
-- **Simulation**: Attractors are fixed (loaded from training means) and used to guide dynamics
-
-### Meditative States
-
-Four empirically-based meditative states:
-- **Breath Focus** (BF): Focused attention on breath
-- **Mind Wandering** (MW): Distracted state
-- **Meta-Awareness** (MA): Noticing mind has wandered
-- **Redirect Breath** (RA): Returning attention to breath
-
-### Thoughtseeds
-
-Five hypothetical attentional agents :
-- `attend_breath`
-- `pain_discomfort`
-- `pending_tasks`
-- `aha_moment`
-- `equanimity`
-
-## Useful Commands
-
-```bash
-# Run full training pipeline (learn attractors)
-python run_training.py
-
-# Generate training visualizations
-python -m viz.plot_training
-
-# Run simulation with trained attractors
-python run_simulation.py
-
-# Run individual visualization modules
-python -m viz.plot_convergence
-python -m viz.plot_attractors
-python -m viz.plot_diagnostics
-```
-
-## Notes
-
-- The model is a computational simulation framework, not an empirical data analysis tool.
-- Training must be run before simulation to generate the required attractor files.
-- Seed 42 outputs are saved during training for convergence visualization purposes.

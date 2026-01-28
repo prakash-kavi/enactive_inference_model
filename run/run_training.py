@@ -1,13 +1,17 @@
 """run_training.py — Multi-seed convergence study for learning stable attractors"""
 
+import sys
+from pathlib import Path
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import json
 import numpy as np
-from pathlib import Path
-from meditation_model import GNWBottleneck
-from meditation_utils import ensure_directories
-from meditation_trainer import Trainer
+from core.layer2_gnw_bottleneck import GNWBottleneck
+from utils.meditation_utils import ensure_directories
+from core.meditation_trainer import Trainer
 
 def run_convergence_for_level(level, seeds, timesteps, output_dir):
     """Run convergence study for a specific experience level."""
@@ -42,27 +46,27 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
             enable_learning=True
         )
         
-        # Extract learned weights
+        # Extract observed network aggregates
         learned_weights = {
-            'network_profiles': {},
+            'observed_network_means': {},
             'seed': seed,
             'timesteps': timesteps,
-            'experience_level': level
+            'experience_level': level,
         }
-        
-        for state in agent.states:
-            learned_weights['network_profiles'][state] = {}
-            for network in agent.networks:
-                learned_weights['network_profiles'][state][network] = float(
-                    agent.learned_network_profiles["state_network_expectations"][state][network]
-                )
-        
+
+        # Observed network means (what Layer 1 actually expressed during training)
+        from utils.meditation_utils import compute_state_aggregates
+
+        aggregates = compute_state_aggregates(agent)
+        observed_means = aggregates.get("average_network_activations_by_state", {})
+        learned_weights["observed_network_means"] = observed_means
+
         # Save seed result
         output_file = output_dir / f"learned_weights_{level}_seed{seed}.json"
         with open(output_file, 'w') as f:
             json.dump(learned_weights, f, indent=2)
-        
-        all_results[f'seed_{seed}'] = learned_weights
+
+        all_results[f"seed_{seed}"] = learned_weights
 
     # Compute Summary
     summary = {
@@ -74,13 +78,18 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
         'convergence_metrics': {}
     }
     
-    # Calculate mean and std
+    # Calculate mean and std based on OBSERVED network means (what the biology expressed),
+    # not just the internal state expectations. This sets realistic expectations for
+    # the separation that actually appears in training/simulation.
     for state in agent.states:
         summary['network_profiles_mean'][state] = {}
         summary['network_profiles_std'][state] = {}
         
         for network in agent.networks:
-            values = [all_results[f'seed_{s}']['network_profiles'][state][network] for s in seeds]
+            values = [
+                all_results[f"seed_{s}"]["observed_network_means"].get(state, {}).get(network, 0.0)
+                for s in seeds
+            ]
             summary['network_profiles_mean'][state][network] = float(np.mean(values))
             summary['network_profiles_std'][state][network] = float(np.std(values))
     
@@ -104,8 +113,8 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
 
 def run_training():
     """Run 3-seed convergence study for both novice and expert levels."""
-    SEEDS = [42, 43, 44]
-    TIMESTEPS = 3000
+    SEEDS = [42] #, 43, 44]
+    TIMESTEPS = 5000
     LEVELS = ['novice', 'expert']
     OUTPUT_DIR = Path("data") / "training"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

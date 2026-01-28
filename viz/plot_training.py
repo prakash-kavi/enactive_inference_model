@@ -16,10 +16,10 @@ from pathlib import Path
 # Import from viz package
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from viz.plotting_utils import set_plot_style, STATE_COLORS, STATE_DISPLAY_NAMES, STATE_SHORT_NAMES, save_figure, load_time_series
+from viz.plotting_utils import set_plot_style, STATE_COLORS, STATE_DISPLAY_NAMES, STATE_SHORT_NAMES, save_figure, load_time_series, NETWORK_KEYS
 from config.meditation_config import STATES
 
-NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
+NETWORKS = NETWORK_KEYS  # Use centralized constant
 
 def clean_old_plots(output_dir):
     """Remove clutter from previous runs."""
@@ -117,17 +117,22 @@ def plot_convergence_history(level, results_dir="data/training", output_dir="plo
 
     fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
 
+    # Convert steps to seconds
+    from config.meditation_config import DEFAULTS
+    dt = DEFAULTS['DEFAULT_DT']
+    time_sec = steps * dt
+    
     # Panel 1: Free energy trend (exact match to plot_convergence.py)
     ax = axes[0]
-    ax.plot(steps, free_energy, color="#cccccc", linewidth=1.0, label="Free energy (raw)")
+    ax.plot(time_sec, free_energy, color="#cccccc", linewidth=1.0, label="Free energy (raw)")
     fe_mean = rolling_mean(free_energy, window)
     fe_std = rolling_std(free_energy, window)
-    ax.plot(steps, fe_mean, color="#E74C3C", linewidth=2.0, label=f"Rolling mean (w={window})")
+    ax.plot(time_sec, fe_mean, color="#E74C3C", linewidth=2.0, label=f"Rolling mean (w={window})")
     valid = ~np.isnan(fe_mean)
     if np.any(valid):
         lower = (fe_mean - fe_std)[valid]
         upper = (fe_mean + fe_std)[valid]
-        ax.fill_between(steps[valid], lower, upper, color="#E74C3C", alpha=0.18)
+        ax.fill_between(time_sec[valid], lower, upper, color="#E74C3C", alpha=0.18)
     ax.set_ylabel("Free energy")
     ax.set_title(f"Free-energy stabilisation ({level.title()})", fontsize=14, fontweight="bold")
     ax.legend(loc="upper right", frameon=True)
@@ -136,9 +141,9 @@ def plot_convergence_history(level, results_dir="data/training", output_dir="plo
     ax = axes[1]
     fractions = cumulative_state_fraction(states)
     for state in STATES:
-        ax.plot(steps, fractions[state], color=STATE_COLORS[state], linewidth=1.8, label=STATE_SHORT_NAMES[state])
+        ax.plot(time_sec, fractions[state], color=STATE_COLORS[state], linewidth=1.8, label=STATE_SHORT_NAMES[state])
     ax.set_ylabel("Cumulative fraction")
-    ax.set_xlabel("Timestep")
+    ax.set_xlabel("Time (seconds)")
     ax.set_ylim(0.0, 1.0)
     ax.set_title("Cumulative state occupancy", fontsize=14, fontweight="bold")
     ax.legend(loc="lower right", frameon=True)
