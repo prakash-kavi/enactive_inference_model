@@ -1,9 +1,4 @@
-"""Markov Blanket L2-L3: attentional-agent monitoring interface.
-
-Mediates between Layer 2 (GNW bottleneck) and Layer 3 (monitor).
-- Sensory (L2 -> L3): thoughtseed activations, meta-awareness, state, event flags
-- Active (L3 -> L2): precision modulation
-"""
+"""Markov Blanket L2-L3: attentional-model monitoring interface."""
 
 import numpy as np
 from typing import Dict
@@ -21,6 +16,7 @@ class MarkovBlanketL2L3:
         'van_spike_detected',
         'aha_accumulator_value',
         'current_van',
+        'vfe',
         'recognition_signal'
     }
 

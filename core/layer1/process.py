@@ -1,4 +1,4 @@
-"""Layer 1: Generative process for brain network dynamics (MVOU)."""
+"""Layer 1: generative process for brain network dynamics (MVOU)."""
 
 import torch
 import torch.nn as nn
@@ -73,7 +73,7 @@ class StateMachine:
         self._sample_next_dwell()
 
 
-class MeditationGenerativeProcess(nn.Module):
+class Layer1Process(nn.Module):
     """Layer 1 MVOU dynamics for brain networks."""
 
     def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None,
@@ -155,6 +155,7 @@ class MeditationGenerativeProcess(nn.Module):
         return mu, theta
 
     def update(self, active_states: Dict) -> Tuple[Dict[str, torch.Tensor], str]:
+        """Advance one step; return network activations and current state."""
         dwell_mod = active_states.get('dwell_modifier', 1.0)
         if isinstance(dwell_mod, torch.Tensor):
             dwell_mod = dwell_mod.item()

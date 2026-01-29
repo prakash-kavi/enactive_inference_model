@@ -1,8 +1,4 @@
-"""
-meditation_vae.py
-
-Core engine for Layer 2 (GNW bottleneck).
-Implements a lightweight VAE with independent-strength thoughtseeds (attentional agents).
+"""Lightweight VAE for the Layer 2 attentional model.
 
 Role in Russian Doll Architecture:
 - Encoder: Recognition model q(z|x). Maps networks (L1) -> thoughtseed strengths (z in [0,1]).

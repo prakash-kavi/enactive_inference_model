@@ -134,9 +134,10 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
     with open(out_path_ts, "w", encoding="utf-8") as f:
         json.dump(thoughtseed_params, f, indent=2)
 
+    params = getattr(learner, "params", {}) if hasattr(learner, "params") else {}
     active_inf_params = {
-        "precision_weight": getattr(learner, "precision_weight", None),
-        "complexity_penalty": getattr(learner, "complexity_penalty", None),
+        "precision_weight": params.get("precision_weight"),
+        "complexity_penalty": params.get("complexity_penalty"),
         "learning_rate": getattr(learner, "learning_rate", None),
         "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
         "average_prediction_error_by_state": aggregates.get("average_prediction_error_by_state", {}),

@@ -9,10 +9,10 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import json
 import numpy as np
-from core.layer2_gnw_bottleneck import GNWBottleneck
+from core.layer2.bottleneck import Layer2AttentionalModel
 from utils.meditation_utils import ensure_directories
-from core.meditation_trainer import Trainer
-from core.layer1_brain_networks import MeditationGenerativeProcess
+from core.train.trainer import PracticeTrainer
+from core.layer1.process import Layer1Process
 
 def load_trained_attractors(level: str, training_dir: str = "data/training") -> dict:
     """Load mean state-network attractors from training convergence summary."""
@@ -29,7 +29,7 @@ def load_trained_attractors(level: str, training_dir: str = "data/training") -> 
     
     return summary['network_profiles_mean']
 
-def validate_attractors(agent: GNWBottleneck, attractors: dict):
+def validate_attractors(agent: Layer2AttentionalModel, attractors: dict):
     """Validate that trained attractors contain all required states and networks."""
     missing_states = [state for state in agent.states if state not in attractors]
     if missing_states:
@@ -63,18 +63,18 @@ def run_simulation():
 
     # Run Novice Simulation
     logging.info("\n--- Running Novice Simulation ---")
-    agent_novice = GNWBottleneck(experience_level='novice', timesteps_per_cycle=T)
+    agent_novice = Layer2AttentionalModel(experience_level='novice', timesteps_per_cycle=T)
     validate_attractors(agent_novice, novice_attractors)
     
     # Initialize Layer 1 with learned attractors (so generative process uses trained attractors)
-    process_novice = MeditationGenerativeProcess(
+    process_novice = Layer1Process(
         experience_level='novice',
         seed=seed,
         learned_attractors=novice_attractors
     )
     
     logging.info("Novice seed: %d", seed)
-    Trainer(agent_novice, generative_process=process_novice).train(
+    PracticeTrainer(agent_novice, generative_process=process_novice).train(
         save_outputs=True, 
         output_dir=out_dir, 
         seed=seed,
@@ -83,18 +83,18 @@ def run_simulation():
 
     # Run Expert Simulation
     logging.info("\n--- Running Expert Simulation ---")
-    agent_expert = GNWBottleneck(experience_level='expert', timesteps_per_cycle=T)
+    agent_expert = Layer2AttentionalModel(experience_level='expert', timesteps_per_cycle=T)
     validate_attractors(agent_expert, expert_attractors)
     
     # Initialize Layer 1 with learned attractors (so generative process uses trained attractors)
-    process_expert = MeditationGenerativeProcess(
+    process_expert = Layer1Process(
         experience_level='expert',
         seed=seed,
         learned_attractors=expert_attractors
     )
     
     logging.info("Expert seed: %d", seed)
-    Trainer(agent_expert, generative_process=process_expert).train(
+    PracticeTrainer(agent_expert, generative_process=process_expert).train(
         save_outputs=True, 
         output_dir=out_dir, 
         seed=seed,

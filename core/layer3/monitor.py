@@ -7,13 +7,14 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-class WitnessingLayer(nn.Module):
+class Layer3Monitor(nn.Module):
     """Layer 3 monitoring + policy module."""
     
     def __init__(self, networks: list, thoughtseeds: list, 
                  sensory_precision_base: float, prior_precision_base: float,
                  precision_weight: float, complexity_penalty: float,
-                 get_meta_awareness_fn=None, blanket_l2l3=None):
+                 get_meta_awareness_fn=None, blanket_l2l3=None,
+                 vfe_ema_alpha: float = 0.9):
         super().__init__()
         
         self.networks = networks
@@ -24,6 +25,8 @@ class WitnessingLayer(nn.Module):
         self.complexity_penalty = complexity_penalty
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
+        self.vfe_ema_alpha = vfe_ema_alpha
+        self.vfe_ema = 0.0
     
     def compute_meta_metrics(self) -> dict:
         """Monitor internal state metrics (logging only)."""
@@ -40,6 +43,16 @@ class WitnessingLayer(nn.Module):
         sensory = self.blanket_l2l3.sensory_states
         z = sensory['thoughtseed_activations'] # Tensor
         current_state = sensory['current_state']
+
+        vfe_val = sensory.get('vfe', None)
+        if vfe_val is not None:
+            try:
+                vfe_val = float(vfe_val)
+            except Exception:
+                vfe_val = None
+        if vfe_val is not None:
+            vfe_sig = 1.0 / (1.0 + np.exp(-vfe_val))
+            self.vfe_ema = (self.vfe_ema_alpha * self.vfe_ema) + ((1 - self.vfe_ema_alpha) * vfe_sig)
         
         z_vals = z.detach().cpu().numpy() if isinstance(z, torch.Tensor) else np.array(z)
         
@@ -65,6 +78,11 @@ class WitnessingLayer(nn.Module):
             prescription_l1l2['dwell_modifier'] = 0.2
             prescription_l1l2['noise_reduction'] = 0.5
             prescription_l2l3['precision_modulation'] = 1.5
+
+        if self.vfe_ema > 0.6:
+            prescription_l1l2['dwell_modifier'] = min(prescription_l1l2['dwell_modifier'], 0.6)
+            prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.8)
+            prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], 1.1)
              
         # Policy 2: Attentional sharpening
         ma = sensory.get('meta_awareness', None)

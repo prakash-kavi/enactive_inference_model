@@ -9,9 +9,9 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import json
 import numpy as np
-from core.layer2_gnw_bottleneck import GNWBottleneck
+from core.layer2.bottleneck import Layer2AttentionalModel
 from utils.meditation_utils import ensure_directories
-from core.meditation_trainer import Trainer
+from core.train.trainer import PracticeTrainer
 
 def run_convergence_for_level(level, seeds, timesteps, output_dir):
     """Run convergence study for a specific experience level."""
@@ -25,7 +25,7 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
         logging.info(f"Training {level} - Seed {seed}")
         
         # Create agent
-        agent = GNWBottleneck(experience_level=level, timesteps_per_cycle=timesteps)
+        agent = Layer2AttentionalModel(experience_level=level, timesteps_per_cycle=timesteps)
         
         # Save full outputs only for Seed 42 (for plotting purposes)
         save_output = (seed == 42)
@@ -38,7 +38,7 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
             seed_output_dir = None
         
         # Train with learning enabled
-        trainer = Trainer(agent)
+        trainer = PracticeTrainer(agent)
         trainer.train(
             save_outputs=save_output,
             output_dir=seed_output_dir,

@@ -7,14 +7,14 @@ import os
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from core.layer2_gnw_bottleneck import GNWBottleneck
-from core.meditation_trainer import Trainer
+from core.layer2.bottleneck import Layer2AttentionalModel
+from core.train.trainer import PracticeTrainer
 
 def verify():
     print("Initializing Differentiable Engine (v2 - Contrastive)...")
     # 200 steps
-    agent = GNWBottleneck(experience_level='expert', timesteps_per_cycle=200)
-    trainer = Trainer(agent)
+    agent = Layer2AttentionalModel(experience_level='expert', timesteps_per_cycle=200)
+    trainer = PracticeTrainer(agent)
     
     print("Starting Training (BPTT)...")
     try:

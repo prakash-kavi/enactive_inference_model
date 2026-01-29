@@ -1,36 +1,28 @@
-"""
-meditation_trainer.py
-
-Trainer that orchestrates Active Inference training for a `GNWBottleneck`.
-Refactored for Backpropagation Through Time (BPTT) using PyTorch.
-
-Architecture:
-- Layer 1 (Generative Process): layer1_brain_networks.py (Differentiable)
-- Layers 2 & 3 (Agent): layer2_gnw_bottleneck.py, layer3_phenomenological_monitor.py (Differentiable)
-"""
+"""Trainer orchestrating BPTT for the Layer 2 attentional model."""
 import os
 import json
 import numpy as np
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 from typing import Tuple, Dict, Any, Optional
 
 from utils.meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates, build_transition_stats
-from config.meditation_config import DEFAULTS, NETWORK_PROFILES
+from config.meditation_config import DEFAULTS, NETWORK_PROFILES, get_thoughtseed_targets
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
     compute_dmn_dan_anticorrelation
 )
-from .layer1_brain_networks import MeditationGenerativeProcess
+from ..layer1.process import Layer1Process
 
-class Trainer:
+class PracticeTrainer:
     """Orchestrates the BPTT simulation loop."""
     
-    def __init__(self, agent, generative_process: Optional[MeditationGenerativeProcess] = None):
+    def __init__(self, agent, generative_process: Optional[Layer1Process] = None):
         self.agent = agent
         # Initialize generative process if not provided
         if generative_process is None:
-            self.process = MeditationGenerativeProcess(
+            self.process = Layer1Process(
                 experience_level=agent.experience_level,
                 seed=agent.rng.randint(0, 2**31) if hasattr(agent.rng, 'randint') else None
             )
@@ -79,6 +71,7 @@ class Trainer:
             
             # Run Sequence
             loss = torch.tensor(0.0, device=self.agent.vae.encoder_net[0].weight.device)
+            state_net_accum = {s: [] for s in self.agent.states}
             
             for t_sub in range(steps_to_run):
                 t = t_start + t_sub
@@ -137,9 +130,31 @@ class Trainer:
                 
                 # 2.7 Record History (Detached)
                 self._record_history(current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll)
+
+                # Accumulate per-state network vectors for contrastive loss
+                net_vec = torch.stack([network_acts[net] for net in self.agent.networks])
+                state_net_accum[current_state].append(net_vec)
                 
             # --- End of Sequence: Backprop ---
             if enable_learning and loss.requires_grad:
+                # Contrastive loss over state means (within this BPTT window)
+                contrastive_weight = self.agent.params.get("state_contrastive_weight", 0.0)
+                if contrastive_weight > 0.0 and 'state_net_accum' in locals():
+                    state_means = {}
+                    for s, vecs in state_net_accum.items():
+                        if vecs:
+                            state_means[s] = torch.stack(vecs, dim=0).mean(dim=0)
+                    states = list(state_means.keys())
+                    if len(states) > 1:
+                        sims = []
+                        for i in range(len(states)):
+                            for j in range(i + 1, len(states)):
+                                a = state_means[states[i]]
+                                b = state_means[states[j]]
+                                sims.append(F.cosine_similarity(a, b, dim=0))
+                        if sims:
+                            contrastive_loss = torch.stack(sims).clamp(min=0.0).mean()
+                            loss = loss + (contrastive_weight * contrastive_loss)
                 
                 loss.backward()
                 
@@ -157,6 +172,8 @@ class Trainer:
             # Layer 2: Use .data to safely modify buffers in-place
             with torch.no_grad():
                 self.agent.aha_accum_val.data = self.agent.aha_accum_val.detach()
+                if hasattr(self.agent, "z_ema"):
+                    self.agent.z_ema = self.agent.z_ema.detach()
             
             # Detach Blanket Active States (Critical for BPTT across batches)
             # Replace dictionary values with detached copies
@@ -191,8 +208,7 @@ class Trainer:
         # Initial activations (Tensor)
         device = self.agent.vae.encoder_net[0].weight.device
         
-        from config.meditation_config import ThoughtseedParams
-        mu_dict = ThoughtseedParams.get_target_activations(current_state, 0.6, self.agent.experience_level)
+        mu_dict = get_thoughtseed_targets(current_state, 0.6, self.agent.experience_level)
         activations_np = np.array([mu_dict[ts] for ts in self.agent.thoughtseeds])
         # Add noise
         activations_np += np.random.normal(0, self.agent.noise_level, size=len(activations_np))
@@ -214,7 +230,7 @@ class Trainer:
                       observed_networks: Dict[str, torch.Tensor], sensory_inference: torch.Tensor) -> Tuple[float, torch.Tensor, Dict[str, torch.Tensor]]:
         
         raw_meta = self.agent.get_meta_awareness(current_state, activations)
-        smoothing = self.agent.params.smoothing
+        smoothing = self.agent.params['smoothing']
         meta_awareness = smoothing * prev_meta_awareness + (1 - smoothing) * raw_meta
         
         # Make meta-awareness available to L3/L2 policies and precision logic
@@ -235,14 +251,8 @@ class Trainer:
                        target_activations: Any, observed_networks: Dict[str, torch.Tensor],
                        sensory_inference: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         
-        # A. VAE Reconstruction from the same latent used for dynamics
-        # (independent strengths: activations are in [0,1])
-        if activations.dim() == 1:
-            z_in = activations.unsqueeze(0)
-            recon_batch = self.agent.vae.decode(z_in)
-            recon_x = recon_batch.squeeze(0)
-        else:
-            recon_x = self.agent.vae.decode(activations)
+        # A. Reconstruction from the same latent used for dynamics (state-aware)
+        recon_x = self.agent.decode_with_state(activations, current_state)
         
         # B. VAE Loss (VFE)
         # Prepare Tensors
@@ -269,7 +279,7 @@ class Trainer:
         )
 
         # C. Network target regularizer (lightweight)
-        reg_weight = getattr(self.agent.params, "network_target_reg", 0.0)
+        reg_weight = self.agent.params.get("network_target_reg", 0.0)
         target_loss = torch.tensor(0.0, device=device)
         if reg_weight > 0.0 and current_state in NETWORK_PROFILES:
             prof = NETWORK_PROFILES[current_state][self.agent.experience_level]
@@ -305,7 +315,7 @@ class Trainer:
         self.agent.free_energy_history.append(free_energy.detach().item())
         self.agent.prediction_error_history.append(accuracy_nll.detach().item())
         
-        prec = 0.5 + self.agent.params.precision_weight * meta_awareness
+        prec = 0.5 + self.agent.params['precision_weight'] * meta_awareness
         self.agent.precision_history.append(prec)
         
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
@@ -319,8 +329,6 @@ class Trainer:
              self.agent.expert_mind_wandering_detections += 1
              
         self.agent.stability_indicators.append(compute_dmn_dan_anticorrelation(net_acts_float))
-
-
 
     def _save_results(self, output_dir, state_transition_patterns, transition_timestamps):
         """Save results (Helper)."""
