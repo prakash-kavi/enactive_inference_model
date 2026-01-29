@@ -56,12 +56,14 @@ class Layer2AttentionalModel(nn.Module):
         
         self.mu_params = nn.ParameterDict()
         self.state_decoder_bias = nn.ParameterDict()
+        self.state_decoder_gain = nn.ParameterDict()
         
         for state in self.states:
             mu_dict = get_thoughtseed_targets(state, 0.5, self.experience_level)
             mu_vec = [mu_dict[ts] for ts in self.thoughtseeds]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32))
             self.state_decoder_bias[state] = nn.Parameter(torch.zeros(len(self.networks), dtype=torch.float32))
+            self.state_decoder_gain[state] = nn.Parameter(torch.zeros(len(self.networks), dtype=torch.float32))
             
         
         self.register_buffer('z_ema', torch.zeros(self.num_thoughtseeds))
@@ -154,6 +156,10 @@ class Layer2AttentionalModel(nn.Module):
         else:
             decoded = self.vae.decode(z)
         bias = self.state_decoder_bias.get(current_state)
+        gain = self.state_decoder_gain.get(current_state)
+        if gain is not None:
+            gate = 0.5 + torch.sigmoid(gain)
+            decoded = decoded * gate
         if bias is not None:
             decoded = decoded + bias
         return torch.clamp(decoded, 0.0, 1.0)

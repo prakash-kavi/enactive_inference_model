@@ -57,7 +57,6 @@ class Layer3Monitor(nn.Module):
         
         prescription_l1l2 = {
             'noise_reduction': 1.0,
-            'dwell_modifier': 1.0,
             'fatigue_buffer': 1.0
         }
         
@@ -81,12 +80,10 @@ class Layer3Monitor(nn.Module):
             recognition = max(recognition, float(dom_act))
 
         if recognition > 0.7:
-            prescription_l1l2['dwell_modifier'] = 0.2
             prescription_l1l2['noise_reduction'] = 0.5
             prescription_l2l3['precision_modulation'] = 1.5
 
         if self.vfe_ema > 0.6:
-            prescription_l1l2['dwell_modifier'] = min(prescription_l1l2['dwell_modifier'], 0.6)
             prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.8)
             prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], 1.1)
              
@@ -104,7 +101,7 @@ class Layer3Monitor(nn.Module):
             )
             if ma > 0.6:
                 prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.6)
-                 
+
         eq_idx = self.thoughtseeds.index('equanimity')
         if z_vals[eq_idx] > 0.6:
             prescription_l1l2['fatigue_buffer'] = 0.5

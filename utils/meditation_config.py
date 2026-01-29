@@ -9,6 +9,22 @@ STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
+# Probabilistic state transitions (rows sum to 1.0)
+STATE_TRANSITION_PROBS = {
+    'expert': {
+        'breath_focus': {'breath_focus': 0.55, 'mind_wandering': 0.30, 'meta_awareness': 0.05, 'redirect_breath': 0.10},
+        'mind_wandering': {'breath_focus': 0.05, 'mind_wandering': 0.35, 'meta_awareness': 0.40, 'redirect_breath': 0.20},
+        'meta_awareness': {'breath_focus': 0.05, 'mind_wandering': 0.05, 'meta_awareness': 0.05, 'redirect_breath': 0.85},
+        'redirect_breath': {'breath_focus': 0.90, 'mind_wandering': 0.05, 'meta_awareness': 0.03, 'redirect_breath': 0.02},
+    },
+    'novice': {
+        'breath_focus': {'breath_focus': 0.50, 'mind_wandering': 0.40, 'meta_awareness': 0.05, 'redirect_breath': 0.05},
+        'mind_wandering': {'breath_focus': 0.05, 'mind_wandering': 0.70, 'meta_awareness': 0.15, 'redirect_breath': 0.10},
+        'meta_awareness': {'breath_focus': 0.15, 'mind_wandering': 0.15, 'meta_awareness': 0.05, 'redirect_breath': 0.65},
+        'redirect_breath': {'breath_focus': 0.70, 'mind_wandering': 0.20, 'meta_awareness': 0.05, 'redirect_breath': 0.05},
+    }
+}
+
 # Network profiles for mediative states (used for agent learning initialization)
 NETWORK_PROFILES = {
     "breath_focus": {
@@ -36,7 +52,7 @@ DEFAULTS = {
     'HAZARD_K': 6.0,
 }
 
-# Dwell Times (Seconds) for State Transitions
+# Dwell Times (Seconds) for State Transitions (level-specific)
 DWELL_TIMES = {
     'expert': {
         'breath_focus': (15, 30),
@@ -51,6 +67,7 @@ DWELL_TIMES = {
         'redirect_breath': (2, 5)
     }
 }
+
 
 THOUGHTSEED_BASE_ACTIVATIONS = {
     "breath_focus": {
@@ -85,32 +102,65 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
 
 THOUGHTSEED_TARGET_ADJUSTMENTS = {
     "breath_focus": {
-        "attend_breath": (0.1, 0.1),
-        "equanimity": (0.25, 0.2),
-        "pain_discomfort": (0.0, 0.0),
-        "pending_tasks": (0.0, 0.0),
-        "aha_moment": (0.1, 0.0)
+        "attend_breath": 0.1,
+        "equanimity": 0.25,
+        "pain_discomfort": 0.0,
+        "pending_tasks": 0.0,
+        "aha_moment": 0.1
     },
     "mind_wandering": {
-        "attend_breath": (0.0, 0.0),
-        "equanimity": (-0.05, 0.05),
-        "pain_discomfort": (-0.1, 0.4),
-        "pending_tasks": (-0.1, 0.4),
-        "aha_moment": (0.3, 0.0)
+        "attend_breath": 0.0,
+        "equanimity": -0.05,
+        "pain_discomfort": -0.1,
+        "pending_tasks": -0.1,
+        "aha_moment": 0.3
     },
     "meta_awareness": {
-        "attend_breath": (0.1, 0.0),
-        "equanimity": (0.1, 0.1),
-        "pain_discomfort": (0.0, 0.0),
-        "pending_tasks": (0.0, 0.0),
-        "aha_moment": (0.1, 0.1)
+        "attend_breath": 0.1,
+        "equanimity": 0.1,
+        "pain_discomfort": 0.0,
+        "pending_tasks": 0.0,
+        "aha_moment": 0.1
     },
     "redirect_breath": {
-        "attend_breath": (0.2, 0.0),
-        "equanimity": (0.25, 0.2),
-        "pain_discomfort": (-0.1, 0.0),
-        "pending_tasks": (0.0, 0.0),
-        "aha_moment": (0.1, 0.0)
+        "attend_breath": 0.2,
+        "equanimity": 0.25,
+        "pain_discomfort": -0.1,
+        "pending_tasks": 0.0,
+        "aha_moment": 0.1
+    }
+}
+
+THOUGHTSEED_LEVEL_OFFSETS = {
+    "expert": {
+        "breath_focus": {
+            "attend_breath": 0.1,
+            "equanimity": 0.2,
+            "pain_discomfort": 0.0,
+            "pending_tasks": 0.0,
+            "aha_moment": 0.0
+        },
+        "mind_wandering": {
+            "attend_breath": 0.0,
+            "equanimity": 0.05,
+            "pain_discomfort": 0.4,
+            "pending_tasks": 0.4,
+            "aha_moment": 0.0
+        },
+        "meta_awareness": {
+            "attend_breath": 0.0,
+            "equanimity": 0.1,
+            "pain_discomfort": 0.0,
+            "pending_tasks": 0.0,
+            "aha_moment": 0.1
+        },
+        "redirect_breath": {
+            "attend_breath": 0.0,
+            "equanimity": 0.2,
+            "pain_discomfort": 0.0,
+            "pending_tasks": 0.0,
+            "aha_moment": 0.0
+        }
     }
 }
 
@@ -118,10 +168,10 @@ def get_thoughtseed_targets(state, meta_awareness, experience_level='novice'):
     """Get target activation values for each thoughtseed in the specified state."""
     activations = THOUGHTSEED_BASE_ACTIVATIONS[state].copy()
     for ts in activations:
-        meta_mod, expert_offset = THOUGHTSEED_TARGET_ADJUSTMENTS[state][ts]
+        meta_mod = THOUGHTSEED_TARGET_ADJUSTMENTS[state][ts]
         activations[ts] += meta_mod * meta_awareness
-        if experience_level == 'expert':
-            activations[ts] += expert_offset
+        level_offset = THOUGHTSEED_LEVEL_OFFSETS.get(experience_level, {}).get(state, {}).get(ts, 0.0)
+        activations[ts] += level_offset
     return activations
 
 

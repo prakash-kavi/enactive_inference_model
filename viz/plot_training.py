@@ -16,10 +16,8 @@ from pathlib import Path
 # Import from viz package
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from viz.plotting_utils import set_plot_style, STATE_COLORS, STATE_DISPLAY_NAMES, STATE_SHORT_NAMES, save_figure, load_time_series, NETWORK_KEYS
-from utils.meditation_config import STATES
-
-NETWORKS = NETWORK_KEYS  # Use centralized constant
+from viz.plotting_utils import set_plot_style, STATE_COLORS, STATE_DISPLAY_NAMES, STATE_SHORT_NAMES, save_figure, load_time_series
+from utils.meditation_config import STATES, NETWORKS
 
 def clean_old_plots(output_dir):
     """Remove clutter from previous runs."""

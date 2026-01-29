@@ -15,10 +15,9 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.meditation_config import STATES
+from utils.meditation_config import STATES, NETWORKS
 from .plotting_utils import (
     NETWORK_COLORS,
-    NETWORK_KEYS,
     PLOT_DIR,
     STATE_COLORS,
     STATE_SHORT_NAMES,
@@ -65,8 +64,8 @@ def cumulative_state_fraction(states: List[str]) -> Dict[str, np.ndarray]:
 
 def _network_matrix(history: List[Dict[str, float]]) -> np.ndarray:
     if not history:
-        return np.zeros((0, len(NETWORK_KEYS)))
-    return np.asarray([[step.get(net, 0.0) for net in NETWORK_KEYS] for step in history], dtype=float)
+        return np.zeros((0, len(NETWORKS)))
+    return np.asarray([[step.get(net, 0.0) for net in NETWORKS] for step in history], dtype=float)
 
 
 def plot_convergence_panels(cohort: str, window: int = 25, tail_span: int = 200, fe_ylim: tuple[float, float] | None = None) -> Path:

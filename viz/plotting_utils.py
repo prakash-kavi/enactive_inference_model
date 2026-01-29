@@ -38,8 +38,6 @@ STATE_COLORS = {
 
 from utils.meditation_config import NETWORKS
 
-NETWORK_KEYS = NETWORKS
-
 NETWORK_COLORS = {
     'DMN': '#CA3542',
     'VAN': '#B77FB4',

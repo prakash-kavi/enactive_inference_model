@@ -20,11 +20,9 @@ from .plotting_utils import (
     set_plot_style, load_json_data, get_tail_stats, smooth_series,
     PLOT_DIR, TAIL_STEPS, STATE_COLORS, NETWORK_COLORS,
     STATE_SHORT_NAMES, STATE_DISPLAY_NAMES, THOUGHTSEED_COLORS,
-    save_figure, NETWORK_KEYS
+    save_figure
 )
-from utils.meditation_config import STATES, THOUGHTSEEDS
-
-NETWORKS = NETWORK_KEYS  # Use centralized constant
+from utils.meditation_config import STATES, THOUGHTSEEDS, NETWORKS
 
 def plot_hierarchy(data, save_path=None):
     """

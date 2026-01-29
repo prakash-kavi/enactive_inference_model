@@ -18,7 +18,7 @@ def clip_array(x, vmin, vmax):
 def ensure_directories(base_dir=None):
     """Create `data/` and `plots/` under `base_dir` (or package root)."""
     if not base_dir:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.getcwd()
     base_dir = os.fspath(base_dir)
     os.makedirs(os.path.join(base_dir, "data"), exist_ok=True)
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)

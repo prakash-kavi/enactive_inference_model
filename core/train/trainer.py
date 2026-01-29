@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from typing import Tuple, Dict, Any, Optional
 
 from utils.meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates, build_transition_stats
-from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, get_thoughtseed_targets
+from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, META_BASE_AWARENESS, get_thoughtseed_targets
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
     compute_dmn_dan_anticorrelation
@@ -76,7 +76,7 @@ class PracticeTrainer:
             
             for t_sub in range(steps_to_run):
                 t = t_start + t_sub
-                
+
                 # --- Step Logic ---
                 # 2.1 Biology (Layer 1)
                 # Reads actives from L1-L2 (which were set in previous step)
@@ -148,11 +148,21 @@ class PracticeTrainer:
                     states = list(state_means.keys())
                     if len(states) > 1:
                         sims = []
+                        pair_weights = {
+                            ('breath_focus', 'mind_wandering'): 2.0,
+                            ('mind_wandering', 'meta_awareness'): 1.5,
+                            ('mind_wandering', 'redirect_breath'): 1.5,
+                            ('breath_focus', 'meta_awareness'): 1.2,
+                            ('breath_focus', 'redirect_breath'): 1.2,
+                            ('meta_awareness', 'redirect_breath'): 1.0
+                        }
                         for i in range(len(states)):
                             for j in range(i + 1, len(states)):
                                 a = state_means[states[i]]
                                 b = state_means[states[j]]
-                                sims.append(F.cosine_similarity(a, b, dim=0))
+                                key = tuple(sorted((states[i], states[j])))
+                                weight = pair_weights.get(key, 1.0)
+                                sims.append(weight * F.cosine_similarity(a, b, dim=0))
                         if sims:
                             contrastive_loss = torch.stack(sims).clamp(min=0.0).mean()
                             loss = loss + (contrastive_weight * contrastive_loss)
@@ -235,21 +245,53 @@ class PracticeTrainer:
                       observed_networks: Dict[str, torch.Tensor], sensory_inference: torch.Tensor) -> Tuple[float, torch.Tensor, Dict[str, torch.Tensor]]:
         
         raw_meta = self.agent.get_meta_awareness(current_state, activations)
-        smoothing = self.agent.params['smoothing']
-        meta_awareness = smoothing * prev_meta_awareness + (1 - smoothing) * raw_meta
+        base_smoothing = self.agent.params['smoothing']
+        progress = 0.0
+        if dwell_limit > 0:
+            progress = min(1.0, current_dwell / max(1, dwell_limit))
+        if current_state in ('mind_wandering', 'breath_focus'):
+            smoothing = max(0.3, base_smoothing - 0.2 * (1.0 - progress))
+        else:
+            smoothing = base_smoothing
+
+        rng = getattr(self, "rng_np", None)
+        noise_scale = 0.0
+        if current_state == 'mind_wandering':
+            noise_scale = 0.06
+        elif current_state == 'breath_focus':
+            noise_scale = 0.04
+        elif current_state == 'redirect_breath':
+            noise_scale = 0.03
+        else:
+            noise_scale = 0.02
+        if self.agent.experience_level == 'expert':
+            noise_scale *= 0.6
+        noise = 0.0
+        if rng is not None and noise_scale > 0.0:
+            noise = float(rng.normal(0.0, noise_scale))
+
+        meta_awareness = smoothing * prev_meta_awareness + (1 - smoothing) * raw_meta + noise
+        if self.agent.experience_level == 'expert':
+            novice_floor = META_BASE_AWARENESS.get(current_state, 0.0)
+            meta_awareness = max(meta_awareness, novice_floor + 0.05)
+        meta_awareness = float(np.clip(meta_awareness, 0.0, 1.0))
         
-        # Make meta-awareness available to L3/L2 policies and precision logic
-        self.agent.blanket_l2l3.update_sensory_states({
-            'meta_awareness': meta_awareness,
-            'current_state': current_state
-        })
-        
+        prev_dom = self.agent.thoughtseeds[int(torch.argmax(activations).item())]
         activations = self.agent.update_thoughtseed_dynamics(
             activations, current_state, current_dwell, dwell_limit, observed_networks, sensory_inference
         )
         # update_thoughtseed_dynamics returns updated z.
         # It also updates blanket with prior_seeds etc.
-        
+        dom_curr = self.agent.thoughtseeds[int(torch.argmax(activations).item())]
+        if prev_dom != dom_curr and current_state in ('mind_wandering', 'breath_focus'):
+            meta_awareness = float(np.clip(meta_awareness + 0.04, 0.0, 1.0))
+
+        # Make meta-awareness available to L3/L2 policies and precision logic
+        self.agent.blanket_l2l3.update_sensory_states({
+            'meta_awareness': meta_awareness,
+            'current_state': current_state
+        })
+
         return meta_awareness, activations, {} # Return empty targets map
 
     def _pass_bottom_up(self, current_state: str, activations: torch.Tensor, meta_awareness: float, 
@@ -286,14 +328,19 @@ class PracticeTrainer:
         # C. Network target regularizer (lightweight)
         reg_weight = self.agent.params.get("network_target_reg", 0.0)
         target_loss = torch.tensor(0.0, device=device)
+        van_boost_loss = torch.tensor(0.0, device=device)
         if reg_weight > 0.0 and current_state in NETWORK_PROFILES:
             prof = NETWORK_PROFILES[current_state][self.agent.experience_level]
             target_vec = torch.tensor([prof[n] for n in self.agent.networks], device=device, dtype=torch.float32)
             target_loss = torch.nn.functional.mse_loss(x, target_vec, reduction='sum')
+            if current_state == 'meta_awareness' and 'VAN' in self.agent.networks:
+                van_idx = self.agent.networks.index('VAN')
+                van_shortfall = torch.relu(target_vec[van_idx] - x[van_idx])
+                van_boost_loss = van_shortfall * van_shortfall
 
         # Total loss
         beta = 1.0
-        loss = recon_loss + beta * kl_div + (reg_weight * target_loss)
+        loss = recon_loss + beta * kl_div + (reg_weight * target_loss) + (reg_weight * 0.6 * van_boost_loss)
         
         # We treat VAE loss as "Free Energy"
         free_energy = loss

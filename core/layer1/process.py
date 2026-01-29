@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Dict, Tuple, Optional
-from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATES, NETWORKS
+from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS, STATES, NETWORKS
 
 IDX = {n: i for i, n in enumerate(NETWORKS)}
 
@@ -18,20 +18,15 @@ THETA_NOVICE = {
         (IDX['DMN'], IDX['FPN']): -0.15, (IDX['FPN'], IDX['DMN']): -0.15
     },
     'meta_awareness': {
-        (IDX['VAN'], IDX['FPN']): -0.50, (IDX['FPN'], IDX['VAN']): -0.50
+        (IDX['VAN'], IDX['FPN']): -0.50, (IDX['FPN'], IDX['VAN']): -0.50,
+        (IDX['DMN'], IDX['DAN']): -0.25, (IDX['DAN'], IDX['DMN']): -0.25,
+        (IDX['DMN'], IDX['FPN']): -0.25, (IDX['FPN'], IDX['DMN']): -0.25
     },
     'redirect_breath': {
-        (IDX['DMN'], IDX['DAN']): -0.30, (IDX['DAN'], IDX['DMN']): -0.30,
-        (IDX['DMN'], IDX['FPN']): -0.20, (IDX['FPN'], IDX['DMN']): -0.20,
+        (IDX['DMN'], IDX['DAN']): -0.40, (IDX['DAN'], IDX['DMN']): -0.40,
+        (IDX['DMN'], IDX['FPN']): -0.30, (IDX['FPN'], IDX['DMN']): -0.30,
         (IDX['DAN'], IDX['FPN']): 0.40, (IDX['FPN'], IDX['DAN']): 0.40
     }
-}
-
-NOISE_STATE_SCALE = {
-    'breath_focus': 0.7,
-    'mind_wandering': 1.3,
-    'meta_awareness': 1.0,
-    'redirect_breath': 0.9
 }
 
 
@@ -51,16 +46,14 @@ class StateMachine:
         self.hazard_k = float(DEFAULTS['HAZARD_K'])
 
         self.dwell_ranges_sec = DWELL_TIMES.get(level, DWELL_TIMES['novice'])
+        self.transition_probs = STATE_TRANSITION_PROBS.get(level, STATE_TRANSITION_PROBS['novice'])
         self._sample_next_dwell()
 
     def _sample_next_dwell(self):
         min_s, max_s = self.dwell_ranges_sec[self.current_state]
-        min_steps = max(1, int(min_s / self.dt))
-        max_steps = max(min_steps, int(max_s / self.dt))
-        mean_steps = 0.5 * (min_steps + max_steps)
-        std_steps = max((max_steps - min_steps) / 2.0, 1.0)
-        sampled_steps = self._truncated_normal(mean_steps, std_steps, min_steps, max_steps)
-        self.current_max_steps = int(np.clip(round(sampled_steps), min_steps, max_steps))
+        min_steps = max(1, int(round(min_s / self.dt)))
+        max_steps = max(min_steps, int(round(max_s / self.dt)))
+        self.current_max_steps = int(self.rng.randint(min_steps, max_steps + 1))
         self.timer_steps = 0
         self.steps_since_transition = 0
 
@@ -73,40 +66,46 @@ class StateMachine:
                 return float(val)
         return float(np.clip(val, low, high))
 
-    def check_transition(self, dwell_modifier: float = 1.0, transition_drive: float = 0.0) -> str:
+    def check_transition(self, transition_drive: float = 0.0) -> str:
         self.timer_steps += 1
         self.steps_since_transition += 1
 
         min_s, _ = self.dwell_ranges_sec[self.current_state]
         min_steps = int(min_s / self.dt)
 
-        effective_limit_steps = int(self.current_max_steps * dwell_modifier)
-        effective_limit_steps = max(effective_limit_steps, min_steps)
+        effective_limit_steps = max(self.current_max_steps, min_steps)
 
         if self.steps_since_transition < self.refractory_steps:
+            return self.current_state
+
+        drive = max(0.0, min(transition_drive, 1.0))
+        if self.timer_steps >= min_steps and drive >= 0.7:
+            self.transition()
             return self.current_state
 
         if self.timer_steps >= effective_limit_steps:
             self.transition()
             return self.current_state
 
-        if self.timer_steps >= min_steps:
-            progress = (self.timer_steps - min_steps) / max(1, effective_limit_steps - min_steps)
-            base_hazard = 1.0 / (1.0 + np.exp(-self.hazard_k * (progress - 0.5)))
-            drive = max(0.0, min(transition_drive, 1.0))
-            hazard = min(1.0, base_hazard * (0.4 + 0.8 * drive))
-            if self.rng.rand() < hazard:
-                self.transition()
-
         return self.current_state
 
     def transition(self):
-        try:
-            current_idx = STATES.index(self.current_state)
-            next_idx = (current_idx + 1) % len(STATES)
-            self.current_state = STATES[next_idx]
-        except ValueError:
-            self.current_state = STATES[0]
+        probs = self.transition_probs.get(self.current_state)
+        if probs:
+            states = list(probs.keys())
+            weights = np.array([probs[s] for s in states], dtype=float)
+            for i, s in enumerate(states):
+                if s == self.current_state:
+                    weights[i] = 0.0
+            weights = weights / max(weights.sum(), 1e-6)
+            self.current_state = self.rng.choice(states, p=weights)
+        else:
+            try:
+                current_idx = STATES.index(self.current_state)
+                next_idx = (current_idx + 1) % len(STATES)
+                self.current_state = STATES[next_idx]
+            except ValueError:
+                self.current_state = STATES[0]
         self._sample_next_dwell()
 
 
@@ -198,14 +197,10 @@ class Layer1Process(nn.Module):
 
     def update(self, active_states: Dict) -> Tuple[Dict[str, torch.Tensor], str]:
         """Advance one step; return network activations and current state."""
-        dwell_mod = active_states.get('dwell_modifier', 1.0)
-        if isinstance(dwell_mod, torch.Tensor):
-            dwell_mod = dwell_mod.item()
-
         transition_drive = active_states.get('transition_drive', 0.0)
         if isinstance(transition_drive, torch.Tensor):
             transition_drive = transition_drive.item()
-        current_state = self.sm.check_transition(dwell_mod, transition_drive)
+        current_state = self.sm.check_transition(transition_drive)
         self.current_state = current_state
         self.current_max_dwell = self.sm.current_max_steps
 
@@ -224,7 +219,7 @@ class Layer1Process(nn.Module):
             noise_gain = noise_gain.item()
 
         base_variance = 0.001 if self.level == 'expert' else 0.002
-        state_scale = NOISE_STATE_SCALE.get(current_state, 1.0)
+        state_scale = 1.3 if current_state == 'mind_wandering' else 1.0
         variance = max(0.0005, base_variance * noise_gain * state_scale)
         sigma = np.sqrt(variance)
 
