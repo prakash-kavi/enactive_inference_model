@@ -3,22 +3,22 @@
   "complexity_penalty": 0.4,
   "learning_rate": 0.01,
   "average_free_energy_by_state": {
-    "breath_focus": 0.0788584400303335,
-    "mind_wandering": 0.035849674298599754,
-    "meta_awareness": 0.14246144825087267,
-    "redirect_breath": 0.12330758742272581
+    "breath_focus": 0.06886488342505304,
+    "mind_wandering": 0.03337440453409064,
+    "meta_awareness": 0.10481628196666369,
+    "redirect_breath": 0.11075581786912177
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 0.03003123021530643,
-    "mind_wandering": 0.01586371836116847,
-    "meta_awareness": 0.031084130316592504,
-    "redirect_breath": 0.038866528882020406
+    "breath_focus": 0.02246787560857857,
+    "mind_wandering": 0.019452031314341173,
+    "meta_awareness": 0.02731645828918428,
+    "redirect_breath": 0.033743254021384644
   },
   "average_precision_by_state": {
-    "breath_focus": 0.7011003708343091,
-    "mind_wandering": 0.6199724779922239,
-    "meta_awareness": 0.7714726995345571,
-    "redirect_breath": 0.7491791642433522
+    "breath_focus": 0.7011212596470213,
+    "mind_wandering": 0.620333967765473,
+    "meta_awareness": 0.7641678928712048,
+    "redirect_breath": 0.7483338339063506
   },
   "network_expectations": {}
 }

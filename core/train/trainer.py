@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from typing import Tuple, Dict, Any, Optional
 
 from utils.meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates, build_transition_stats
-from config.meditation_config import DEFAULTS, NETWORK_PROFILES, get_thoughtseed_targets
+from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, get_thoughtseed_targets
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
     compute_dmn_dan_anticorrelation
@@ -44,8 +44,9 @@ class PracticeTrainer:
              np.random.seed(seed)
              # Agent RNG (kept for legacy random calls if any)
              self.agent.rng = np.random.RandomState(seed)
-             # Process RNG (numpy part)
-             self.process.rng_np = np.random.RandomState(seed)
+             # Shared RNG for dwell sampling / reproducibility
+             self.rng_np = np.random.RandomState(seed)
+             self.process.set_rng(self.rng_np)
 
         # 1. Initialization
         self.optimizer.zero_grad()
@@ -211,7 +212,11 @@ class PracticeTrainer:
         mu_dict = get_thoughtseed_targets(current_state, 0.6, self.agent.experience_level)
         activations_np = np.array([mu_dict[ts] for ts in self.agent.thoughtseeds])
         # Add noise
-        activations_np += np.random.normal(0, self.agent.noise_level, size=len(activations_np))
+        rng = getattr(self, "rng_np", None)
+        if rng is None:
+            activations_np += np.random.normal(0, self.agent.noise_level, size=len(activations_np))
+        else:
+            activations_np += rng.normal(0, self.agent.noise_level, size=len(activations_np))
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
         activations = torch.clamp(activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         

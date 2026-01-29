@@ -13,9 +13,7 @@ class MarkovBlanketL2L3:
         'current_state',
         'dominant_thoughtseed',
         'dominant_activation',
-        'van_spike_detected',
         'aha_accumulator_value',
-        'current_van',
         'vfe',
         'recognition_signal'
     }

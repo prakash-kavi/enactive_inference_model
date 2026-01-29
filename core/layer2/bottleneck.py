@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy as np
 from typing import Optional, Dict, Tuple, List
 
-from config.meditation_config import (
+from utils.meditation_config import (
     THOUGHTSEEDS, STATES, NETWORKS,
     get_actinf_params, get_thoughtseed_targets, compute_meta_awareness,
     DEFAULTS
@@ -71,7 +71,6 @@ class Layer2AttentionalModel(nn.Module):
         self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.7)
         
         self.monitor = Layer3Monitor(
-            networks=self.networks,
             thoughtseeds=self.thoughtseeds,
             sensory_precision_base=self.params['sensory_precision_base'],
             prior_precision_base=self.params['prior_precision_base'],
@@ -164,7 +163,7 @@ class Layer2AttentionalModel(nn.Module):
                                    observed_networks: Dict[str, torch.Tensor],
                                    sensory_inference: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Update attentional-agent strengths."""
-        van_spike_detected, current_van = self._update_van_signals(observed_networks, current_state)
+        van_spike_detected, _current_van = self._update_van_signals(observed_networks, current_state)
 
         mu_prior = self.mu_params[current_state]
         progress = 0.0
@@ -212,9 +211,7 @@ class Layer2AttentionalModel(nn.Module):
         self.blanket_l2l3.update_sensory_states({
             'dominant_thoughtseed': self.thoughtseeds[int(torch.argmax(updated_activations))],
             'dominant_activation': updated_activations.max().detach().item(),
-            'van_spike_detected': van_spike_detected,
-            'aha_accumulator_value': float(self.aha_accum_val),
-            'current_van': float(current_van)
+            'aha_accumulator_value': float(self.aha_accum_val)
         })
         
         return updated_activations

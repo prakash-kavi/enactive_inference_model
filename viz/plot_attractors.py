@@ -17,7 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from pathlib import Path
 from typing import Dict, List
 
-from config.meditation_config import STATES, THOUGHTSEEDS
+from utils.meditation_config import STATES, THOUGHTSEEDS
 from . import plotting_utils as pu
 
 # Use constants from plotting_utils

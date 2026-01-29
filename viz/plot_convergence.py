@@ -15,7 +15,7 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
-from config.meditation_config import STATES
+from utils.meditation_config import STATES
 from .plotting_utils import (
     NETWORK_COLORS,
     NETWORK_KEYS,

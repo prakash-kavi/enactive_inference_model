@@ -4,14 +4,14 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Dict, Tuple, Optional
-from config.meditation_config import DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATES, NETWORKS
+from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATES, NETWORKS
 
 IDX = {n: i for i, n in enumerate(NETWORKS)}
 
 THETA_NOVICE = {
     'breath_focus': {
         (IDX['DMN'], IDX['DAN']): 0.50, (IDX['DAN'], IDX['DMN']): 0.50,
-        (IDX['DAN'], IDX['FPN']): -0.40, (IDX['FPN'], IDX['DAN']): -0.40
+        (IDX['DAN'], IDX['FPN']): 0.15, (IDX['FPN'], IDX['DAN']): 0.15
     },
     'mind_wandering': {
         (IDX['DMN'], IDX['VAN']): -0.30, (IDX['VAN'], IDX['DMN']): -0.30,
@@ -27,6 +27,13 @@ THETA_NOVICE = {
     }
 }
 
+NOISE_STATE_SCALE = {
+    'breath_focus': 0.7,
+    'mind_wandering': 1.3,
+    'meta_awareness': 1.0,
+    'redirect_breath': 0.9
+}
+
 
 class StateMachine:
     """Markovian state transitions with dwell times."""
@@ -39,18 +46,36 @@ class StateMachine:
         self.current_state = STATES[0]
         self.timer_steps = 0
         self.current_max_steps = 0
+        self.steps_since_transition = 0
+        self.refractory_steps = max(1, int(DEFAULTS['REFRACTORY_SEC'] / self.dt))
+        self.hazard_k = float(DEFAULTS['HAZARD_K'])
 
         self.dwell_ranges_sec = DWELL_TIMES.get(level, DWELL_TIMES['novice'])
         self._sample_next_dwell()
 
     def _sample_next_dwell(self):
         min_s, max_s = self.dwell_ranges_sec[self.current_state]
-        duration_s = self.rng.uniform(min_s, max_s)
-        self.current_max_steps = int(duration_s / self.dt)
+        min_steps = max(1, int(min_s / self.dt))
+        max_steps = max(min_steps, int(max_s / self.dt))
+        mean_steps = 0.5 * (min_steps + max_steps)
+        std_steps = max((max_steps - min_steps) / 2.0, 1.0)
+        sampled_steps = self._truncated_normal(mean_steps, std_steps, min_steps, max_steps)
+        self.current_max_steps = int(np.clip(round(sampled_steps), min_steps, max_steps))
         self.timer_steps = 0
+        self.steps_since_transition = 0
 
-    def check_transition(self, dwell_modifier: float = 1.0) -> str:
+    def _truncated_normal(self, mean: float, std: float, low: float, high: float, max_tries: int = 10) -> float:
+        """Sample a bounded Gaussian dwell time."""
+        val = mean
+        for _ in range(max_tries):
+            val = self.rng.normal(mean, std)
+            if low <= val <= high:
+                return float(val)
+        return float(np.clip(val, low, high))
+
+    def check_transition(self, dwell_modifier: float = 1.0, transition_drive: float = 0.0) -> str:
         self.timer_steps += 1
+        self.steps_since_transition += 1
 
         min_s, _ = self.dwell_ranges_sec[self.current_state]
         min_steps = int(min_s / self.dt)
@@ -58,8 +83,20 @@ class StateMachine:
         effective_limit_steps = int(self.current_max_steps * dwell_modifier)
         effective_limit_steps = max(effective_limit_steps, min_steps)
 
+        if self.steps_since_transition < self.refractory_steps:
+            return self.current_state
+
         if self.timer_steps >= effective_limit_steps:
             self.transition()
+            return self.current_state
+
+        if self.timer_steps >= min_steps:
+            progress = (self.timer_steps - min_steps) / max(1, effective_limit_steps - min_steps)
+            base_hazard = 1.0 / (1.0 + np.exp(-self.hazard_k * (progress - 0.5)))
+            drive = max(0.0, min(transition_drive, 1.0))
+            hazard = min(1.0, base_hazard * (0.4 + 0.8 * drive))
+            if self.rng.rand() < hazard:
+                self.transition()
 
         return self.current_state
 
@@ -154,13 +191,21 @@ class Layer1Process(nn.Module):
 
         return mu, theta
 
+    def set_rng(self, rng: np.random.RandomState):
+        """Attach a shared RNG for reproducible dwell sampling."""
+        if rng is not None:
+            self.sm.rng = rng
+
     def update(self, active_states: Dict) -> Tuple[Dict[str, torch.Tensor], str]:
         """Advance one step; return network activations and current state."""
         dwell_mod = active_states.get('dwell_modifier', 1.0)
         if isinstance(dwell_mod, torch.Tensor):
             dwell_mod = dwell_mod.item()
 
-        current_state = self.sm.check_transition(dwell_mod)
+        transition_drive = active_states.get('transition_drive', 0.0)
+        if isinstance(transition_drive, torch.Tensor):
+            transition_drive = transition_drive.item()
+        current_state = self.sm.check_transition(dwell_mod, transition_drive)
         self.current_state = current_state
         self.current_max_dwell = self.sm.current_max_steps
 
@@ -179,7 +224,8 @@ class Layer1Process(nn.Module):
             noise_gain = noise_gain.item()
 
         base_variance = 0.001 if self.level == 'expert' else 0.002
-        variance = max(0.0005, base_variance * noise_gain)
+        state_scale = NOISE_STATE_SCALE.get(current_state, 1.0)
+        variance = max(0.0005, base_variance * noise_gain * state_scale)
         sigma = np.sqrt(variance)
 
         n_substeps = 2

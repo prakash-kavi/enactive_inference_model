@@ -32,6 +32,8 @@ DEFAULTS = {
     'ACTIVATION_CLIP_MIN': 0.05,
     'ACTIVATION_CLIP_MAX': 0.9,
     'DEFAULT_DT': 0.2,
+    'REFRACTORY_SEC': 0.4,
+    'HAZARD_K': 6.0,
 }
 
 # Dwell Times (Seconds) for State Transitions

@@ -22,7 +22,7 @@ from .plotting_utils import (
     STATE_SHORT_NAMES, STATE_DISPLAY_NAMES, THOUGHTSEED_COLORS,
     save_figure, NETWORK_KEYS
 )
-from config.meditation_config import STATES, THOUGHTSEEDS
+from utils.meditation_config import STATES, THOUGHTSEEDS
 
 NETWORKS = NETWORK_KEYS  # Use centralized constant
 
@@ -40,7 +40,7 @@ def plot_hierarchy(data, save_path=None):
             print(f"ERROR: Required data '{field}' missing for hierarchy plot")
             return
     
-    from config.meditation_config import DEFAULTS
+    from utils.meditation_config import DEFAULTS
     dt = DEFAULTS['DEFAULT_DT']
     time_steps = np.arange(len(data['state_history'])) * dt
     
@@ -182,7 +182,7 @@ def plot_time_series(novice_stats, expert_stats, save_path=None):
         state_history = stats['state_history']
         net_hist = stats['network_activations_history']
         fe_raw = np.array(stats.get('free_energy_history', []))
-        from config.meditation_config import DEFAULTS
+        from utils.meditation_config import DEFAULTS
         dt = DEFAULTS['DEFAULT_DT']
         time_steps = np.arange(len(state_history)) * dt
 
@@ -271,7 +271,7 @@ def plot_cognitive_hierarchy(novice_stats, expert_stats, save_path=None):
         meta_hist = stats.get('meta_awareness_history', []) # Level 3
         fe_raw = np.array(stats.get('free_energy_history', []))
         
-        from config.meditation_config import DEFAULTS
+        from utils.meditation_config import DEFAULTS
         dt = DEFAULTS['DEFAULT_DT']
         time_steps = np.arange(len(state_history)) * dt
 
@@ -514,7 +514,7 @@ def plot_dwell_times(novice_stats, expert_stats, save_path=None):
     nov_dwells = get_dwell_times(novice_stats)
     exp_dwells = get_dwell_times(expert_stats)
 
-    from config.meditation_config import DEFAULTS
+    from utils.meditation_config import DEFAULTS
     dt = DEFAULTS['DEFAULT_DT']
 
     nov_means = [np.mean(nov_dwells[s]) * dt if nov_dwells[s] else 0 for s in STATES]

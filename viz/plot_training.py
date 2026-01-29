@@ -17,7 +17,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from viz.plotting_utils import set_plot_style, STATE_COLORS, STATE_DISPLAY_NAMES, STATE_SHORT_NAMES, save_figure, load_time_series, NETWORK_KEYS
-from config.meditation_config import STATES
+from utils.meditation_config import STATES
 
 NETWORKS = NETWORK_KEYS  # Use centralized constant
 
@@ -65,7 +65,7 @@ def rolling_std(arr: np.ndarray, window: int) -> np.ndarray:
 
 def cumulative_state_fraction(states: list) -> dict:
     """Compute cumulative state fractions matching plot_convergence.py style."""
-    from config.meditation_config import STATES
+    from utils.meditation_config import STATES
     n = len(states)
     fractions = {state: np.zeros(n, dtype=float) for state in STATES}
     counts = {state: 0 for state in STATES}
@@ -118,7 +118,7 @@ def plot_convergence_history(level, results_dir="data/training", output_dir="plo
     fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
 
     # Convert steps to seconds
-    from config.meditation_config import DEFAULTS
+    from utils.meditation_config import DEFAULTS
     dt = DEFAULTS['DEFAULT_DT']
     time_sec = steps * dt
     

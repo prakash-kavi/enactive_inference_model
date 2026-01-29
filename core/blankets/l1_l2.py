@@ -7,18 +7,20 @@ Mediates between Layer 1 (generative process) and Layer 2 (attentional agents).
 
 import numpy as np
 from typing import Dict
+from utils.meditation_config import NETWORKS
 
 
 class MarkovBlanketL1L2:
     """Markov Blanket for the Layer 1 <-> Layer 2 interface."""
 
-    REQUIRED_SENSORY_KEYS = {'DMN', 'VAN', 'DAN', 'FPN'}
+    REQUIRED_SENSORY_KEYS = set(NETWORKS)
 
     def __init__(self, smoothing: float = 0.7):
         self.active_states = {
             'noise_reduction': 1.0,
             'dwell_modifier': 1.0,
             'fatigue_buffer': 1.0,
+            'transition_drive': 0.0,
             'agent_bias': None,
         }
         self.smoothing = smoothing
@@ -63,6 +65,7 @@ class MarkovBlanketL1L2:
         self.active_states['noise_reduction'] = np.clip(self.active_states['noise_reduction'], 0.2, 1.2)
         self.active_states['dwell_modifier'] = np.clip(self.active_states['dwell_modifier'], 0.1, 1.0)
         self.active_states['fatigue_buffer'] = np.clip(self.active_states['fatigue_buffer'], 0.1, 1.0)
+        self.active_states['transition_drive'] = np.clip(self.active_states['transition_drive'], 0.0, 1.0)
 
     def reset(self):
         """Reset to default values for new simulation runs."""
@@ -70,6 +73,7 @@ class MarkovBlanketL1L2:
             'noise_reduction': 1.0,
             'dwell_modifier': 1.0,
             'fatigue_buffer': 1.0,
+            'transition_drive': 0.0,
             'agent_bias': None,
         }
         self.sensory_states = {}

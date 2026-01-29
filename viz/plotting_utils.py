@@ -36,7 +36,7 @@ STATE_COLORS = {
     "redirect_breath": "#ff7f0e",
 }
 
-from config.meditation_config import NETWORKS
+from utils.meditation_config import NETWORKS
 
 NETWORK_KEYS = NETWORKS
 
