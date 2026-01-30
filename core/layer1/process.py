@@ -4,30 +4,12 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Dict, Tuple, Optional
-from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS, STATES, NETWORKS
+from utils.meditation_config import (
+    DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS, STATES, NETWORKS, THETA_BASE
+)
+from utils.meditation_utils import get_preferred_transition_probs
 
 IDX = {n: i for i, n in enumerate(NETWORKS)}
-
-THETA_NOVICE = {
-    'breath_focus': {
-        (IDX['DMN'], IDX['DAN']): 0.50, (IDX['DAN'], IDX['DMN']): 0.50,
-        (IDX['DAN'], IDX['FPN']): 0.15, (IDX['FPN'], IDX['DAN']): 0.15
-    },
-    'mind_wandering': {
-        (IDX['DMN'], IDX['VAN']): -0.30, (IDX['VAN'], IDX['DMN']): -0.30,
-        (IDX['DMN'], IDX['FPN']): -0.15, (IDX['FPN'], IDX['DMN']): -0.15
-    },
-    'meta_awareness': {
-        (IDX['VAN'], IDX['FPN']): -0.50, (IDX['FPN'], IDX['VAN']): -0.50,
-        (IDX['DMN'], IDX['DAN']): -0.25, (IDX['DAN'], IDX['DMN']): -0.25,
-        (IDX['DMN'], IDX['FPN']): -0.25, (IDX['FPN'], IDX['DMN']): -0.25
-    },
-    'redirect_breath': {
-        (IDX['DMN'], IDX['DAN']): -0.40, (IDX['DAN'], IDX['DMN']): -0.40,
-        (IDX['DMN'], IDX['FPN']): -0.30, (IDX['FPN'], IDX['DMN']): -0.30,
-        (IDX['DAN'], IDX['FPN']): 0.40, (IDX['FPN'], IDX['DAN']): 0.40
-    }
-}
 
 
 class StateMachine:
@@ -43,7 +25,7 @@ class StateMachine:
         self.current_max_steps = 0
         self.steps_since_transition = 0
         self.refractory_steps = max(1, int(DEFAULTS['REFRACTORY_SEC'] / self.dt))
-        self.hazard_k = float(DEFAULTS['HAZARD_K'])
+        self.spontaneous_max = 0.18
 
         self.dwell_ranges_sec = DWELL_TIMES.get(level, DWELL_TIMES['novice'])
         self.transition_probs = STATE_TRANSITION_PROBS.get(level, STATE_TRANSITION_PROBS['novice'])
@@ -53,7 +35,10 @@ class StateMachine:
         min_s, max_s = self.dwell_ranges_sec[self.current_state]
         min_steps = max(1, int(round(min_s / self.dt)))
         max_steps = max(min_steps, int(round(max_s / self.dt)))
-        self.current_max_steps = int(self.rng.randint(min_steps, max_steps + 1))
+        mean = 0.5 * (min_steps + max_steps)
+        std = max(1.0, (max_steps - min_steps) / 3.0)
+        sampled = self._truncated_normal(mean, std, min_steps, max_steps)
+        self.current_max_steps = int(round(sampled))
         self.timer_steps = 0
         self.steps_since_transition = 0
 
@@ -73,30 +58,46 @@ class StateMachine:
         min_s, _ = self.dwell_ranges_sec[self.current_state]
         min_steps = int(min_s / self.dt)
 
-        effective_limit_steps = max(self.current_max_steps, min_steps)
-
         if self.steps_since_transition < self.refractory_steps:
             return self.current_state
 
         drive = max(0.0, min(transition_drive, 1.0))
-        if self.timer_steps >= min_steps and drive >= 0.7:
-            self.transition()
+        if self.timer_steps < min_steps:
             return self.current_state
 
-        if self.timer_steps >= effective_limit_steps:
-            self.transition()
+        if self.timer_steps >= self.current_max_steps:
+            self.transition(drive)
+            return self.current_state
+
+        p_spont = self.spontaneous_max * drive
+        if self.rng.rand() < p_spont:
+            self.transition(drive)
             return self.current_state
 
         return self.current_state
 
-    def transition(self):
+    def transition(self, transition_drive: float = 0.0):
         probs = self.transition_probs.get(self.current_state)
         if probs:
             states = list(probs.keys())
             weights = np.array([probs[s] for s in states], dtype=float)
-            for i, s in enumerate(states):
-                if s == self.current_state:
-                    weights[i] = 0.0
+            weights = weights / max(weights.sum(), 1e-6)
+            drive = max(0.0, min(float(transition_drive), 1.0))
+            if drive > 0.0:
+                pref = get_preferred_transition_probs(self.level, self.current_state)
+                if pref:
+                    pref_w = np.array([pref.get(s, 0.0) for s in states], dtype=float)
+                    if pref_w.sum() > 0.0:
+                        pref_w = pref_w / pref_w.sum()
+                        weights = (1.0 - drive) * weights + drive * pref_w
+            # If mind wandering has persisted, bias exit toward meta-awareness (noticing)
+            if self.current_state == 'mind_wandering' and self.current_max_steps > 0:
+                progress = min(1.0, self.timer_steps / max(1, self.current_max_steps))
+                if progress > 0.6 and 'meta_awareness' in states:
+                    bias = (progress - 0.6) / 0.4
+                    bias = max(0.0, min(bias, 1.0))
+                    target = np.array([1.0 if s == 'meta_awareness' else 0.0 for s in states], dtype=float)
+                    weights = (1.0 - bias) * weights + bias * target
             weights = weights / max(weights.sum(), 1e-6)
             self.current_state = self.rng.choice(states, p=weights)
         else:
@@ -140,12 +141,14 @@ class Layer1Process(nn.Module):
 
         mu = torch.tensor(mu_np, dtype=torch.float32, device=device)
 
-        coupling_map = THETA_NOVICE.get(state, {})
+        coupling_map = THETA_BASE.get(state, {})
         base_diag = 0.50 if state == 'mind_wandering' else 0.15
 
         theta_np = np.eye(4) * base_diag
         for (row, col), val in coupling_map.items():
-            theta_np[row, col] = val
+            r_idx = IDX.get(row, row)
+            c_idx = IDX.get(col, col)
+            theta_np[r_idx, c_idx] = val
 
         theta = torch.tensor(theta_np, dtype=torch.float32, device=device)
 
@@ -209,10 +212,13 @@ class Layer1Process(nn.Module):
 
         agent_bias = active_states.get('agent_bias')
         if agent_bias is not None:
-            alpha = 0.6 if self.level == 'expert' else 0.1
+            enactive_bias = active_states.get('l2tol1_enactive_bias', 0.0)
+            if isinstance(enactive_bias, torch.Tensor):
+                enactive_bias = enactive_bias.item()
+            enactive_bias = max(0.0, min(float(enactive_bias), 1.0))
             if not isinstance(agent_bias, torch.Tensor):
                 agent_bias = torch.tensor(agent_bias, device=device, dtype=torch.float32)
-            mu = (1 - alpha) * mu + alpha * agent_bias
+            mu = (1 - enactive_bias) * mu + enactive_bias * agent_bias
 
         noise_gain = active_states.get('noise_reduction', 1.0)
         if isinstance(noise_gain, torch.Tensor):

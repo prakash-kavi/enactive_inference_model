@@ -6,6 +6,19 @@ import numpy as np
 import json
 import torch
 
+from utils.meditation_config import (
+    STATE_TRANSITION_PROBS,
+    PREFERRED_TRANSITION_BIAS,
+    STATES,
+    THOUGHTSEED_BASE_ACTIVATIONS,
+    THOUGHTSEED_TARGET_ADJUSTMENTS,
+    THOUGHTSEED_LEVEL_OFFSETS,
+    META_BASE_AWARENESS,
+    META_THOUGHTSEED_INFLUENCES,
+    ACTINF_DEFAULTS,
+    ACTINF_EXPERT_OVERRIDES,
+)
+
 
 def clip_array(x, vmin, vmax):
     """Clip a scalar or array to [vmin, vmax], preserving scalar return."""
@@ -24,34 +37,54 @@ def ensure_directories(base_dir=None):
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     logging.info("Directories created/verified: data/, plots/")
 
-class LeakyAccumulator:
-    """Standardized Leaky Integrator for signal accumulation.
-    Used for DMN spikes, FPN fatigue, VFE tracking, and Aha Detection.
-    """
-    def __init__(self, decay: float = 0.9, gain: float = 0.1, initial_value: float = 0.0, activation: str = 'linear'):
-        self.decay = decay
-        self.gain = gain
-        self.value = initial_value
-        self.activation = activation
+def _normalize_probs(probs: dict, states: list) -> dict:
+    vals = {s: max(0.0, float(probs.get(s, 0.0))) for s in states}
+    total = sum(vals.values())
+    if total <= 0.0:
+        uniform = 1.0 / max(1, len(states))
+        return {s: uniform for s in states}
+    return {k: v / total for k, v in vals.items()}
 
-    def update(self, input_val: float) -> float:
-        """Update the accumulator: value = activation(decay * value + gain * input)."""
-        new_val = self.decay * self.value + self.gain * input_val
-        
-        if self.activation == 'sigmoid':
-            self.value = 1.0 / (1.0 + np.exp(-10.0 * (new_val - 0.5))) # Standard sigmoid centered at 0.5
-        elif self.activation == 'tanh':
-            self.value = np.tanh(new_val)
-        elif self.activation == 'relu':
-            self.value = max(0.0, new_val)
-        else:
-            self.value = new_val
-            
-        return self.value
+def get_exit_transition_probs(experience_level: str, current_state: str) -> dict:
+    """Return exit-only transition distribution for current_state."""
+    base = STATE_TRANSITION_PROBS.get(experience_level, {}).get(current_state, {})
+    return _normalize_probs(base, [s for s in STATES if s != current_state])
 
-    def reset(self, value: float = 0.0):
-        """Reset the accumulator to a specific value."""
-        self.value = value
+def get_preferred_transition_probs(experience_level: str, current_state: str) -> dict:
+    """Return preferred next-state distribution P*(s'|s) as normalized base + bias."""
+    base = get_exit_transition_probs(experience_level, current_state)
+    bias = PREFERRED_TRANSITION_BIAS.get(experience_level, {}).get(current_state, {})
+    if not base:
+        return {}
+    adjusted = {}
+    for state, prob in base.items():
+        adjusted[state] = max(0.0, float(prob) + float(bias.get(state, 0.0)))
+    return _normalize_probs(adjusted, list(adjusted.keys()))
+
+def get_thoughtseed_targets(state, meta_awareness, experience_level='novice'):
+    """Get target activation values for each thoughtseed in the specified state."""
+    activations = THOUGHTSEED_BASE_ACTIVATIONS[state].copy()
+    for ts in activations:
+        meta_mod = THOUGHTSEED_TARGET_ADJUSTMENTS[state][ts]
+        activations[ts] += meta_mod * meta_awareness
+        level_offset = THOUGHTSEED_LEVEL_OFFSETS.get(experience_level, {}).get(state, {}).get(ts, 0.0)
+        activations[ts] += level_offset
+    return activations
+
+def compute_meta_awareness(state, thoughtseed_activations):
+    """Compute meta-awareness from mediative state and thoughtseed activations."""
+    base_awareness = META_BASE_AWARENESS[state]
+    awareness_boost = 0
+    for ts, influence in META_THOUGHTSEED_INFLUENCES.items():
+        if ts in thoughtseed_activations:
+            awareness_boost += thoughtseed_activations[ts] * influence
+    return base_awareness + awareness_boost
+
+def get_actinf_params(experience_level='novice'):
+    params = dict(ACTINF_DEFAULTS)
+    if experience_level == 'expert':
+        params.update(ACTINF_EXPERT_OVERRIDES)
+    return params
 
 def _save_json_outputs(learner, output_dir=None, aggregates=None):
     """Write learner parameters and time series to JSON files.
@@ -71,15 +104,10 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
     activations_history = learner.activations_history or []
     network_activations_history = learner.network_activations_history or []
 
-    learned_profiles = {}
-    if hasattr(learner, 'learned_network_profiles'):
-        learned_profiles = convert(learner.learned_network_profiles)
-
     thoughtseed_params = {
         "agent_parameters": {},
         "activation_means_by_state": aggregates.get("activation_means_by_state", {}),
         "network_activations_by_state": aggregates.get("average_network_activations_by_state", {}),
-        "learned_network_profiles": learned_profiles,
     }
 
     for i, ts in enumerate(learner.thoughtseeds):
@@ -126,6 +154,10 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
         "network_activations_history": convert(network_activations_history),
         "meta_awareness_history": learner.meta_awareness_history,
         "free_energy_history": learner.free_energy_history,
+        "efe_history": getattr(learner, "efe_history", []),
+        "transition_drive_history": getattr(learner, "transition_drive_history", []),
+        "recon_loss_history": getattr(learner, "recon_loss_history", []),
+        "kl_div_history": getattr(learner, "kl_div_history", []),
         "state_history": learner.state_history,
         "dominant_ts_history": learner.dominant_ts_history,
     }
@@ -136,13 +168,16 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
 
     params = getattr(learner, "params", {}) if hasattr(learner, "params") else {}
     active_inf_params = {
-        "precision_weight": params.get("precision_weight"),
-        "complexity_penalty": params.get("complexity_penalty"),
+        "l3tol2_precision_min": params.get("l3tol2_precision_min"),
+        "l3tol2_precision_max": params.get("l3tol2_precision_max"),
+        "l2tol1_enactive_bias_min": params.get("l2tol1_enactive_bias_min"),
+        "l2tol1_enactive_bias_max": params.get("l2tol1_enactive_bias_max"),
+        "kl_beta": params.get("kl_beta"),
         "learning_rate": getattr(learner, "learning_rate", None),
         "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
+        "average_efe_by_state": aggregates.get("average_efe_by_state", {}),
         "average_prediction_error_by_state": aggregates.get("average_prediction_error_by_state", {}),
         "average_precision_by_state": aggregates.get("average_precision_by_state", {}),
-        "network_expectations": learned_profiles.get("state_network_expectations", {}),
     }
 
     out_path_ai = os.path.join(output_dir, f"active_inference_params_{learner.experience_level}.json")
@@ -170,7 +205,6 @@ def build_transition_stats(agent, state_transition_patterns, transition_timestam
     return {
         'transition_timestamps': [int(x) for x in transition_timestamps],
         'state_transition_patterns': serial_patterns,
-        'distraction_buildup_rates': [float(x) for x in getattr(agent, "distraction_buildup_rates", [])],
         'average_network_activations_by_state': aggregates.get('average_network_activations_by_state', {}),
         'average_free_energy_by_state': aggregates.get('average_free_energy_by_state', {}),
     }
@@ -194,6 +228,7 @@ def compute_state_aggregates(learner):
     free_energy_means = {}
     pred_error_means = {}
     precision_means = {}
+    efe_means = {}
 
     state_indices = {
         state: [j for j, s in enumerate(learner.state_history) if s == state]
@@ -205,6 +240,7 @@ def compute_state_aggregates(learner):
     free_energy_history = np.asarray(learner.free_energy_history, dtype=float)
     pred_error_history = np.asarray(learner.prediction_error_history, dtype=float)
     precision_history = np.asarray(learner.precision_history, dtype=float)
+    efe_history = np.asarray(getattr(learner, "efe_history", []), dtype=float)
 
     for state in states:
         indices = state_indices.get(state, [])
@@ -233,11 +269,14 @@ def compute_state_aggregates(learner):
         free_energy_means[state] = float(np.mean(free_energy_history[indices]))
         pred_error_means[state] = float(np.mean(pred_error_history[indices]))
         precision_means[state] = float(np.mean(precision_history[indices]))
+        if efe_history.size == len(learner.state_history):
+            efe_means[state] = float(np.mean(efe_history[indices]))
 
     aggregates["activation_means_by_state"] = activation_means
     aggregates["average_network_activations_by_state"] = network_means
     aggregates["average_free_energy_by_state"] = free_energy_means
     aggregates["average_prediction_error_by_state"] = pred_error_means
     aggregates["average_precision_by_state"] = precision_means
+    aggregates["average_efe_by_state"] = efe_means
 
     return aggregates

@@ -155,9 +155,12 @@ def get_tail_stats(stats_data, tail=TAIL_STEPS):
         'meta_awareness_history',
         'network_activations_history',
         'free_energy_history',
+        'efe_history',
+        'transition_drive_history',
+        'recon_loss_history',
+        'kl_div_history',
         'dominant_ts_history',
         'activations_history',
-        'van_hazard_history',
     ]
     for key in keys:
         if key in trimmed:

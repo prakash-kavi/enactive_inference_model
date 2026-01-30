@@ -9,19 +9,60 @@ STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
-# Probabilistic state transitions (rows sum to 1.0)
+# Base Ornstein-Uhlenbeck (OU) coupling terms per state (dX = -Theta * dt).
+# Positive = Inhibition/Restoring force (keeps activation stable).
+# Negative = Synergy/Divergent force (drives co-activation).
+THETA_BASE = {
+    'breath_focus': {
+        ('DMN', 'DAN'): 0.50, ('DAN', 'DMN'): 0.50,
+        ('DAN', 'FPN'): 0.15, ('FPN', 'DAN'): 0.15
+    },
+    'mind_wandering': {
+        ('DMN', 'VAN'): -0.30, ('VAN', 'DMN'): -0.30,
+        ('DMN', 'FPN'): -0.15, ('FPN', 'DMN'): -0.15
+    },
+    'meta_awareness': {
+        ('VAN', 'FPN'): -0.50, ('FPN', 'VAN'): -0.50,
+        ('DMN', 'DAN'): -0.25, ('DAN', 'DMN'): -0.25,
+        ('DMN', 'FPN'): -0.25, ('FPN', 'DMN'): -0.25
+    },
+    'redirect_breath': {
+        ('DMN', 'DAN'): -0.40, ('DAN', 'DMN'): -0.40,
+        ('DMN', 'FPN'): -0.30, ('FPN', 'DMN'): -0.30,
+        ('DAN', 'FPN'): 0.40, ('FPN', 'DAN'): 0.40
+    }
+}
+
+# Exit transition probabilities (self-transitions handled by dwell)
 STATE_TRANSITION_PROBS = {
     'expert': {
-        'breath_focus': {'breath_focus': 0.55, 'mind_wandering': 0.30, 'meta_awareness': 0.05, 'redirect_breath': 0.10},
-        'mind_wandering': {'breath_focus': 0.05, 'mind_wandering': 0.35, 'meta_awareness': 0.40, 'redirect_breath': 0.20},
-        'meta_awareness': {'breath_focus': 0.05, 'mind_wandering': 0.05, 'meta_awareness': 0.05, 'redirect_breath': 0.85},
-        'redirect_breath': {'breath_focus': 0.90, 'mind_wandering': 0.05, 'meta_awareness': 0.03, 'redirect_breath': 0.02},
+        'breath_focus': {'mind_wandering': 0.40, 'meta_awareness': 0.40, 'redirect_breath': 0.20},
+        'mind_wandering': {'breath_focus': 0.20, 'meta_awareness': 0.55, 'redirect_breath': 0.25},
+        'meta_awareness': {'redirect_breath': 0.80, 'breath_focus': 0.15, 'mind_wandering': 0.05},
+        'redirect_breath': {'breath_focus': 0.60, 'meta_awareness': 0.30, 'mind_wandering': 0.10},
     },
     'novice': {
-        'breath_focus': {'breath_focus': 0.50, 'mind_wandering': 0.40, 'meta_awareness': 0.05, 'redirect_breath': 0.05},
-        'mind_wandering': {'breath_focus': 0.05, 'mind_wandering': 0.70, 'meta_awareness': 0.15, 'redirect_breath': 0.10},
-        'meta_awareness': {'breath_focus': 0.15, 'mind_wandering': 0.15, 'meta_awareness': 0.05, 'redirect_breath': 0.65},
-        'redirect_breath': {'breath_focus': 0.70, 'mind_wandering': 0.20, 'meta_awareness': 0.05, 'redirect_breath': 0.05},
+        'breath_focus': {'mind_wandering': 0.88, 'meta_awareness': 0.08, 'redirect_breath': 0.04},
+        'mind_wandering': {'meta_awareness': 0.65, 'redirect_breath': 0.20, 'breath_focus': 0.15},
+        'meta_awareness': {'redirect_breath': 0.75, 'breath_focus': 0.15, 'mind_wandering': 0.10},
+        'redirect_breath': {'breath_focus': 0.85, 'mind_wandering': 0.10, 'meta_awareness': 0.05},
+    }
+}
+
+# Preferred transition bias (state-conditional preferences).
+# Values are small deltas added to base transition probs and renormalized.
+PREFERRED_TRANSITION_BIAS = {
+    'novice': {
+        'breath_focus': {'mind_wandering': 0.04, 'redirect_breath': -0.02},
+        'mind_wandering': {'meta_awareness': 0.06, 'redirect_breath': -0.02},
+        'meta_awareness': {'redirect_breath': 0.06, 'mind_wandering': -0.03},
+        'redirect_breath': {'breath_focus': 0.06, 'mind_wandering': -0.03},
+    },
+    'expert': {
+        'breath_focus': {'meta_awareness': 0.06, 'mind_wandering': -0.04},
+        'mind_wandering': {'meta_awareness': 0.07, 'redirect_breath': 0.03},
+        'meta_awareness': {'redirect_breath': 0.08, 'mind_wandering': -0.04},
+        'redirect_breath': {'meta_awareness': 0.05, 'mind_wandering': -0.03},
     }
 }
 
@@ -49,7 +90,6 @@ DEFAULTS = {
     'ACTIVATION_CLIP_MAX': 0.9,
     'DEFAULT_DT': 0.2,
     'REFRACTORY_SEC': 0.4,
-    'HAZARD_K': 6.0,
 }
 
 # Dwell Times (Seconds) for State Transitions (level-specific)
@@ -67,7 +107,6 @@ DWELL_TIMES = {
         'redirect_breath': (2, 5)
     }
 }
-
 
 THOUGHTSEED_BASE_ACTIVATIONS = {
     "breath_focus": {
@@ -164,16 +203,6 @@ THOUGHTSEED_LEVEL_OFFSETS = {
     }
 }
 
-def get_thoughtseed_targets(state, meta_awareness, experience_level='novice'):
-    """Get target activation values for each thoughtseed in the specified state."""
-    activations = THOUGHTSEED_BASE_ACTIVATIONS[state].copy()
-    for ts in activations:
-        meta_mod = THOUGHTSEED_TARGET_ADJUSTMENTS[state][ts]
-        activations[ts] += meta_mod * meta_awareness
-        level_offset = THOUGHTSEED_LEVEL_OFFSETS.get(experience_level, {}).get(state, {}).get(ts, 0.0)
-        activations[ts] += level_offset
-    return activations
-
 
 META_BASE_AWARENESS = {
     "breath_focus": 0.4,
@@ -187,48 +216,38 @@ META_THOUGHTSEED_INFLUENCES = {
     "equanimity": 0.1
 }
 
-def compute_meta_awareness(state, thoughtseed_activations, experience_level='novice'):
-    """Compute meta-awareness from mediative state and thoughtseed activations."""
-    base_awareness = META_BASE_AWARENESS[state]
-    awareness_boost = 0
-    for ts, influence in META_THOUGHTSEED_INFLUENCES.items():
-        if ts in thoughtseed_activations:
-            awareness_boost += thoughtseed_activations[ts] * influence
-    return base_awareness + awareness_boost
-
-
 ACTINF_DEFAULTS = {
-    "precision_weight": 0.4,
-    "complexity_penalty": 0.4,
     "learning_rate": 0.01,
     "noise_level": 0.04,
     "smoothing": 0.6,
     "z_ema_alpha": 0.75,
-    "z_noise_sigma": 0.03,
+    "z_noise_sigma": 0.05,
     "aha_accum_decay": 0.95,
     "aha_accum_inc": 0.05,
     "vfe_ema_alpha": 0.9,
-    "sensory_precision_base": 0.1,
-    "prior_precision_base": 1.0,
+    "kl_beta": 1.0,
+    "efe_risk_weight": 1.0,
+    "efe_ambiguity_weight": 0.4,
+    "efe_scale": 0.5,
+    "l3tol2_precision_min": 0.4,
+    "l3tol2_precision_max": 0.6,
+    "l2tol1_enactive_bias_min": 0.4,
+    "l2tol1_enactive_bias_max": 0.6,
     "network_target_reg": 0.05,
     "state_contrastive_weight": 0.02,
 }
 
 ACTINF_EXPERT_OVERRIDES = {
-    "precision_weight": 0.5,
-    "complexity_penalty": 0.2,
     "learning_rate": 0.02,
     "noise_level": 0.03,
     "smoothing": 0.8,
     "z_ema_alpha": 0.75,
     "vfe_ema_alpha": 0.9,
+    "efe_risk_weight": 1.0,
+    "efe_ambiguity_weight": 0.35,
+    "efe_scale": 0.45,
+    "kl_beta": 0.7,
     "network_target_reg": 0.05,
     "state_contrastive_weight": 0.02,
     "z_noise_sigma": 0.02
 }
-
-def get_actinf_params(experience_level='novice'):
-    params = dict(ACTINF_DEFAULTS)
-    if experience_level == 'expert':
-        params.update(ACTINF_EXPERT_OVERRIDES)
-    return params

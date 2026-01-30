@@ -2,7 +2,7 @@
 
 Mediates between Layer 1 (generative process) and Layer 2 (attentional agents).
 - Sensory (L1 -> L2): network activations [DMN, VAN, DAN, FPN]
-- Active (L2 -> L1): modulation signals [noise_reduction, fatigue_buffer, transition_drive]
+- Active (L2 -> L1): modulation signals [noise_reduction, transition_drive]
 """
 
 import numpy as np
@@ -18,7 +18,7 @@ class MarkovBlanketL1L2:
     def __init__(self, smoothing: float = 0.7):
         self.active_states = {
             'noise_reduction': 1.0,
-            'fatigue_buffer': 1.0,
+            'l2tol1_enactive_bias': 0.0,
             'transition_drive': 0.0,
             'agent_bias': None,
         }
@@ -62,14 +62,14 @@ class MarkovBlanketL1L2:
             )
 
         self.active_states['noise_reduction'] = np.clip(self.active_states['noise_reduction'], 0.2, 1.2)
-        self.active_states['fatigue_buffer'] = np.clip(self.active_states['fatigue_buffer'], 0.1, 1.0)
+        self.active_states['l2tol1_enactive_bias'] = np.clip(self.active_states['l2tol1_enactive_bias'], 0.0, 1.0)
         self.active_states['transition_drive'] = np.clip(self.active_states['transition_drive'], 0.0, 1.0)
 
     def reset(self):
         """Reset to default values for new simulation runs."""
         self.active_states = {
             'noise_reduction': 1.0,
-            'fatigue_buffer': 1.0,
+            'l2tol1_enactive_bias': 0.0,
             'transition_drive': 0.0,
             'agent_bias': None,
         }

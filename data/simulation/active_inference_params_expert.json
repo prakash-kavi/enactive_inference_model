@@ -1,24 +1,32 @@
 {
-  "precision_weight": 0.5,
-  "complexity_penalty": 0.2,
+  "l3tol2_precision_min": 0.4,
+  "l3tol2_precision_max": 0.6,
+  "l2tol1_enactive_bias_min": 0.4,
+  "l2tol1_enactive_bias_max": 0.6,
+  "kl_beta": 0.7,
   "learning_rate": 0.02,
   "average_free_energy_by_state": {
-    "breath_focus": 0.4471211229155703,
-    "mind_wandering": 0.6057388867486648,
-    "meta_awareness": 0.3795461925129368,
-    "redirect_breath": 0.4540364384989847
+    "breath_focus": 0.16279822419243917,
+    "mind_wandering": 2.0178708746238283,
+    "meta_awareness": 0.3480711861854733,
+    "redirect_breath": 2.150644997304136
+  },
+  "average_efe_by_state": {
+    "breath_focus": 0.9279727437454762,
+    "mind_wandering": 0.9199316545347613,
+    "meta_awareness": 0.8877713240476498,
+    "redirect_breath": 0.9373256672977403
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 0.014083631917771814,
-    "mind_wandering": 0.013278592445838053,
-    "meta_awareness": 0.01046527763079112,
-    "redirect_breath": 0.015341755677416751
+    "breath_focus": 0.017563049707277314,
+    "mind_wandering": 0.01646858479397056,
+    "meta_awareness": 0.012632155660678181,
+    "redirect_breath": 0.017161541249758255
   },
   "average_precision_by_state": {
-    "breath_focus": 0.7454059387323942,
-    "mind_wandering": 0.6506974815288371,
-    "meta_awareness": 0.8430417264059542,
-    "redirect_breath": 0.808026535360792
-  },
-  "network_expectations": {}
+    "breath_focus": 0.4780641267663193,
+    "mind_wandering": 0.4608503735842314,
+    "meta_awareness": 0.49615711016039865,
+    "redirect_breath": 0.5016253265005604
+  }
 }

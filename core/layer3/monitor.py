@@ -7,25 +7,108 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from utils.meditation_config import STATES, NETWORK_PROFILES
+from utils.meditation_utils import get_exit_transition_probs, get_preferred_transition_probs
+
 class Layer3Monitor(nn.Module):
     """Layer 3 monitoring + policy module."""
     
     def __init__(self, thoughtseeds: list, 
-                 sensory_precision_base: float, prior_precision_base: float,
-                 precision_weight: float, complexity_penalty: float,
+                 experience_level: str = 'novice',
+                 efe_risk_weight: float = 1.0,
+                 efe_ambiguity_weight: float = 0.4,
+                 efe_scale: float = 0.5,
+                 l3tol2_precision_min: float = 0.4,
+                 l3tol2_precision_max: float = 0.6,
+                 l2tol1_enactive_bias_min: float = 0.4,
+                 l2tol1_enactive_bias_max: float = 0.6,
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
         super().__init__()
         
         self.thoughtseeds = thoughtseeds
-        self.sensory_precision_base = sensory_precision_base
-        self.prior_precision_base = prior_precision_base
-        self.precision_weight = precision_weight
-        self.complexity_penalty = complexity_penalty
+        self.experience_level = experience_level
+        self.efe_risk_weight = efe_risk_weight
+        self.efe_ambiguity_weight = efe_ambiguity_weight
+        self.efe_scale = efe_scale
+        self.l3tol2_precision_min = l3tol2_precision_min
+        self.l3tol2_precision_max = l3tol2_precision_max
+        self.l2tol1_enactive_bias_min = l2tol1_enactive_bias_min
+        self.l2tol1_enactive_bias_max = l2tol1_enactive_bias_max
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
         self.vfe_ema_alpha = vfe_ema_alpha
         self.vfe_ema = 0.0
+        self.efe_ema = 0.0
+        self.last_efe = 0.0
+        self.meta_awareness_ema = None
+        self.prev_transition_drive = 0.0
+    
+    def _compute_efe(self, current_state: str, transition_drive: float) -> float:
+        base = get_exit_transition_probs(self.experience_level, current_state)
+        if not base:
+            return 0.0
+        drive = float(np.clip(transition_drive, 0.0, 1.0))
+        pref = get_preferred_transition_probs(self.experience_level, current_state)
+        if not pref:
+            return 0.0
+        pred = dict(base)
+        if drive > 0.0:
+            for s in pred.keys():
+                pred[s] = (1.0 - drive) * base.get(s, 0.0) + drive * pref.get(s, 0.0)
+
+        eps = 1e-8
+        risk = 0.0
+        for s in STATES:
+            p_s = max(eps, float(pred.get(s, 0.0)))
+            q_s = max(eps, float(pref.get(s, 0.0)))
+            risk += p_s * (np.log(p_s) - np.log(q_s))
+
+        ambiguity = 0.0
+        for s, p_s in pred.items():
+            profile = NETWORK_PROFILES.get(s, {}).get(self.experience_level, {})
+            if not profile:
+                continue
+            for val in profile.values():
+                p = float(np.clip(val, eps, 1.0 - eps))
+                ambiguity += float(p_s) * (-(p * np.log(p) + (1.0 - p) * np.log(1.0 - p)))
+
+        return (self.efe_risk_weight * risk) + (self.efe_ambiguity_weight * ambiguity)
+
+    def compute_meta_awareness(self, current_state: str, z) -> float:
+        """Compute meta-awareness in L3 using L3 signals and z as a calibrator."""
+        base = 0.0
+        if self.get_meta_awareness_fn:
+            base = float(self.get_meta_awareness_fn(current_state, z))
+
+        sensory = self.blanket_l2l3.sensory_states if self.blanket_l2l3 else {}
+        recognition = float(np.clip(sensory.get('recognition_signal', 0.0), 0.0, 1.0))
+        aha_accum = float(np.clip(sensory.get('aha_accumulator_value', 0.0), 0.0, 1.0))
+        vfe_drive = float(np.clip(self.vfe_ema, 0.0, 1.0))
+
+        dom_ts = sensory.get('dominant_thoughtseed')
+        dom_act = sensory.get('dominant_activation', 0.0)
+        try:
+            dom_act = float(dom_act)
+        except Exception:
+            dom_act = 0.0
+        dom_boost = 0.0
+        if dom_ts in ('aha_moment', 'equanimity'):
+            dom_boost = float(np.clip(dom_act, 0.0, 1.0))
+
+        raw = (0.6 * base) + (0.2 * recognition) + (0.1 * vfe_drive) + (0.1 * max(aha_accum, dom_boost))
+        raw = float(np.clip(raw, 0.0, 1.0))
+
+        if self.meta_awareness_ema is None:
+            self.meta_awareness_ema = raw
+        else:
+            alpha = float(np.clip(self.vfe_ema_alpha, 0.0, 1.0))
+            self.meta_awareness_ema = (alpha * self.meta_awareness_ema) + ((1.0 - alpha) * raw)
+
+        meta = float(np.clip(self.meta_awareness_ema, 0.0, 1.0))
+        if self.blanket_l2l3:
+            self.blanket_l2l3.update_sensory_states({'meta_awareness': meta})
+        return meta
     
     def compute_meta_metrics(self) -> dict:
         """Monitor internal state metrics (logging only)."""
@@ -57,7 +140,6 @@ class Layer3Monitor(nn.Module):
         
         prescription_l1l2 = {
             'noise_reduction': 1.0,
-            'fatigue_buffer': 1.0
         }
         
         prescription_l2l3 = {
@@ -87,25 +169,18 @@ class Layer3Monitor(nn.Module):
             prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.8)
             prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], 1.1)
              
-        # Policy 2: Attentional sharpening
-        ma = sensory.get('meta_awareness', None)
-        if ma is None and self.get_meta_awareness_fn:
-            ma = self.get_meta_awareness_fn(current_state, z) # Returns float
-        if ma is not None:
-            ma = float(ma)
-            ma = float(np.clip(ma, 0.0, 1.0))
-            ma_precision = 0.8 + 1.0 * ma
-            prescription_l2l3['precision_modulation'] = max(
-                prescription_l2l3['precision_modulation'],
-                ma_precision
-            )
-            if ma > 0.6:
-                prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.6)
+        # Policy 2: Attentional sharpening (meta-awareness from L3)
+        ma = float(np.clip(sensory.get('meta_awareness', 0.0), 0.0, 1.0))
+        prec_min = self.l3tol2_precision_min
+        prec_max = self.l3tol2_precision_max
+        ma_precision = prec_min + (prec_max - prec_min) * ma
+        prescription_l2l3['precision_modulation'] = max(
+            prescription_l2l3['precision_modulation'],
+            ma_precision
+        )
+        if ma > 0.6:
+            prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.6)
 
-        eq_idx = self.thoughtseeds.index('equanimity')
-        if z_vals[eq_idx] > 0.6:
-            prescription_l1l2['fatigue_buffer'] = 0.5
-            
         if current_state == 'meta_awareness':
             prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.4)
             prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], 1.3)
@@ -121,7 +196,32 @@ class Layer3Monitor(nn.Module):
             transition_drive = min(1.0, transition_drive + 0.15 * float(np.clip(dom_act, 0.0, 1.0)))
         elif dom_ts == 'attend_breath':
             transition_drive = max(0.0, transition_drive - 0.15 * float(np.clip(dom_act, 0.0, 1.0)))
+        elif dom_ts == 'aha_moment':
+            transition_drive = min(1.0, transition_drive + 0.2 * float(np.clip(dom_act, 0.0, 1.0)))
         prescription_l1l2['transition_drive'] = float(np.clip(transition_drive, 0.0, 1.0))
+
+        # L2 -> L1 enactive bias derived from meta-awareness (no hardcoded level)
+        bias_min = self.l2tol1_enactive_bias_min
+        bias_max = self.l2tol1_enactive_bias_max
+        enactive_bias = bias_min + (bias_max - bias_min) * ma
+        prescription_l1l2['l2tol1_enactive_bias'] = float(np.clip(enactive_bias, 0.0, 1.0))
+
+        # Expected Free Energy (risk + ambiguity) uses previous-step drive to avoid same-step feedback.
+        self.last_efe = float(self._compute_efe(current_state, self.prev_transition_drive))
+        self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.last_efe)
+
+        if self.efe_ema > 0.0:
+            prescription_l2l3['precision_modulation'] = max(
+                prescription_l2l3['precision_modulation'],
+                1.0 + (self.efe_scale * self.efe_ema)
+            )
+            transition_drive = float(np.clip(
+                transition_drive + (self.efe_scale * self.efe_ema), 0.0, 1.0
+            ))
+            prescription_l1l2['transition_drive'] = transition_drive
+
+        # Store final drive for next-step EFE
+        self.prev_transition_drive = transition_drive
             
         if self.blanket_l2l3:
             self.blanket_l2l3.update_active_states(prescription_l2l3)

@@ -427,16 +427,14 @@ def plot_network_radar(novice_ts, expert_ts, save_path=None):
     """Figure 3B: Network Activation Profiles (radar plots showing network expectations for each state)"""
     set_plot_style()
     def _extract_net(ts_data):
-        # Try to find network expectations
-        if "network_expectations" in ts_data: # Sometimes in active_inference_params
-             return ts_data["network_expectations"]
-        # Or in thoughtseed params if structured that way
-        return ts_data.get("network_expectations", {}) # Fallback
+        return {}
 
-    # Network expectations are typically found in active_inference_params (ai_data)
-    # We handle both locations for compatibility.
     nov_nets = _extract_net(novice_ts)
     exp_nets = _extract_net(expert_ts)
+
+    if not nov_nets or not exp_nets:
+        logging.warning("Radar: missing network expectations; skipping plot.")
+        return
 
     fig = plt.figure(figsize=(14, 12))
     fig.suptitle('Network Activation Profiles', fontsize=18, fontweight='bold')

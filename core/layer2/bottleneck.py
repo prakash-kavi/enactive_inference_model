@@ -5,11 +5,8 @@ import torch.nn as nn
 import numpy as np
 from typing import Optional, Dict, Tuple, List
 
-from utils.meditation_config import (
-    THOUGHTSEEDS, STATES, NETWORKS,
-    get_actinf_params, get_thoughtseed_targets, compute_meta_awareness,
-    DEFAULTS
-)
+from utils.meditation_config import THOUGHTSEEDS, STATES, NETWORKS, DEFAULTS
+from utils.meditation_utils import get_actinf_params, get_thoughtseed_targets, compute_meta_awareness
 from ..blankets.l1_l2 import MarkovBlanketL1L2
 from ..blankets.l2_l3 import MarkovBlanketL2L3
 from ..layer3.monitor import Layer3Monitor
@@ -43,6 +40,10 @@ class Layer2AttentionalModel(nn.Module):
         self.neural_efficiency_history = []
         self.stability_indicators = []
         self.dominant_ts_history = []
+        self.efe_history = []
+        self.transition_drive_history = []
+        self.recon_loss_history = []
+        self.kl_div_history = []
         
         self.van_history: List[float] = []
         self.van_spike_detections = 0
@@ -74,10 +75,14 @@ class Layer2AttentionalModel(nn.Module):
         
         self.monitor = Layer3Monitor(
             thoughtseeds=self.thoughtseeds,
-            sensory_precision_base=self.params['sensory_precision_base'],
-            prior_precision_base=self.params['prior_precision_base'],
-            precision_weight=self.params['precision_weight'],
-            complexity_penalty=self.params['complexity_penalty'],
+            experience_level=self.experience_level,
+            efe_risk_weight=self.params.get('efe_risk_weight', 1.0),
+            efe_ambiguity_weight=self.params.get('efe_ambiguity_weight', 0.4),
+            efe_scale=self.params.get('efe_scale', 0.5),
+            l3tol2_precision_min=self.params.get('l3tol2_precision_min', 0.4),
+            l3tol2_precision_max=self.params.get('l3tol2_precision_max', 0.6),
+            l2tol1_enactive_bias_min=self.params.get('l2tol1_enactive_bias_min', 0.4),
+            l2tol1_enactive_bias_max=self.params.get('l2tol1_enactive_bias_max', 0.6),
             get_meta_awareness_fn=self.get_meta_awareness,
             blanket_l2l3=self.blanket_l2l3,
             vfe_ema_alpha=self.params['vfe_ema_alpha']
@@ -92,8 +97,7 @@ class Layer2AttentionalModel(nn.Module):
         act_dict = {ts: activations[i].item() for i, ts in enumerate(self.thoughtseeds)}
         return compute_meta_awareness(
             state=current_state,
-            thoughtseed_activations=act_dict,
-            experience_level=self.experience_level
+            thoughtseed_activations=act_dict
         )
 
     def detect_van_spike(self, current_van: float) -> bool:

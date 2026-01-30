@@ -7,8 +7,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 from typing import Tuple, Dict, Any, Optional
 
-from utils.meditation_utils import ensure_directories, _save_json_outputs, compute_state_aggregates, build_transition_stats
-from utils.meditation_config import DEFAULTS, NETWORK_PROFILES, META_BASE_AWARENESS, get_thoughtseed_targets
+from utils.meditation_utils import (
+    ensure_directories, _save_json_outputs, compute_state_aggregates,
+    build_transition_stats, get_thoughtseed_targets
+)
+from utils.meditation_config import DEFAULTS, NETWORK_PROFILES
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
     compute_dmn_dan_anticorrelation
@@ -111,7 +114,7 @@ class PracticeTrainer:
                 
                 # 2.5 Bottom-Up (L2 -> L3)
                 # Pass None for target_activations as we use prior_seeds from blanket
-                free_energy, accuracy_nll = self._pass_bottom_up(
+                free_energy, accuracy_nll, recon_loss, kl_div = self._pass_bottom_up(
                      current_state, activations, meta_awareness, 
                      None, 
                      network_acts, sensory_inference
@@ -130,7 +133,11 @@ class PracticeTrainer:
                 # Prescriptions applied to blanket
                 
                 # 2.7 Record History (Detached)
-                self._record_history(current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll)
+                transition_drive = float(self.agent.blanket.active_states.get('transition_drive', 0.0))
+                self._record_history(
+                    current_state, activations, meta_awareness, network_acts,
+                    free_energy, accuracy_nll, transition_drive, recon_loss, kl_div
+                )
 
                 # Accumulate per-state network vectors for contrastive loss
                 net_vec = torch.stack([network_acts[net] for net in self.agent.networks])
@@ -243,39 +250,6 @@ class PracticeTrainer:
     def _pass_top_down(self, current_state: str, current_dwell: int, dwell_limit: int, 
                       activations: torch.Tensor, prev_meta_awareness: float,
                       observed_networks: Dict[str, torch.Tensor], sensory_inference: torch.Tensor) -> Tuple[float, torch.Tensor, Dict[str, torch.Tensor]]:
-        
-        raw_meta = self.agent.get_meta_awareness(current_state, activations)
-        base_smoothing = self.agent.params['smoothing']
-        progress = 0.0
-        if dwell_limit > 0:
-            progress = min(1.0, current_dwell / max(1, dwell_limit))
-        if current_state in ('mind_wandering', 'breath_focus'):
-            smoothing = max(0.3, base_smoothing - 0.2 * (1.0 - progress))
-        else:
-            smoothing = base_smoothing
-
-        rng = getattr(self, "rng_np", None)
-        noise_scale = 0.0
-        if current_state == 'mind_wandering':
-            noise_scale = 0.06
-        elif current_state == 'breath_focus':
-            noise_scale = 0.04
-        elif current_state == 'redirect_breath':
-            noise_scale = 0.03
-        else:
-            noise_scale = 0.02
-        if self.agent.experience_level == 'expert':
-            noise_scale *= 0.6
-        noise = 0.0
-        if rng is not None and noise_scale > 0.0:
-            noise = float(rng.normal(0.0, noise_scale))
-
-        meta_awareness = smoothing * prev_meta_awareness + (1 - smoothing) * raw_meta + noise
-        if self.agent.experience_level == 'expert':
-            novice_floor = META_BASE_AWARENESS.get(current_state, 0.0)
-            meta_awareness = max(meta_awareness, novice_floor + 0.05)
-        meta_awareness = float(np.clip(meta_awareness, 0.0, 1.0))
-        
         prev_dom = self.agent.thoughtseeds[int(torch.argmax(activations).item())]
         activations = self.agent.update_thoughtseed_dynamics(
             activations, current_state, current_dwell, dwell_limit, observed_networks, sensory_inference
@@ -284,19 +258,19 @@ class PracticeTrainer:
         # It also updates blanket with prior_seeds etc.
         dom_curr = self.agent.thoughtseeds[int(torch.argmax(activations).item())]
         if prev_dom != dom_curr and current_state in ('mind_wandering', 'breath_focus'):
-            meta_awareness = float(np.clip(meta_awareness + 0.04, 0.0, 1.0))
+            pass
 
-        # Make meta-awareness available to L3/L2 policies and precision logic
+        # Meta-awareness now computed by L3 using its own signals + z
         self.agent.blanket_l2l3.update_sensory_states({
-            'meta_awareness': meta_awareness,
             'current_state': current_state
         })
+        meta_awareness = self.agent.monitor.compute_meta_awareness(current_state, activations)
 
         return meta_awareness, activations, {} # Return empty targets map
 
     def _pass_bottom_up(self, current_state: str, activations: torch.Tensor, meta_awareness: float, 
                        target_activations: Any, observed_networks: Dict[str, torch.Tensor],
-                       sensory_inference: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                       sensory_inference: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         
         # A. Reconstruction from the same latent used for dynamics (state-aware)
         recon_x = self.agent.decode_with_state(activations, current_state)
@@ -313,13 +287,19 @@ class PracticeTrainer:
         # Reconstruction loss (MSE)
         recon_loss = torch.nn.functional.mse_loss(recon_x, x, reduction='sum')
 
-        # KL for independent strengths: Bernoulli q(z) vs uniform prior p=0.5
+        # KL for independent strengths: Bernoulli q(z) vs state-aware prior
         eps = 1e-6
         z = activations
         if z.dim() != 1:
             z = z.squeeze(0)
         z = torch.clamp(z, eps, 1.0 - eps)
-        prior = 0.5
+        prior_dict = get_thoughtseed_targets(current_state, meta_awareness, self.agent.experience_level)
+        prior_vec = torch.tensor(
+            [prior_dict[ts] for ts in self.agent.thoughtseeds],
+            device=device,
+            dtype=torch.float32
+        )
+        prior = torch.clamp(prior_vec, eps, 1.0 - eps)
         kl_div = torch.sum(
             z * torch.log(z / prior) +
             (1 - z) * torch.log((1 - z) / (1 - prior))
@@ -339,14 +319,14 @@ class PracticeTrainer:
                 van_boost_loss = van_shortfall * van_shortfall
 
         # Total loss
-        beta = 1.0
+        beta = float(self.agent.params.get("kl_beta", 1.0))
         loss = recon_loss + beta * kl_div + (reg_weight * target_loss) + (reg_weight * 0.6 * van_boost_loss)
         
         # We treat VAE loss as "Free Energy"
         free_energy = loss
         accuracy_nll = recon_loss # approximation
         
-        return free_energy, accuracy_nll
+        return free_energy, accuracy_nll, recon_loss, kl_div
 
     def _record_transition(self, patterns, timestamps, t, old, new, acts, nets, vfe):
         # Detach and convert
@@ -355,7 +335,7 @@ class PracticeTrainer:
         patterns.append((old, new, acts_dict, nets_dict, float(vfe)))
         timestamps.append(t)
 
-    def _record_history(self, current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll):
+    def _record_history(self, current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll, transition_drive, recon_loss, kl_div):
         # Detach and convert
         self.agent.state_history.append(current_state)
         self.agent.activations_history.append(activations.detach().cpu().numpy())
@@ -366,9 +346,21 @@ class PracticeTrainer:
         
         self.agent.free_energy_history.append(free_energy.detach().item())
         self.agent.prediction_error_history.append(accuracy_nll.detach().item())
+        if hasattr(self.agent, "recon_loss_history"):
+            self.agent.recon_loss_history.append(recon_loss.detach().item())
+        if hasattr(self.agent, "kl_div_history"):
+            self.agent.kl_div_history.append(kl_div.detach().item())
         
-        prec = 0.5 + self.agent.params['precision_weight'] * meta_awareness
+        prec_min = self.agent.params.get('l3tol2_precision_min', 0.4)
+        prec_max = self.agent.params.get('l3tol2_precision_max', 0.6)
+        prec = prec_min + (prec_max - prec_min) * meta_awareness
         self.agent.precision_history.append(prec)
+
+        efe_val = getattr(self.agent.monitor, "last_efe", 0.0)
+        self.agent.efe_history.append(float(efe_val))
+
+        if hasattr(self.agent, "transition_drive_history"):
+            self.agent.transition_drive_history.append(float(transition_drive))
         
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
         self.agent.dominant_ts_history.append(dom)

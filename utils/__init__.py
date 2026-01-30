@@ -2,7 +2,6 @@
 
 from .meditation_utils import (
     clip_array,
-    LeakyAccumulator,
     ensure_directories,
     _save_json_outputs,
     compute_state_aggregates,
@@ -11,7 +10,6 @@ from .meditation_utils import (
 
 __all__ = [
     'clip_array',
-    'LeakyAccumulator',
     'ensure_directories',
     '_save_json_outputs',
     'compute_state_aggregates',
