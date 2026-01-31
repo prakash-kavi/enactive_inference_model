@@ -230,10 +230,11 @@ class PracticeTrainer:
         activations_np = np.array([mu_dict[ts] for ts in self.agent.thoughtseeds])
         # Add noise
         rng = getattr(self, "rng_np", None)
+        init_sigma = float(getattr(self.agent, "init_noise_sigma", 0.0))
         if rng is None:
-            activations_np += np.random.normal(0, self.agent.noise_level, size=len(activations_np))
+            activations_np += np.random.normal(0, init_sigma, size=len(activations_np))
         else:
-            activations_np += rng.normal(0, self.agent.noise_level, size=len(activations_np))
+            activations_np += rng.normal(0, init_sigma, size=len(activations_np))
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
         activations = torch.clamp(activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
@@ -250,19 +251,15 @@ class PracticeTrainer:
     def _pass_top_down(self, current_state: str, current_dwell: int, dwell_limit: int, 
                       activations: torch.Tensor, prev_meta_awareness: float,
                       observed_networks: Dict[str, torch.Tensor], sensory_inference: torch.Tensor) -> Tuple[float, torch.Tensor, Dict[str, torch.Tensor]]:
-        prev_dom = self.agent.thoughtseeds[int(torch.argmax(activations).item())]
         activations = self.agent.update_thoughtseed_dynamics(
             activations, current_state, current_dwell, dwell_limit, observed_networks, sensory_inference
         )
         # update_thoughtseed_dynamics returns updated z.
         # It also updates blanket with prior_seeds etc.
-        dom_curr = self.agent.thoughtseeds[int(torch.argmax(activations).item())]
-        if prev_dom != dom_curr and current_state in ('mind_wandering', 'breath_focus'):
-            pass
-
         # Meta-awareness now computed by L3 using its own signals + z
         self.agent.blanket_l2l3.update_sensory_states({
-            'current_state': current_state
+            'current_state': current_state,
+            'dwell_progress': (current_dwell / max(1, dwell_limit)) if dwell_limit else 0.0
         })
         meta_awareness = self.agent.monitor.compute_meta_awareness(current_state, activations)
 
@@ -279,7 +276,6 @@ class PracticeTrainer:
         # Prepare Tensors
         device = self.agent.vae.encoder_net[0].weight.device
         
-        # Stack Observed (Generic order check?)
         # self.agent.networks list order is fixed ['DMN', 'VAN', 'DAN', 'FPN']
         x = torch.stack([observed_networks[net] for net in self.agent.networks]).to(device)
         recon_x = recon_x.to(device)

@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Optional, Dict, Tuple, List
+from typing import Optional, Dict, List, Tuple
 
 from utils.meditation_config import THOUGHTSEEDS, STATES, NETWORKS, DEFAULTS
 from utils.meditation_utils import get_actinf_params, get_thoughtseed_targets, compute_meta_awareness
@@ -56,15 +56,16 @@ class Layer2AttentionalModel(nn.Module):
         )
         
         self.mu_params = nn.ParameterDict()
-        self.state_decoder_bias = nn.ParameterDict()
-        self.state_decoder_gain = nn.ParameterDict()
+        self.state_embed_dim = int(self.params.get("state_embed_dim", 2))
+        self.state_embeddings = nn.ParameterDict()
+        self.state_embed_to_bias = nn.Linear(self.state_embed_dim, len(self.networks), bias=False)
         
         for state in self.states:
             mu_dict = get_thoughtseed_targets(state, 0.5, self.experience_level)
             mu_vec = [mu_dict[ts] for ts in self.thoughtseeds]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32))
-            self.state_decoder_bias[state] = nn.Parameter(torch.zeros(len(self.networks), dtype=torch.float32))
-            self.state_decoder_gain[state] = nn.Parameter(torch.zeros(len(self.networks), dtype=torch.float32))
+            embed = torch.randn(self.state_embed_dim, dtype=torch.float32) * 0.05
+            self.state_embeddings[state] = nn.Parameter(embed)
             
         
         self.register_buffer('z_ema', torch.zeros(self.num_thoughtseeds))
@@ -78,17 +79,14 @@ class Layer2AttentionalModel(nn.Module):
             experience_level=self.experience_level,
             efe_risk_weight=self.params.get('efe_risk_weight', 1.0),
             efe_ambiguity_weight=self.params.get('efe_ambiguity_weight', 0.4),
-            efe_scale=self.params.get('efe_scale', 0.5),
             l3tol2_precision_min=self.params.get('l3tol2_precision_min', 0.4),
             l3tol2_precision_max=self.params.get('l3tol2_precision_max', 0.6),
-            l2tol1_enactive_bias_min=self.params.get('l2tol1_enactive_bias_min', 0.4),
-            l2tol1_enactive_bias_max=self.params.get('l2tol1_enactive_bias_max', 0.6),
             get_meta_awareness_fn=self.get_meta_awareness,
             blanket_l2l3=self.blanket_l2l3,
             vfe_ema_alpha=self.params['vfe_ema_alpha']
         )
         
-        self.noise_level = self.params['noise_level']
+        self.init_noise_sigma = float(self.params.get('z_noise_sigma', 0.0))
         self.learning_rate = self.params['learning_rate']
 
 
@@ -159,12 +157,9 @@ class Layer2AttentionalModel(nn.Module):
             decoded = self.vae.decode(z_in).squeeze(0)
         else:
             decoded = self.vae.decode(z)
-        bias = self.state_decoder_bias.get(current_state)
-        gain = self.state_decoder_gain.get(current_state)
-        if gain is not None:
-            gate = 0.5 + torch.sigmoid(gain)
-            decoded = decoded * gate
-        if bias is not None:
+        embed = self.state_embeddings.get(current_state)
+        if embed is not None:
+            bias = self.state_embed_to_bias(embed.unsqueeze(0)).squeeze(0)
             decoded = decoded + bias
         return torch.clamp(decoded, 0.0, 1.0)
 
@@ -179,14 +174,15 @@ class Layer2AttentionalModel(nn.Module):
         progress = 0.0
         if dwell_limit > 0:
             progress = min(1.0, current_dwell / max(1, dwell_limit))
+        prec_mod = self.blanket_l2l3.active_states.get('precision_modulation', 0.5)
+        if isinstance(prec_mod, torch.Tensor):
+            prec_mod = prec_mod.item()
+        prec_mod = float(np.clip(prec_mod, 0.0, 1.0))
+
         if sensory_inference is None:
             z_inferred = mu_prior
         else:
-            prec_mod = self.blanket_l2l3.active_states.get('precision_modulation', 1.0)
-            if isinstance(prec_mod, torch.Tensor):
-                prec_mod = prec_mod.item()
-            prior_scale = max(0.0, min((prec_mod - 0.5) / 1.5, 1.0))
-            w_prior = 0.25 + 0.45 * prior_scale + 0.2 * progress
+            w_prior = 0.2 + 0.6 * prec_mod + 0.2 * progress
             w_prior = max(0.15, min(w_prior, 0.85))
             z_inferred = (w_prior * mu_prior) + ((1 - w_prior) * sensory_inference)
         z_inferred = torch.clamp(z_inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
@@ -200,6 +196,16 @@ class Layer2AttentionalModel(nn.Module):
         if noise_sigma > 0.0:
             noise = torch.randn_like(z_inferred) * noise_sigma * noise_scale
             z_inferred = torch.clamp(z_inferred + noise, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+
+        # Soft WTA + global workspace broadcast (precision-gated).
+        tau = max(0.25, 0.9 - (0.7 * prec_mod))
+        winner = torch.softmax(z_inferred / tau, dim=0)
+        workspace_gain = float(np.clip(prec_mod, 0.0, 1.0))
+        z_inferred = torch.clamp(
+            z_inferred + (workspace_gain * winner),
+            DEFAULTS['ACTIVATION_CLIP_MIN'],
+            DEFAULTS['ACTIVATION_CLIP_MAX']
+        )
 
         alpha = self.params['z_ema_alpha']
         aha_idx = self.ts_index.get('aha_moment')
@@ -219,22 +225,10 @@ class Layer2AttentionalModel(nn.Module):
         updated_activations = torch.clamp(self.z_ema, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
         self.blanket_l2l3.update_sensory_states({
-            'dominant_thoughtseed': self.thoughtseeds[int(torch.argmax(updated_activations))],
-            'dominant_activation': updated_activations.max().detach().item(),
             'aha_accumulator_value': float(self.aha_accum_val)
         })
         
         return updated_activations
-
-    def get_target_activations(self, state: str, meta_awareness: float) -> np.ndarray:
-        """Helper to get target activations (Numpy) for initialization compatibility."""
-        targets_dict = get_thoughtseed_targets(state, meta_awareness, self.experience_level)
-        target_activations = np.zeros(self.num_thoughtseeds)
-        for i, ts in enumerate(self.thoughtseeds):
-            target_activations[i] = targets_dict[ts]
-        # Add noise using numpy rng
-        target_activations += self.rng.normal(0, self.noise_level, size=self.num_thoughtseeds)
-        return np.clip(target_activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
 
     def prescriptive_action(self, z: torch.Tensor, vfe: torch.Tensor, current_state: str) -> dict:
         """Delegate policy to Layer 3."""

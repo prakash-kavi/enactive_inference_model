@@ -17,11 +17,8 @@ class Layer3Monitor(nn.Module):
                  experience_level: str = 'novice',
                  efe_risk_weight: float = 1.0,
                  efe_ambiguity_weight: float = 0.4,
-                 efe_scale: float = 0.5,
                  l3tol2_precision_min: float = 0.4,
                  l3tol2_precision_max: float = 0.6,
-                 l2tol1_enactive_bias_min: float = 0.4,
-                 l2tol1_enactive_bias_max: float = 0.6,
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
         super().__init__()
@@ -30,11 +27,8 @@ class Layer3Monitor(nn.Module):
         self.experience_level = experience_level
         self.efe_risk_weight = efe_risk_weight
         self.efe_ambiguity_weight = efe_ambiguity_weight
-        self.efe_scale = efe_scale
         self.l3tol2_precision_min = l3tol2_precision_min
         self.l3tol2_precision_max = l3tol2_precision_max
-        self.l2tol1_enactive_bias_min = l2tol1_enactive_bias_min
-        self.l2tol1_enactive_bias_max = l2tol1_enactive_bias_max
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
         self.vfe_ema_alpha = vfe_ema_alpha
@@ -83,20 +77,8 @@ class Layer3Monitor(nn.Module):
 
         sensory = self.blanket_l2l3.sensory_states if self.blanket_l2l3 else {}
         recognition = float(np.clip(sensory.get('recognition_signal', 0.0), 0.0, 1.0))
-        aha_accum = float(np.clip(sensory.get('aha_accumulator_value', 0.0), 0.0, 1.0))
         vfe_drive = float(np.clip(self.vfe_ema, 0.0, 1.0))
-
-        dom_ts = sensory.get('dominant_thoughtseed')
-        dom_act = sensory.get('dominant_activation', 0.0)
-        try:
-            dom_act = float(dom_act)
-        except Exception:
-            dom_act = 0.0
-        dom_boost = 0.0
-        if dom_ts in ('aha_moment', 'equanimity'):
-            dom_boost = float(np.clip(dom_act, 0.0, 1.0))
-
-        raw = (0.6 * base) + (0.2 * recognition) + (0.1 * vfe_drive) + (0.1 * max(aha_accum, dom_boost))
+        raw = (0.7 * base) + (0.2 * recognition) + (0.1 * vfe_drive)
         raw = float(np.clip(raw, 0.0, 1.0))
 
         if self.meta_awareness_ema is None:
@@ -109,16 +91,6 @@ class Layer3Monitor(nn.Module):
         if self.blanket_l2l3:
             self.blanket_l2l3.update_sensory_states({'meta_awareness': meta})
         return meta
-    
-    def compute_meta_metrics(self) -> dict:
-        """Monitor internal state metrics (logging only)."""
-        if not self.blanket_l2l3 or not self.blanket_l2l3.sensory_states:
-            return {}
-            
-        return {
-            "meta_awareness": self.blanket_l2l3.sensory_states.get('meta_awareness', 0.0),
-            "dominant_thoughtseed": self.blanket_l2l3.sensory_states.get('dominant_thoughtseed')
-        }
 
     def evaluate_policies(self) -> dict:
         """Evaluate policies and return prescriptions (non-differentiable)."""
@@ -143,80 +115,46 @@ class Layer3Monitor(nn.Module):
         }
         
         prescription_l2l3 = {
-            'precision_modulation': 1.0
+            'precision_modulation': 0.5
         }
-        
+
         aha_idx = self.thoughtseeds.index('aha_moment')
         aha_accum = sensory.get('aha_accumulator_value', 0.0)
-        dom_ts = sensory.get('dominant_thoughtseed', None)
-        dom_act = sensory.get('dominant_activation', 0.0)
-        try:
-            dom_act = float(dom_act)
-        except Exception:
-            dom_act = 0.0
-        
         recognition = sensory.get('recognition_signal', None)
         if recognition is None:
             recognition = max(z_vals[aha_idx], 0.0) * 0.7 + max(float(aha_accum), 0.0) * 0.3
-        if dom_ts == 'aha_moment':
-            recognition = max(recognition, float(dom_act))
+        recognition_drive = float(np.clip(recognition, 0.0, 1.0))
 
-        if recognition > 0.7:
-            prescription_l1l2['noise_reduction'] = 0.5
-            prescription_l2l3['precision_modulation'] = 1.5
-
-        if self.vfe_ema > 0.6:
-            prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.8)
-            prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], 1.1)
-             
-        # Policy 2: Attentional sharpening (meta-awareness from L3)
         ma = float(np.clip(sensory.get('meta_awareness', 0.0), 0.0, 1.0))
         prec_min = self.l3tol2_precision_min
         prec_max = self.l3tol2_precision_max
-        ma_precision = prec_min + (prec_max - prec_min) * ma
-        prescription_l2l3['precision_modulation'] = max(
-            prescription_l2l3['precision_modulation'],
-            ma_precision
-        )
-        if ma > 0.6:
-            prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.6)
+        precision_drive = 0.5 * (ma + recognition_drive)
+        precision = prec_min + (prec_max - prec_min) * precision_drive
+        precision = float(np.clip(precision, 0.0, 1.0))
+        if current_state in ('meta_awareness', 'redirect_breath'):
+            precision = float(np.clip(precision + 0.1, 0.0, 1.0))
+        prescription_l2l3['precision_modulation'] = precision
 
-        if current_state == 'meta_awareness':
-            prescription_l1l2['noise_reduction'] = min(prescription_l1l2['noise_reduction'], 0.4)
-            prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], 1.3)
+        noise_reduction = 1.0 - (0.6 * precision)
+        prescription_l1l2['noise_reduction'] = float(np.clip(noise_reduction, 0.4, 1.0))
 
-        if dom_ts in ('aha_moment', 'equanimity'):
-            precision_boost = 1.1 + 0.2 * float(np.clip(dom_act, 0.0, 1.0))
-            prescription_l2l3['precision_modulation'] = max(prescription_l2l3['precision_modulation'], precision_boost)
-
-        recognition_drive = float(np.clip(recognition, 0.0, 1.0))
-        ma_drive = float(np.clip(ma, 0.0, 1.0)) if ma is not None else 0.0
-        transition_drive = (0.4 * ma_drive) + (0.3 * self.vfe_ema) + (0.3 * recognition_drive)
-        if dom_ts in ('pending_tasks', 'pain_discomfort'):
-            transition_drive = min(1.0, transition_drive + 0.15 * float(np.clip(dom_act, 0.0, 1.0)))
-        elif dom_ts == 'attend_breath':
-            transition_drive = max(0.0, transition_drive - 0.15 * float(np.clip(dom_act, 0.0, 1.0)))
-        elif dom_ts == 'aha_moment':
-            transition_drive = min(1.0, transition_drive + 0.2 * float(np.clip(dom_act, 0.0, 1.0)))
+        transition_drive = (0.4 * ma) + (0.3 * self.vfe_ema) + (0.3 * recognition_drive)
+        if current_state in ('meta_awareness', 'redirect_breath'):
+            progress = float(np.clip(sensory.get('dwell_progress', 0.0), 0.0, 1.0))
+            transition_drive = float(np.clip(transition_drive + (0.2 * progress), 0.0, 1.0))
         prescription_l1l2['transition_drive'] = float(np.clip(transition_drive, 0.0, 1.0))
 
-        # L2 -> L1 enactive bias derived from meta-awareness (no hardcoded level)
-        bias_min = self.l2tol1_enactive_bias_min
-        bias_max = self.l2tol1_enactive_bias_max
-        enactive_bias = bias_min + (bias_max - bias_min) * ma
-        prescription_l1l2['l2tol1_enactive_bias'] = float(np.clip(enactive_bias, 0.0, 1.0))
+        # L2 -> L1 enactive bias tied to precision (single control signal)
+        prescription_l1l2['l2tol1_enactive_bias'] = float(np.clip(precision, 0.0, 1.0))
 
         # Expected Free Energy (risk + ambiguity) uses previous-step drive to avoid same-step feedback.
         self.last_efe = float(self._compute_efe(current_state, self.prev_transition_drive))
         self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.last_efe)
 
         if self.efe_ema > 0.0:
-            prescription_l2l3['precision_modulation'] = max(
-                prescription_l2l3['precision_modulation'],
-                1.0 + (self.efe_scale * self.efe_ema)
-            )
+            efe_gain = 0.5
             transition_drive = float(np.clip(
-                transition_drive + (self.efe_scale * self.efe_ema), 0.0, 1.0
+                transition_drive + (efe_gain * self.efe_ema), 0.0, 1.0
             ))
             prescription_l1l2['transition_drive'] = transition_drive
 

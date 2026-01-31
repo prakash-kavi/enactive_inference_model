@@ -11,7 +11,6 @@ from utils.meditation_utils import get_preferred_transition_probs
 
 IDX = {n: i for i, n in enumerate(NETWORKS)}
 
-
 class StateMachine:
     """Markovian state transitions with dwell times."""
 
@@ -225,8 +224,7 @@ class Layer1Process(nn.Module):
             noise_gain = noise_gain.item()
 
         base_variance = 0.001 if self.level == 'expert' else 0.002
-        state_scale = 1.3 if current_state == 'mind_wandering' else 1.0
-        variance = max(0.0005, base_variance * noise_gain * state_scale)
+        variance = max(0.0005, base_variance * noise_gain)
         sigma = np.sqrt(variance)
 
         n_substeps = 2

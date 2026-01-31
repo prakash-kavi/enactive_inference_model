@@ -11,8 +11,7 @@ class MarkovBlanketL2L3:
         'thoughtseed_activations',
         'meta_awareness',
         'current_state',
-        'dominant_thoughtseed',
-        'dominant_activation',
+        'dwell_progress',
         'aha_accumulator_value',
         'vfe',
         'recognition_signal'
@@ -20,7 +19,7 @@ class MarkovBlanketL2L3:
 
     def __init__(self, smoothing: float = 0.7):
         self.active_states = {
-            'precision_modulation': 1.0,
+            'precision_modulation': 0.5,
         }
         self.smoothing = smoothing
         self.sensory_states: Dict = {}
@@ -48,11 +47,11 @@ class MarkovBlanketL2L3:
                     self.smoothing * self.active_states[key] + (1 - self.smoothing) * target
                 )
 
-        self.active_states['precision_modulation'] = np.clip(self.active_states['precision_modulation'], 0.5, 2.0)
+        self.active_states['precision_modulation'] = np.clip(self.active_states['precision_modulation'], 0.0, 1.0)
 
     def reset(self):
         """Reset to default values for new simulation runs."""
         self.active_states = {
-            'precision_modulation': 1.0,
+            'precision_modulation': 0.5,
         }
         self.sensory_states = {}

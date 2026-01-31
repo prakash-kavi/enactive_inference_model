@@ -20,14 +20,6 @@ from utils.meditation_config import (
 )
 
 
-def clip_array(x, vmin, vmax):
-    """Clip a scalar or array to [vmin, vmax], preserving scalar return."""
-    arr = np.asarray(x)
-    clipped = np.clip(arr, vmin, vmax)
-    if clipped.shape == ():
-        return float(clipped)
-    return clipped
-
 def ensure_directories(base_dir=None):
     """Create `data/` and `plots/` under `base_dir` (or package root)."""
     if not base_dir:
@@ -170,8 +162,6 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
     active_inf_params = {
         "l3tol2_precision_min": params.get("l3tol2_precision_min"),
         "l3tol2_precision_max": params.get("l3tol2_precision_max"),
-        "l2tol1_enactive_bias_min": params.get("l2tol1_enactive_bias_min"),
-        "l2tol1_enactive_bias_max": params.get("l2tol1_enactive_bias_max"),
         "kl_beta": params.get("kl_beta"),
         "learning_rate": getattr(learner, "learning_rate", None),
         "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
