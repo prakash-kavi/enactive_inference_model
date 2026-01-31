@@ -30,21 +30,10 @@ class Layer2AttentionalModel(nn.Module):
         
         self.register_buffer('aha_accum_val', torch.tensor(0.0))
         
-        self.activations_history = []
-        self.state_history = []
-        self.meta_awareness_history = []
-        self.network_activations_history = []
-        self.free_energy_history = []
-        self.prediction_error_history = []
-        self.precision_history = []
-        self.neural_efficiency_history = []
-        self.stability_indicators = []
-        self.dominant_ts_history = []
-        self.efe_history = []
-        self.transition_drive_history = []
-        self.recon_loss_history = []
-        self.kl_div_history = []
         
+        # Internal Logic History (Not Logging)
+        self.van_history: List[float] = [] 
+
         self.van_history: List[float] = []
         self.van_spike_detections = 0
         self.expert_mind_wandering_detections = 0

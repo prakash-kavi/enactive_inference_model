@@ -246,6 +246,6 @@ ACTINF_DEFAULTS = {
 ACTINF_EXPERT_OVERRIDES = {
     "learning_rate": 0.02,
     "efe_ambiguity_weight": 0.35,
-    "kl_beta": 0.7,
+    "kl_beta": 0.55,
     "z_noise_sigma": 0.02
 }

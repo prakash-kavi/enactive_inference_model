@@ -193,12 +193,12 @@ class Layer1Process(nn.Module):
         return mu, theta
 
     def set_rng(self, rng: np.random.RandomState):
-        """Attach a shared RNG for reproducible dwell sampling."""
+        """Attach a shared RNG for dwell sampling."""
         if rng is not None:
             self.sm.rng = rng
 
     def update(self, active_states: Dict) -> Tuple[Dict[str, torch.Tensor], str]:
-        """Advance one step; return network activations and current state."""
+        """Advance one step and return network activations + current state."""
         transition_drive = active_states.get('transition_drive', 0.0)
         if isinstance(transition_drive, torch.Tensor):
             transition_drive = transition_drive.item()

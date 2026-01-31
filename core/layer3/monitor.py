@@ -70,7 +70,7 @@ class Layer3Monitor(nn.Module):
         return (self.efe_risk_weight * risk) + (self.efe_ambiguity_weight * ambiguity)
 
     def compute_meta_awareness(self, current_state: str, z) -> float:
-        """Compute meta-awareness in L3 using L3 signals and z as a calibrator."""
+        """Compute meta-awareness using L3 signals with z as a calibrator."""
         base = 0.0
         if self.get_meta_awareness_fn:
             base = float(self.get_meta_awareness_fn(current_state, z))
@@ -138,21 +138,23 @@ class Layer3Monitor(nn.Module):
         noise_reduction = 1.0 - (0.6 * precision)
         prescription_l1l2['noise_reduction'] = float(np.clip(noise_reduction, 0.4, 1.0))
 
-        transition_drive = (0.4 * ma) + (0.3 * self.vfe_ema) + (0.3 * recognition_drive)
+        transition_drive = (0.4 * ma) + (0.2 * self.vfe_ema) + (0.3 * recognition_drive)
+        if current_state == 'mind_wandering' and recognition_drive > 0.6:
+            transition_drive = float(np.clip(transition_drive + 0.2, 0.0, 1.0))
         if current_state in ('meta_awareness', 'redirect_breath'):
             progress = float(np.clip(sensory.get('dwell_progress', 0.0), 0.0, 1.0))
             transition_drive = float(np.clip(transition_drive + (0.2 * progress), 0.0, 1.0))
         prescription_l1l2['transition_drive'] = float(np.clip(transition_drive, 0.0, 1.0))
 
-        # L2 -> L1 enactive bias tied to precision (single control signal)
+        # L2 -> L1 enactive bias tied to precision
         prescription_l1l2['l2tol1_enactive_bias'] = float(np.clip(precision, 0.0, 1.0))
 
-        # Expected Free Energy (risk + ambiguity) uses previous-step drive to avoid same-step feedback.
+        # Expected Free Energy uses previous-step drive to avoid same-step feedback.
         self.last_efe = float(self._compute_efe(current_state, self.prev_transition_drive))
         self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.last_efe)
 
         if self.efe_ema > 0.0:
-            efe_gain = 0.5
+            efe_gain = 0.35
             transition_drive = float(np.clip(
                 transition_drive + (efe_gain * self.efe_ema), 0.0, 1.0
             ))

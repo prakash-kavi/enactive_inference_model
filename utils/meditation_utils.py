@@ -10,6 +10,8 @@ from utils.meditation_config import (
     STATE_TRANSITION_PROBS,
     PREFERRED_TRANSITION_BIAS,
     STATES,
+    THOUGHTSEEDS,
+    NETWORKS,
     THOUGHTSEED_BASE_ACTIVATIONS,
     THOUGHTSEED_TARGET_ADJUSTMENTS,
     THOUGHTSEED_LEVEL_OFFSETS,
@@ -78,11 +80,12 @@ def get_actinf_params(experience_level='novice'):
         params.update(ACTINF_EXPERT_OVERRIDES)
     return params
 
-def _save_json_outputs(learner, output_dir=None, aggregates=None):
+def _save_json_outputs(learner, history=None, output_dir=None, aggregates=None):
     """Write learner parameters and time series to JSON files.
 
     Converts NumPy arrays to lists and computes per-state aggregates.
     """
+    history = history or learner
     if output_dir is None:
         output_dir = os.path.join(os.path.dirname(__file__), "data")
     os.makedirs(output_dir, exist_ok=True)
@@ -92,9 +95,9 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
         return to_json_serializable(obj)
 
     if aggregates is None:
-        aggregates = compute_state_aggregates(learner)
-    activations_history = learner.activations_history or []
-    network_activations_history = learner.network_activations_history or []
+        aggregates = compute_state_aggregates(learner, history=history)
+    activations_history = history.activations_history or []
+    network_activations_history = history.network_activations_history or []
 
     thoughtseed_params = {
         "agent_parameters": {},
@@ -110,7 +113,6 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
             base_activation = 0.0
             responsiveness = 1.0
 
-        # Extract network profile from VAE decoder (replaces old W matrix)
         # Decode a one-hot thoughtseed vector to get predicted network activations
         ts_idx = learner.thoughtseeds.index(ts)
         
@@ -144,14 +146,14 @@ def _save_json_outputs(learner, output_dir=None, aggregates=None):
     thoughtseed_params["time_series"] = {
         "activations_history": convert(activations_history),
         "network_activations_history": convert(network_activations_history),
-        "meta_awareness_history": learner.meta_awareness_history,
-        "free_energy_history": learner.free_energy_history,
-        "efe_history": getattr(learner, "efe_history", []),
-        "transition_drive_history": getattr(learner, "transition_drive_history", []),
-        "recon_loss_history": getattr(learner, "recon_loss_history", []),
-        "kl_div_history": getattr(learner, "kl_div_history", []),
-        "state_history": learner.state_history,
-        "dominant_ts_history": learner.dominant_ts_history,
+        "meta_awareness_history": history.meta_awareness_history,
+        "free_energy_history": history.free_energy_history,
+        "efe_history": getattr(history, "efe_history", []),
+        "transition_drive_history": getattr(history, "transition_drive_history", []),
+        "recon_loss_history": getattr(history, "recon_loss_history", []),
+        "kl_div_history": getattr(history, "kl_div_history", []),
+        "state_history": history.state_history,
+        "dominant_ts_history": history.dominant_ts_history,
     }
 
     out_path_ts = os.path.join(output_dir, f"thoughtseed_params_{learner.experience_level}.json")
@@ -209,8 +211,9 @@ def to_json_serializable(obj):
         return [to_json_serializable(i) for i in obj]
     return obj
 
-def compute_state_aggregates(learner):
+def compute_state_aggregates(learner, history=None):
     """Return per-state means for activations, networks, VFE and errors."""
+    history = history or learner
     aggregates = {}
     states = learner.states
     activation_means = {}
@@ -221,16 +224,16 @@ def compute_state_aggregates(learner):
     efe_means = {}
 
     state_indices = {
-        state: [j for j, s in enumerate(learner.state_history) if s == state]
+        state: [j for j, s in enumerate(history.state_history) if s == state]
         for state in states
     }
 
-    activations_history = learner.activations_history
-    network_history = learner.network_activations_history
-    free_energy_history = np.asarray(learner.free_energy_history, dtype=float)
-    pred_error_history = np.asarray(learner.prediction_error_history, dtype=float)
-    precision_history = np.asarray(learner.precision_history, dtype=float)
-    efe_history = np.asarray(getattr(learner, "efe_history", []), dtype=float)
+    activations_history = history.activations_history
+    network_history = history.network_activations_history
+    free_energy_history = np.asarray(history.free_energy_history, dtype=float)
+    pred_error_history = np.asarray(history.prediction_error_history, dtype=float)
+    precision_history = np.asarray(history.precision_history, dtype=float)
+    efe_history = np.asarray(getattr(history, "efe_history", []), dtype=float)
 
     for state in states:
         indices = state_indices.get(state, [])
@@ -259,7 +262,7 @@ def compute_state_aggregates(learner):
         free_energy_means[state] = float(np.mean(free_energy_history[indices]))
         pred_error_means[state] = float(np.mean(pred_error_history[indices]))
         precision_means[state] = float(np.mean(precision_history[indices]))
-        if efe_history.size == len(learner.state_history):
+        if efe_history.size == len(history.state_history):
             efe_means[state] = float(np.mean(efe_history[indices]))
 
     aggregates["activation_means_by_state"] = activation_means

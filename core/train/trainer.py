@@ -5,25 +5,31 @@ import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Optional
 
 from utils.meditation_utils import (
     ensure_directories, _save_json_outputs, compute_state_aggregates,
-    build_transition_stats, get_thoughtseed_targets
+    build_transition_stats
 )
-from utils.meditation_config import DEFAULTS, NETWORK_PROFILES
+from utils.meditation_config import (
+    DEFAULTS, NETWORK_PROFILES,
+    THOUGHTSEED_BASE_ACTIVATIONS,
+    THOUGHTSEED_TARGET_ADJUSTMENTS,
+    THOUGHTSEED_LEVEL_OFFSETS
+)
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio, detect_expert_mind_wandering,
     compute_dmn_dan_anticorrelation
 )
 from ..layer1.process import Layer1Process
 
+from .logger import SimulationLogger
+
 class PracticeTrainer:
     """Orchestrates the BPTT simulation loop."""
     
     def __init__(self, agent, generative_process: Optional[Layer1Process] = None):
         self.agent = agent
-        # Initialize generative process if not provided
         if generative_process is None:
             self.process = Layer1Process(
                 experience_level=agent.experience_level,
@@ -32,26 +38,63 @@ class PracticeTrainer:
         else:
             self.process = generative_process
             
-        # Optimizer
-        # Optimize Agent's parameters (Theta, Mu, etc.)
-        # Layer 1 parameters are usually fixed, but if we wanted to learn L1, we'd add them.
-        # User goal: "Gradient-based parameter optimization to fix attractor collapse" -> Agent parameters.
         self.optimizer = optim.Adam(self.agent.parameters(), lr=agent.learning_rate)
+        self._init_prior_cache()
+        self.logger = SimulationLogger(agent.experience_level)
+
+    def _init_prior_cache(self):
+        self.state_index = {s: i for i, s in enumerate(self.agent.states)}
+        self.ts_index = {ts: i for i, ts in enumerate(self.agent.thoughtseeds)}
+
+        num_states = len(self.agent.states)
+        num_ts = len(self.agent.thoughtseeds)
+        base = np.zeros((num_states, num_ts), dtype=np.float32)
+        adjust = np.zeros((num_states, num_ts), dtype=np.float32)
+        offsets = np.zeros((num_states, num_ts), dtype=np.float32)
+
+        level_offsets = THOUGHTSEED_LEVEL_OFFSETS.get(self.agent.experience_level, {})
+
+        for s in self.agent.states:
+            s_idx = self.state_index[s]
+            base_map = THOUGHTSEED_BASE_ACTIVATIONS.get(s, {})
+            adjust_map = THOUGHTSEED_TARGET_ADJUSTMENTS.get(s, {})
+            offset_map = level_offsets.get(s, {})
+            for ts in self.agent.thoughtseeds:
+                t_idx = self.ts_index[ts]
+                base[s_idx, t_idx] = float(base_map.get(ts, 0.0))
+                adjust[s_idx, t_idx] = float(adjust_map.get(ts, 0.0))
+                offsets[s_idx, t_idx] = float(offset_map.get(ts, 0.0))
+
+        self._prior_base_np = base
+        self._prior_adjust_np = adjust
+        self._prior_offset_np = offsets
+        self._prior_cache = {}
+
+    def _get_prior_tensors(self, device: torch.device):
+        cached = self._prior_cache.get(device)
+        if cached is None:
+            base = torch.tensor(self._prior_base_np, device=device)
+            adjust = torch.tensor(self._prior_adjust_np, device=device)
+            offsets = torch.tensor(self._prior_offset_np, device=device)
+            cached = (base, adjust, offsets)
+            self._prior_cache[device] = cached
+        return cached
+
+    def _get_prior_vector(self, state: str, meta_awareness: float, device: torch.device) -> torch.Tensor:
+        idx = self.state_index[state]
+        base, adjust, offsets = self._get_prior_tensors(device)
+        return base[idx] + (meta_awareness * adjust[idx]) + offsets[idx]
 
     def train(self, save_outputs: bool = True, output_dir: str = None, seed: int = None, enable_learning: bool = True):
         """Run BPTT training."""
 
         if seed is not None:
-             # Set torch seed
              torch.manual_seed(seed)
              np.random.seed(seed)
-             # Agent RNG (kept for legacy random calls if any)
              self.agent.rng = np.random.RandomState(seed)
-             # Shared RNG for dwell sampling / reproducibility
              self.rng_np = np.random.RandomState(seed)
              self.process.set_rng(self.rng_np)
 
-        # 1. Initialization
         self.optimizer.zero_grad()
         current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness = self._initialize_simulation()
         
@@ -59,39 +102,26 @@ class PracticeTrainer:
         transition_timestamps = []
         old_state = current_state
         
-        # BPTT Configuration
-        bptt_steps = 50 # Longer sequence to capture dwell transitions
+        bptt_steps = 50
         total_steps = self.agent.timesteps
         
-        # 2. Training Loop (BPTT)
-        # We process in chunks of `bptt_steps`
-        
         for t_start in range(0, total_steps, bptt_steps):
-            # Clear old sensory states to prevent graph leaks
             self.agent.blanket.sensory_states.clear()
             self.agent.blanket_l2l3.sensory_states.clear()
             
             steps_to_run = min(bptt_steps, total_steps - t_start)
             
-            # Run Sequence
             loss = torch.tensor(0.0, device=self.agent.vae.encoder_net[0].weight.device)
             state_net_accum = {s: [] for s in self.agent.states}
             
             for t_sub in range(steps_to_run):
                 t = t_start + t_sub
 
-                # --- Step Logic ---
-                # 2.1 Biology (Layer 1)
-                # Reads actives from L1-L2 (which were set in previous step)
-                # L1 returns Differentiable Tensors
                 network_acts, process_state = self.process.update(self.agent.blanket.active_states)
                 
-                # State Check
                 state_changed = (process_state != current_state)
                 if state_changed:
-                    # Record transition info (detached)
                     self._record_transition(state_transition_patterns, transition_timestamps, t, old_state, process_state, activations, network_acts, 0.0)
-                    # Update pointers
                     old_state = current_state
                     current_state = process_state
                     current_dwell = 0
@@ -99,102 +129,54 @@ class PracticeTrainer:
                 else:
                     current_dwell += 1
                     
-                # 2.2 Blanket L1-L2 (Sensory)
                 self.agent.blanket.update_sensory_states(network_acts)
                 
-                # 2.3 Perception (Layer 2)
                 sensory_inference = self.agent.perceptual_inference()
                 
-                # 2.4 Top-Down (Layer 2) - Top-down priors
-                # Need to handle variables passing.
-                meta_awareness, activations, _ = self._pass_top_down(
-                    current_state, current_dwell, dwell_limit, activations, meta_awareness,
+                meta_awareness, activations = self._update_latents(
+                    current_state, current_dwell, dwell_limit, activations,
                     network_acts, sensory_inference
                 )
                 
-                # 2.5 Bottom-Up (L2 -> L3)
-                # Pass None for target_activations as we use prior_seeds from blanket
-                free_energy, accuracy_nll, recon_loss, kl_div = self._pass_bottom_up(
-                     current_state, activations, meta_awareness, 
-                     None, 
-                     network_acts, sensory_inference
+                free_energy, recon_loss, kl_div = self._perception_bottom_up(
+                     current_state, activations, meta_awareness, network_acts
                 )
                 
-                # Accumulate Loss (Global VFE)
-                # Simple accumulation - PyTorch handles the graph correctly
                 loss = loss + free_energy
                 
-                # Note: Structural Contrastive Loss is now computed at the batch level
-                # via _compute_structural_loss() to be efficient and holistic.
-                # Old per-step logic removed.
+                self._action_top_down(activations, free_energy, current_state)
                 
-                # 2.6 Action (L3 -> L2 -> L1)
-                prescription = self.agent.prescriptive_action(activations, free_energy, current_state)
-                # Prescriptions applied to blanket
-                
-                # 2.7 Record History (Detached)
                 transition_drive = float(self.agent.blanket.active_states.get('transition_drive', 0.0))
                 self._record_history(
                     current_state, activations, meta_awareness, network_acts,
-                    free_energy, accuracy_nll, transition_drive, recon_loss, kl_div
+                    free_energy, recon_loss, transition_drive, kl_div
                 )
 
-                # Accumulate per-state network vectors for contrastive loss
                 net_vec = torch.stack([network_acts[net] for net in self.agent.networks])
                 state_net_accum[current_state].append(net_vec)
                 
-            # --- End of Sequence: Backprop ---
             if enable_learning and loss.requires_grad:
-                # Contrastive loss over state means (within this BPTT window)
                 contrastive_weight = self.agent.params.get("state_contrastive_weight", 0.0)
-                if contrastive_weight > 0.0 and 'state_net_accum' in locals():
-                    state_means = {}
-                    for s, vecs in state_net_accum.items():
-                        if vecs:
-                            state_means[s] = torch.stack(vecs, dim=0).mean(dim=0)
-                    states = list(state_means.keys())
-                    if len(states) > 1:
-                        sims = []
-                        pair_weights = {
-                            ('breath_focus', 'mind_wandering'): 2.0,
-                            ('mind_wandering', 'meta_awareness'): 1.5,
-                            ('mind_wandering', 'redirect_breath'): 1.5,
-                            ('breath_focus', 'meta_awareness'): 1.2,
-                            ('breath_focus', 'redirect_breath'): 1.2,
-                            ('meta_awareness', 'redirect_breath'): 1.0
-                        }
-                        for i in range(len(states)):
-                            for j in range(i + 1, len(states)):
-                                a = state_means[states[i]]
-                                b = state_means[states[j]]
-                                key = tuple(sorted((states[i], states[j])))
-                                weight = pair_weights.get(key, 1.0)
-                                sims.append(weight * F.cosine_similarity(a, b, dim=0))
-                        if sims:
-                            contrastive_loss = torch.stack(sims).clamp(min=0.0).mean()
-                            loss = loss + (contrastive_weight * contrastive_loss)
+                if contrastive_weight > 0.0:
+                    structural_loss = self._compute_structural_loss(state_net_accum)
+                    if structural_loss is not None:
+                        loss = loss + (contrastive_weight * structural_loss)
                 
                 loss.backward()
                 
-                # Clip gradients
                 torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_norm=1.0)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
             
-            # --- Detach States for TBPTT ---
-            # Layer 1: Detach regular tensors (no longer registered buffers)
             with torch.no_grad():
                 self.process.x = self.process.x.detach()
                 self.process.smoothed_x = self.process.smoothed_x.detach()
             
-            # Layer 2: Use .data to safely modify buffers in-place
             with torch.no_grad():
                 self.agent.aha_accum_val.data = self.agent.aha_accum_val.detach()
                 if hasattr(self.agent, "z_ema"):
                     self.agent.z_ema = self.agent.z_ema.detach()
             
-            # Detach Blanket Active States (Critical for BPTT across batches)
-            # Replace dictionary values with detached copies
             for k in list(self.agent.blanket.active_states.keys()):
                 v = self.agent.blanket.active_states[k]
                 if isinstance(v, torch.Tensor):
@@ -205,12 +187,9 @@ class PracticeTrainer:
                 if isinstance(v, torch.Tensor):
                     self.agent.blanket_l2l3.active_states[k] = v.detach()
             
-            # Activations variable (curr latent state)
             activations = activations.detach()
             
-            # Clear graph for next iteration implicitly by new tensors
-
-        # 3. Save Results
+        # Save results
         if save_outputs:
             self._save_results(output_dir, state_transition_patterns, transition_timestamps)
             
@@ -223,12 +202,9 @@ class PracticeTrainer:
         current_dwell = 0
         dwell_limit = self.process.current_max_dwell
         
-        # Initial activations (Tensor)
         device = self.agent.vae.encoder_net[0].weight.device
-        
-        mu_dict = get_thoughtseed_targets(current_state, 0.6, self.agent.experience_level)
-        activations_np = np.array([mu_dict[ts] for ts in self.agent.thoughtseeds])
-        # Add noise
+        prior = self._get_prior_vector(current_state, 0.6, device).detach().cpu().numpy()
+        activations_np = np.array(prior, dtype=np.float32)
         rng = getattr(self, "rng_np", None)
         init_sigma = float(getattr(self.agent, "init_noise_sigma", 0.0))
         if rng is None:
@@ -238,149 +214,151 @@ class PracticeTrainer:
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
         activations = torch.clamp(activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
-        # Initial Network obs
-        network_acts, _ = self.process.update(self.agent.blanket.active_states) # Tensor dict
+        network_acts, _ = self.process.update(self.agent.blanket.active_states)
         self.agent.blanket.update_sensory_states(network_acts)
         
         self.agent.blanket_l2l3.reset()
         
-        meta_awareness = self.agent.get_meta_awareness(current_state, activations) # returns float
+        meta_awareness = self.agent.get_meta_awareness(current_state, activations)
         
         return current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness
 
-    def _pass_top_down(self, current_state: str, current_dwell: int, dwell_limit: int, 
-                      activations: torch.Tensor, prev_meta_awareness: float,
-                      observed_networks: Dict[str, torch.Tensor], sensory_inference: torch.Tensor) -> Tuple[float, torch.Tensor, Dict[str, torch.Tensor]]:
+    def _update_latents(self, current_state: str, current_dwell: int, dwell_limit: int,
+                        activations: torch.Tensor, observed_networks: Dict[str, torch.Tensor],
+                        sensory_inference: torch.Tensor) -> Tuple[float, torch.Tensor]:
         activations = self.agent.update_thoughtseed_dynamics(
             activations, current_state, current_dwell, dwell_limit, observed_networks, sensory_inference
         )
-        # update_thoughtseed_dynamics returns updated z.
-        # It also updates blanket with prior_seeds etc.
-        # Meta-awareness now computed by L3 using its own signals + z
         self.agent.blanket_l2l3.update_sensory_states({
             'current_state': current_state,
             'dwell_progress': (current_dwell / max(1, dwell_limit)) if dwell_limit else 0.0
         })
         meta_awareness = self.agent.monitor.compute_meta_awareness(current_state, activations)
 
-        return meta_awareness, activations, {} # Return empty targets map
+        return meta_awareness, activations
 
-    def _pass_bottom_up(self, current_state: str, activations: torch.Tensor, meta_awareness: float, 
-                       target_activations: Any, observed_networks: Dict[str, torch.Tensor],
-                       sensory_inference: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        
-        # A. Reconstruction from the same latent used for dynamics (state-aware)
+    def _perception_bottom_up(self, current_state: str, activations: torch.Tensor, meta_awareness: float,
+                              observed_networks: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         recon_x = self.agent.decode_with_state(activations, current_state)
         
-        # B. VAE Loss (VFE)
-        # Prepare Tensors
         device = self.agent.vae.encoder_net[0].weight.device
         
-        # self.agent.networks list order is fixed ['DMN', 'VAN', 'DAN', 'FPN']
         x = torch.stack([observed_networks[net] for net in self.agent.networks]).to(device)
         recon_x = recon_x.to(device)
 
-        # Reconstruction loss (MSE)
-        recon_loss = torch.nn.functional.mse_loss(recon_x, x, reduction='sum')
+        recon_loss = torch.nn.functional.mse_loss(recon_x, x, reduction='mean')
 
-        # KL for independent strengths: Bernoulli q(z) vs state-aware prior
         eps = 1e-6
         z = activations
         if z.dim() != 1:
             z = z.squeeze(0)
         z = torch.clamp(z, eps, 1.0 - eps)
-        prior_dict = get_thoughtseed_targets(current_state, meta_awareness, self.agent.experience_level)
-        prior_vec = torch.tensor(
-            [prior_dict[ts] for ts in self.agent.thoughtseeds],
-            device=device,
-            dtype=torch.float32
-        )
+        prior_vec = self._get_prior_vector(current_state, meta_awareness, device)
         prior = torch.clamp(prior_vec, eps, 1.0 - eps)
-        kl_div = torch.sum(
+        kl_div = torch.mean(
             z * torch.log(z / prior) +
             (1 - z) * torch.log((1 - z) / (1 - prior))
         )
 
-        # C. Network target regularizer (lightweight)
         reg_weight = self.agent.params.get("network_target_reg", 0.0)
         target_loss = torch.tensor(0.0, device=device)
         van_boost_loss = torch.tensor(0.0, device=device)
         if reg_weight > 0.0 and current_state in NETWORK_PROFILES:
             prof = NETWORK_PROFILES[current_state][self.agent.experience_level]
             target_vec = torch.tensor([prof[n] for n in self.agent.networks], device=device, dtype=torch.float32)
-            target_loss = torch.nn.functional.mse_loss(x, target_vec, reduction='sum')
+            target_loss = torch.nn.functional.mse_loss(x, target_vec, reduction='mean')
             if current_state == 'meta_awareness' and 'VAN' in self.agent.networks:
                 van_idx = self.agent.networks.index('VAN')
                 van_shortfall = torch.relu(target_vec[van_idx] - x[van_idx])
                 van_boost_loss = van_shortfall * van_shortfall
 
-        # Total loss
         beta = float(self.agent.params.get("kl_beta", 1.0))
         loss = recon_loss + beta * kl_div + (reg_weight * target_loss) + (reg_weight * 0.6 * van_boost_loss)
-        
-        # We treat VAE loss as "Free Energy"
+
         free_energy = loss
-        accuracy_nll = recon_loss # approximation
-        
-        return free_energy, accuracy_nll, recon_loss, kl_div
+        return free_energy, recon_loss, kl_div
+
+    def _action_top_down(self, activations: torch.Tensor, free_energy: torch.Tensor, current_state: str) -> dict:
+        return self.agent.prescriptive_action(activations, free_energy, current_state)
+
+    def _compute_structural_loss(self, state_net_accum: Dict[str, list]) -> Optional[torch.Tensor]:
+        state_means = {}
+        for s, vecs in state_net_accum.items():
+            if vecs:
+                state_means[s] = torch.stack(vecs, dim=0).mean(dim=0)
+
+        states = list(state_means.keys())
+        if len(states) < 2:
+            return None
+
+        pair_weights = {
+            ('breath_focus', 'mind_wandering'): 2.0,
+            ('mind_wandering', 'meta_awareness'): 1.5,
+            ('mind_wandering', 'redirect_breath'): 1.5,
+            ('breath_focus', 'meta_awareness'): 1.2,
+            ('breath_focus', 'redirect_breath'): 1.2,
+            ('meta_awareness', 'redirect_breath'): 1.0
+        }
+
+        sims = []
+        for i in range(len(states)):
+            for j in range(i + 1, len(states)):
+                a = state_means[states[i]]
+                b = state_means[states[j]]
+                key = tuple(sorted((states[i], states[j])))
+                weight = pair_weights.get(key, 1.0)
+                sims.append(weight * F.cosine_similarity(a, b, dim=0))
+
+        if not sims:
+            return None
+        return torch.stack(sims).clamp(min=0.0).mean()
 
     def _record_transition(self, patterns, timestamps, t, old, new, acts, nets, vfe):
-        # Detach and convert
         acts_dict = {ts: acts[i].detach().item() for i, ts in enumerate(self.agent.thoughtseeds)}
         nets_dict = {k: v.detach().item() for k, v in nets.items()}
         patterns.append((old, new, acts_dict, nets_dict, float(vfe)))
         timestamps.append(t)
 
-    def _record_history(self, current_state, activations, meta_awareness, network_acts, free_energy, accuracy_nll, transition_drive, recon_loss, kl_div):
-        # Detach and convert
-        self.agent.state_history.append(current_state)
-        self.agent.activations_history.append(activations.detach().cpu().numpy())
-        self.agent.meta_awareness_history.append(meta_awareness)
-        
+    def _record_history(self, current_state, activations, meta_awareness, network_acts, free_energy, recon_loss, transition_drive, kl_div):
+        # Calculate derived metrics for logging
         net_acts_float = {k: v.detach().item() for k, v in network_acts.items()}
-        self.agent.network_activations_history.append(net_acts_float)
-        
-        self.agent.free_energy_history.append(free_energy.detach().item())
-        self.agent.prediction_error_history.append(accuracy_nll.detach().item())
-        if hasattr(self.agent, "recon_loss_history"):
-            self.agent.recon_loss_history.append(recon_loss.detach().item())
-        if hasattr(self.agent, "kl_div_history"):
-            self.agent.kl_div_history.append(kl_div.detach().item())
         
         prec_min = self.agent.params.get('l3tol2_precision_min', 0.4)
         prec_max = self.agent.params.get('l3tol2_precision_max', 0.6)
         prec = prec_min + (prec_max - prec_min) * meta_awareness
-        self.agent.precision_history.append(prec)
-
+        
         efe_val = getattr(self.agent.monitor, "last_efe", 0.0)
-        self.agent.efe_history.append(float(efe_val))
-
-        if hasattr(self.agent, "transition_drive_history"):
-            self.agent.transition_drive_history.append(float(transition_drive))
-        
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
-        self.agent.dominant_ts_history.append(dom)
         
-        # Diagnostics
         eff = compute_neural_efficiency_ratio(net_acts_float, current_state)
-        if eff is not None: self.agent.neural_efficiency_history.append(eff)
+        stability = compute_dmn_dan_anticorrelation(net_acts_float)
         
-        if detect_expert_mind_wandering(net_acts_float) is True:
-             self.agent.expert_mind_wandering_detections += 1
-             
-        self.agent.stability_indicators.append(compute_dmn_dan_anticorrelation(net_acts_float))
+        is_expert_mw = detect_expert_mind_wandering(net_acts_float)
+        
+        is_van_spike = False 
+        # is_van_spike flag passed as False, relying on final sync of self.agent.van_spike_detections
+        
+        self.logger.record_step(
+            current_state=current_state,
+            activations=activations.detach().cpu().numpy(),
+            meta_awareness=float(meta_awareness),
+            network_acts=net_acts_float,
+            free_energy=free_energy.detach().item(),
+            recon_loss=recon_loss.detach().item(),
+            kl_div=kl_div.detach().item(),
+            transition_drive=float(transition_drive),
+            precision=prec,
+            efe=float(efe_val),
+            dominant_ts=str(dom),
+            neural_efficiency=eff,
+            stability_indicator=stability,
+            is_expert_mw=is_expert_mw,
+            is_van_spike=is_van_spike
+        )
 
     def _save_results(self, output_dir, state_transition_patterns, transition_timestamps):
-        """Save results (Helper)."""
-        out_dir = output_dir or os.path.join(os.path.dirname(__file__), "data")
-        os.makedirs(out_dir, exist_ok=True)
-        # Need to ensure agent history lists are populated with floats/numpy, not tensors (Done in _record_history)
+        # Sync final counters from Agent to Logger
+        self.logger.van_spike_detections = self.agent.van_spike_detections
+        # Expert MW is tracked by Logger's record_step via is_expert_mw flag.
         
-        aggregates = compute_state_aggregates(self.agent)
-        transition_stats = build_transition_stats(self.agent, state_transition_patterns, transition_timestamps, aggregates)
-        
-        out_path = os.path.join(out_dir, f"transition_stats_{self.agent.experience_level}.json")
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(transition_stats, f, indent=2)
-
-        _save_json_outputs(self.agent, output_dir=out_dir, aggregates=aggregates)
+        self.logger.save_results(self.agent, state_transition_patterns, transition_timestamps, output_dir)
