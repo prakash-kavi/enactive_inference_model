@@ -10,10 +10,9 @@ from typing import Dict
 from utils.meditation_config import NETWORKS
 
 
+
 class MarkovBlanketL1L2:
     """Markov Blanket for the Layer 1 <-> Layer 2 interface."""
-
-    REQUIRED_SENSORY_KEYS = set(NETWORKS)
 
     def __init__(self, smoothing: float = 0.7):
         self.active_states = {
@@ -29,21 +28,6 @@ class MarkovBlanketL1L2:
         """Update sensory states with network activations from Layer 1."""
         if not hasattr(self, 'sensory_states') or self.sensory_states is None:
             self.sensory_states = {}
-
-        provided_keys = set(observations.keys())
-        missing_keys = self.REQUIRED_SENSORY_KEYS - provided_keys
-        if missing_keys:
-            raise ValueError(
-                f"Missing required network keys in observations: {missing_keys}. "
-                f"Required: {self.REQUIRED_SENSORY_KEYS}, Provided: {provided_keys}"
-            )
-
-        unexpected_keys = provided_keys - self.REQUIRED_SENSORY_KEYS
-        if unexpected_keys:
-            raise ValueError(
-                f"Unexpected keys in observations: {unexpected_keys}. "
-                f"Only {self.REQUIRED_SENSORY_KEYS} are allowed."
-            )
 
         self.sensory_states.update(observations)
 

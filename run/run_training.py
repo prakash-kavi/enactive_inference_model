@@ -55,9 +55,8 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
         }
 
         # Observed network means (what Layer 1 actually expressed during training)
-        from utils.meditation_utils import compute_state_aggregates
-
-        aggregates = compute_state_aggregates(agent, history=trainer.logger)
+        # Observed network means (what Layer 1 actually expressed during training)
+        aggregates = trainer.logger.compute_aggregates(agent)
         observed_means = aggregates.get("average_network_activations_by_state", {})
         learned_weights["observed_network_means"] = observed_means
 
