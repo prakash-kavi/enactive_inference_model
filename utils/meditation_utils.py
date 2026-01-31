@@ -13,9 +13,7 @@ from utils.meditation_config import (
     THOUGHTSEEDS,
     NETWORKS,
     THOUGHTSEED_BASE_ACTIVATIONS,
-    THOUGHTSEED_TARGET_ADJUSTMENTS,
-    META_BASE_AWARENESS,
-    META_THOUGHTSEED_INFLUENCES,
+    META_THOUGHTSEED_WEIGHTS,
     ACTINF_DEFAULTS,
     ACTINF_EXPERT_OVERRIDES,
 )
@@ -56,20 +54,21 @@ def get_preferred_transition_probs(experience_level: str, current_state: str) ->
 def get_thoughtseed_targets(state, meta_awareness, experience_level='novice'):
     """Get target activation values for each thoughtseed in the specified state."""
     level_map = THOUGHTSEED_BASE_ACTIVATIONS.get(experience_level, {})
-    activations = level_map[state].copy()
-    for ts in activations:
-        meta_mod = THOUGHTSEED_TARGET_ADJUSTMENTS[state][ts]
-        activations[ts] += meta_mod * meta_awareness
-    return activations
+    return level_map[state].copy()
 
 def compute_meta_awareness(state, thoughtseed_activations):
-    """Compute meta-awareness from mediative state and thoughtseed activations."""
-    base_awareness = META_BASE_AWARENESS[state]
-    awareness_boost = 0
-    for ts, influence in META_THOUGHTSEED_INFLUENCES.items():
-        if ts in thoughtseed_activations:
-            awareness_boost += thoughtseed_activations[ts] * influence
-    return base_awareness + awareness_boost
+    """Compute meta-awareness from state-weighted thoughtseed activations."""
+    weights = META_THOUGHTSEED_WEIGHTS.get(state, {})
+    if not weights:
+        return 0.0
+    weighted_sum = 0.0
+    weight_total = 0.0
+    for ts, weight in weights.items():
+        weight_total += float(weight)
+        weighted_sum += float(thoughtseed_activations.get(ts, 0.0)) * float(weight)
+    if weight_total <= 0.0:
+        return 0.0
+    return float(np.clip(weighted_sum / weight_total, 0.0, 1.0))
 
 def get_actinf_params(experience_level='novice'):
     params = dict(ACTINF_DEFAULTS)

@@ -6,27 +6,27 @@
   "kl_beta": 1.0,
   "learning_rate": 0.01,
   "average_free_energy_by_state": {
-    "breath_focus": 0.03973097647913797,
-    "mind_wandering": 0.03341997622910937,
-    "meta_awareness": 0.026289155489767454,
-    "redirect_breath": 0.03118955052923411
+    "breath_focus": 0.03503845723677055,
+    "mind_wandering": 0.03533413025518449,
+    "meta_awareness": 0.026156808941952013,
+    "redirect_breath": 0.02692246607314515
   },
   "average_efe_by_state": {
-    "breath_focus": 0.9551814031387484,
-    "mind_wandering": 1.0383971008411506,
-    "meta_awareness": 1.0043583585526386,
-    "redirect_breath": 1.0804494886940026
+    "breath_focus": 0.9551500833681221,
+    "mind_wandering": 1.0384593790437129,
+    "meta_awareness": 1.0044802785599414,
+    "redirect_breath": 1.080466853477894
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 0.006493158767732573,
-    "mind_wandering": 0.0032952431676578618,
-    "meta_awareness": 0.007543302262017166,
-    "redirect_breath": 0.00654175980032758
+    "breath_focus": 0.005848236616229125,
+    "mind_wandering": 0.0029818008794576835,
+    "meta_awareness": 0.006632341469044827,
+    "redirect_breath": 0.006890281119511553
   },
   "average_precision_by_state": {
-    "breath_focus": 0.48596284106384885,
-    "mind_wandering": 0.45143931350264466,
-    "meta_awareness": 0.4851816095523614,
-    "redirect_breath": 0.50224033729533
+    "breath_focus": 0.48821729127764957,
+    "mind_wandering": 0.43046610866186097,
+    "meta_awareness": 0.4715968257606144,
+    "redirect_breath": 0.5040276142550804
   }
 }

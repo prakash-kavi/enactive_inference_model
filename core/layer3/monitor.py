@@ -66,15 +66,10 @@ class Layer3Monitor(nn.Module):
         return risk + (self.efe_ambiguity_weight * ambiguity)
 
     def compute_meta_awareness(self, current_state: str, z) -> float:
-        """Compute meta-awareness using L3 signals with z as a calibrator."""
-        base = 0.0
+        """Compute meta-awareness from Layer 2 thoughtseed dynamics."""
+        raw = 0.0
         if self.get_meta_awareness_fn:
-            base = float(self.get_meta_awareness_fn(current_state, z))
-
-        sensory = self.blanket_l2l3.sensory_states if self.blanket_l2l3 else {}
-        recognition = float(np.clip(sensory.get('recognition_signal', 0.0), 0.0, 1.0))
-        vfe_drive = float(np.clip(self.vfe_ema, 0.0, 1.0))
-        raw = (0.7 * base) + (0.2 * recognition) + (0.1 * vfe_drive)
+            raw = float(self.get_meta_awareness_fn(current_state, z))
         raw = float(np.clip(raw, 0.0, 1.0))
 
         if self.meta_awareness_ema is None:

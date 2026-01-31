@@ -6,8 +6,7 @@ from typing import Tuple, Dict, Optional
 
 from utils.meditation_config import (
     DEFAULTS, NETWORK_PROFILES,
-    THOUGHTSEED_BASE_ACTIVATIONS,
-    THOUGHTSEED_TARGET_ADJUSTMENTS
+    THOUGHTSEED_BASE_ACTIVATIONS
 )
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio,
@@ -41,32 +40,27 @@ class PracticeTrainer:
         num_states = len(self.agent.states)
         num_ts = len(self.agent.thoughtseeds)
         base = np.zeros((num_states, num_ts), dtype=np.float32)
-        adjust = np.zeros((num_states, num_ts), dtype=np.float32)
         for s in self.agent.states:
             s_idx = self.state_index[s]
             base_map = THOUGHTSEED_BASE_ACTIVATIONS.get(self.agent.experience_level, {}).get(s, {})
-            adjust_map = THOUGHTSEED_TARGET_ADJUSTMENTS.get(s, {})
             for ts in self.agent.thoughtseeds:
                 t_idx = self.ts_index[ts]
                 base[s_idx, t_idx] = float(base_map.get(ts, 0.0))
-                adjust[s_idx, t_idx] = float(adjust_map.get(ts, 0.0))
         self._prior_base_np = base
-        self._prior_adjust_np = adjust
         self._prior_cache = {}
 
     def _get_prior_tensors(self, device: torch.device):
         cached = self._prior_cache.get(device)
         if cached is None:
             base = torch.tensor(self._prior_base_np, device=device)
-            adjust = torch.tensor(self._prior_adjust_np, device=device)
-            cached = (base, adjust)
+            cached = base
             self._prior_cache[device] = cached
         return cached
 
     def _get_prior_vector(self, state: str, meta_awareness: float, device: torch.device) -> torch.Tensor:
         idx = self.state_index[state]
-        base, adjust = self._get_prior_tensors(device)
-        return base[idx] + (meta_awareness * adjust[idx])
+        base = self._get_prior_tensors(device)
+        return base[idx]
 
     def train(self, save_outputs: bool = True, output_dir: str = None, seed: int = None, enable_learning: bool = True):
         """Run BPTT training."""
