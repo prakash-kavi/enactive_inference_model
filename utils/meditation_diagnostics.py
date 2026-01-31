@@ -33,35 +33,6 @@ def compute_neural_efficiency_ratio(network_acts: Dict[str, float], state: str) 
     return dan / fpn
 
 
-def detect_expert_mind_wandering(network_acts: Dict[str, float]) -> Optional[bool]:
-    """Detect expert meta-cognitive signature during mind wandering.
-    
-    Expert shows background monitoring: DMN > 0.5 AND VAN > 0.6
-    Novice shows total capture: DMN > 0.5 AND VAN < 0.5
-    
-    Args:
-        network_acts: Current network activations
-        
-    Returns:
-        True if expert pattern, False if novice pattern, None if DMN < 0.5
-    """
-    dmn = network_acts.get('DMN', 0.0)
-    van = network_acts.get('VAN', 0.0)
-    
-    if dmn <= 0.5:
-        return None
-    
-    # Expert: background monitoring (high VAN)
-    if van > 0.6:
-        return True
-    
-    # Novice: total capture (low VAN)
-    if van < 0.5:
-        return False
-    
-    return None
-
-
 def compute_dmn_dan_anticorrelation(network_acts: Dict[str, float]) -> bool:
     """Check if DMN-DAN anti-correlation indicates successful distraction suppression.
     

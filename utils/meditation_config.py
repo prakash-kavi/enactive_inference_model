@@ -238,8 +238,7 @@ ACTINF_DEFAULTS = {
     "kl_beta": 1.0,
     "efe_risk_weight": 1.0,
     "efe_ambiguity_weight": 0.4,
-    "l3tol2_precision_min": 0.4,
-    "l3tol2_precision_max": 0.6,
+    "l3tol2_precision_range": (0.4, 0.6),
     "network_target_reg": 0.05,
 }
 

@@ -30,13 +30,7 @@ class Layer2AttentionalModel(nn.Module):
         
         self.register_buffer('aha_accum_val', torch.tensor(0.0))
         
-        
-        # Internal Logic History (Not Logging)
-        self.van_history: List[float] = [] 
-
         self.van_history: List[float] = []
-        self.van_spike_detections = 0
-        self.expert_mind_wandering_detections = 0
 
         from .vae import MeditationVAE
         self.vae = MeditationVAE(
@@ -68,8 +62,7 @@ class Layer2AttentionalModel(nn.Module):
             experience_level=self.experience_level,
             efe_risk_weight=self.params.get('efe_risk_weight', 1.0),
             efe_ambiguity_weight=self.params.get('efe_ambiguity_weight', 0.4),
-            l3tol2_precision_min=self.params.get('l3tol2_precision_min', 0.4),
-            l3tol2_precision_max=self.params.get('l3tol2_precision_max', 0.6),
+            l3tol2_precision_range=self.params.get('l3tol2_precision_range', (0.4, 0.6)),
             get_meta_awareness_fn=self.get_meta_awareness,
             blanket_l2l3=self.blanket_l2l3,
             vfe_ema_alpha=self.params['vfe_ema_alpha']
@@ -101,8 +94,6 @@ class Layer2AttentionalModel(nn.Module):
         spike_delta = 0.15
         
         is_spike = (current_van > spike_threshold) and ((current_van - prev_van) > spike_delta)
-        if is_spike:
-            self.van_spike_detections += 1
         return is_spike
 
     def _update_van_signals(self, network_acts: Dict[str, torch.Tensor], current_state: str) -> Tuple[bool, float]:

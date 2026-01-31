@@ -15,7 +15,7 @@ from utils.meditation_config import (
     THOUGHTSEED_LEVEL_OFFSETS
 )
 from utils.meditation_diagnostics import (
-    compute_neural_efficiency_ratio, detect_expert_mind_wandering,
+    compute_neural_efficiency_ratio,
     compute_dmn_dan_anticorrelation
 )
 from ..layer1.process import Layer1Process
@@ -264,13 +264,9 @@ class PracticeTrainer:
             prof = NETWORK_PROFILES[current_state][self.agent.experience_level]
             target_vec = torch.tensor([prof[n] for n in self.agent.networks], device=device, dtype=torch.float32)
             target_loss = torch.nn.functional.mse_loss(x, target_vec, reduction='mean')
-            if current_state == 'meta_awareness' and 'VAN' in self.agent.networks:
-                van_idx = self.agent.networks.index('VAN')
-                van_shortfall = torch.relu(target_vec[van_idx] - x[van_idx])
-                van_boost_loss = van_shortfall * van_shortfall
 
         beta = float(self.agent.params.get("kl_beta", 1.0))
-        loss = recon_loss + beta * kl_div + (reg_weight * target_loss) + (reg_weight * 0.6 * van_boost_loss)
+        loss = recon_loss + beta * kl_div + (reg_weight * target_loss)
 
         free_energy = loss
         return free_energy, recon_loss, kl_div
@@ -320,8 +316,7 @@ class PracticeTrainer:
         # Calculate derived metrics for logging
         net_acts_float = {k: v.detach().item() for k, v in network_acts.items()}
         
-        prec_min = self.agent.params.get('l3tol2_precision_min', 0.4)
-        prec_max = self.agent.params.get('l3tol2_precision_max', 0.6)
+        prec_min, prec_max = self.agent.params.get('l3tol2_precision_range', (0.4, 0.6))
         prec = prec_min + (prec_max - prec_min) * meta_awareness
         
         efe_val = getattr(self.agent.monitor, "last_efe", 0.0)
@@ -329,11 +324,6 @@ class PracticeTrainer:
         
         eff = compute_neural_efficiency_ratio(net_acts_float, current_state)
         stability = compute_dmn_dan_anticorrelation(net_acts_float)
-        
-        is_expert_mw = detect_expert_mind_wandering(net_acts_float)
-        
-        is_van_spike = False 
-        # is_van_spike flag passed as False, relying on final sync of self.agent.van_spike_detections
         
         self.logger.record_step(
             current_state=current_state,
@@ -348,14 +338,8 @@ class PracticeTrainer:
             efe=float(efe_val),
             dominant_ts=str(dom),
             neural_efficiency=eff,
-            stability_indicator=stability,
-            is_expert_mw=is_expert_mw,
-            is_van_spike=is_van_spike
+            stability_indicator=stability
         )
 
     def _save_results(self, output_dir, state_transition_patterns, transition_timestamps):
-        # Sync final counters from Agent to Logger
-        self.logger.van_spike_detections = self.agent.van_spike_detections
-        # Expert MW is tracked by Logger's record_step via is_expert_mw flag.
-        
         self.logger.save_results(self.agent, state_transition_patterns, transition_timestamps, output_dir)

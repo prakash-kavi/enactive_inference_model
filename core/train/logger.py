@@ -32,9 +32,6 @@ class SimulationLogger:
         self.recon_loss_history: List[float] = []
         self.kl_div_history: List[float] = []
 
-        # Diagnostic Counters
-        self.van_spike_detections: int = 0
-        self.expert_mind_wandering_detections: int = 0
 
     def record_step(self, 
                     current_state: str,
@@ -49,9 +46,7 @@ class SimulationLogger:
                     efe: float,
                     dominant_ts: str,
                     neural_efficiency: Optional[float],
-                    stability_indicator: float,
-                    is_expert_mw: bool = False,
-                    is_van_spike: bool = False):
+                    stability_indicator: float):
         """Log a single simulation timestep."""
         self.state_history.append(current_state)
         self.activations_history.append(activations)
@@ -73,11 +68,6 @@ class SimulationLogger:
         
         self.stability_indicators.append(stability_indicator)
 
-        if is_expert_mw:
-            self.expert_mind_wandering_detections += 1
-        
-        if is_van_spike:
-            self.van_spike_detections += 1
 
     def save_results(self, agent: Any, state_transition_patterns: List, transition_timestamps: List, output_dir: str = None):
         """Save simulation results to disk. Orchestrates aggregation and serialization."""
@@ -254,8 +244,7 @@ class SimulationLogger:
 
         params = getattr(agent, "params", {}) if hasattr(agent, "params") else {}
         active_inf_params = {
-            "l3tol2_precision_min": params.get("l3tol2_precision_min"),
-            "l3tol2_precision_max": params.get("l3tol2_precision_max"),
+        "l3tol2_precision_range": params.get("l3tol2_precision_range"),
             "kl_beta": params.get("kl_beta"),
             "learning_rate": getattr(agent, "learning_rate", None),
             "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),

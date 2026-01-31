@@ -51,7 +51,7 @@ class MeditationVAE(nn.Module):
         
     def decode(self, z):
         """
-        Input: z (Batch, 5) - One-hot or Soft-one-hot thoughtseed vector
+        Input: z (Batch, 5) - Soft-one-hot thoughtseed vector
         Output: x_recon (Batch, 4) - Reconstructed Network Activations
         """
         return self.decoder_net(z)

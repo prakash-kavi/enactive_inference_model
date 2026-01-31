@@ -17,8 +17,7 @@ class Layer3Monitor(nn.Module):
                  experience_level: str = 'novice',
                  efe_risk_weight: float = 1.0,
                  efe_ambiguity_weight: float = 0.4,
-                 l3tol2_precision_min: float = 0.4,
-                 l3tol2_precision_max: float = 0.6,
+                 l3tol2_precision_range: tuple = (0.4, 0.6),
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
         super().__init__()
@@ -27,8 +26,7 @@ class Layer3Monitor(nn.Module):
         self.experience_level = experience_level
         self.efe_risk_weight = efe_risk_weight
         self.efe_ambiguity_weight = efe_ambiguity_weight
-        self.l3tol2_precision_min = l3tol2_precision_min
-        self.l3tol2_precision_max = l3tol2_precision_max
+        self.l3tol2_precision_range = l3tol2_precision_range
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
         self.vfe_ema_alpha = vfe_ema_alpha
@@ -126,8 +124,7 @@ class Layer3Monitor(nn.Module):
         recognition_drive = float(np.clip(recognition, 0.0, 1.0))
 
         ma = float(np.clip(sensory.get('meta_awareness', 0.0), 0.0, 1.0))
-        prec_min = self.l3tol2_precision_min
-        prec_max = self.l3tol2_precision_max
+        prec_min, prec_max = self.l3tol2_precision_range
         precision_drive = 0.5 * (ma + recognition_drive)
         precision = prec_min + (prec_max - prec_min) * precision_drive
         precision = float(np.clip(precision, 0.0, 1.0))
