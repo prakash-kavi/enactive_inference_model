@@ -11,8 +11,7 @@ from utils.meditation_utils import ensure_directories
 from utils.meditation_config import (
     DEFAULTS, NETWORK_PROFILES,
     THOUGHTSEED_BASE_ACTIVATIONS,
-    THOUGHTSEED_TARGET_ADJUSTMENTS,
-    THOUGHTSEED_LEVEL_OFFSETS
+    THOUGHTSEED_TARGET_ADJUSTMENTS
 )
 from utils.meditation_diagnostics import (
     compute_neural_efficiency_ratio,
@@ -47,24 +46,16 @@ class PracticeTrainer:
         num_ts = len(self.agent.thoughtseeds)
         base = np.zeros((num_states, num_ts), dtype=np.float32)
         adjust = np.zeros((num_states, num_ts), dtype=np.float32)
-        offsets = np.zeros((num_states, num_ts), dtype=np.float32)
-
-        level_offsets = THOUGHTSEED_LEVEL_OFFSETS.get(self.agent.experience_level, {})
-
         for s in self.agent.states:
             s_idx = self.state_index[s]
-            base_map = THOUGHTSEED_BASE_ACTIVATIONS.get(s, {})
+            base_map = THOUGHTSEED_BASE_ACTIVATIONS.get(self.agent.experience_level, {}).get(s, {})
             adjust_map = THOUGHTSEED_TARGET_ADJUSTMENTS.get(s, {})
-            offset_map = level_offsets.get(s, {})
             for ts in self.agent.thoughtseeds:
                 t_idx = self.ts_index[ts]
                 base[s_idx, t_idx] = float(base_map.get(ts, 0.0))
                 adjust[s_idx, t_idx] = float(adjust_map.get(ts, 0.0))
-                offsets[s_idx, t_idx] = float(offset_map.get(ts, 0.0))
-
         self._prior_base_np = base
         self._prior_adjust_np = adjust
-        self._prior_offset_np = offsets
         self._prior_cache = {}
 
     def _get_prior_tensors(self, device: torch.device):
@@ -72,15 +63,14 @@ class PracticeTrainer:
         if cached is None:
             base = torch.tensor(self._prior_base_np, device=device)
             adjust = torch.tensor(self._prior_adjust_np, device=device)
-            offsets = torch.tensor(self._prior_offset_np, device=device)
-            cached = (base, adjust, offsets)
+            cached = (base, adjust)
             self._prior_cache[device] = cached
         return cached
 
     def _get_prior_vector(self, state: str, meta_awareness: float, device: torch.device) -> torch.Tensor:
         idx = self.state_index[state]
-        base, adjust, offsets = self._get_prior_tensors(device)
-        return base[idx] + (meta_awareness * adjust[idx]) + offsets[idx]
+        base, adjust = self._get_prior_tensors(device)
+        return base[idx] + (meta_awareness * adjust[idx])
 
     def train(self, save_outputs: bool = True, output_dir: str = None, seed: int = None, enable_learning: bool = True):
         """Run BPTT training."""
@@ -319,7 +309,7 @@ class PracticeTrainer:
         prec_min, prec_max = self.agent.params.get('l3tol2_precision_range', (0.4, 0.6))
         prec = prec_min + (prec_max - prec_min) * meta_awareness
         
-        efe_val = getattr(self.agent.monitor, "last_efe", 0.0)
+        efe_val = getattr(self.agent.monitor, "efe_value", 0.0)
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
         
         eff = compute_neural_efficiency_ratio(net_acts_float, current_state)

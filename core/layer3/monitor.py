@@ -13,9 +13,8 @@ from utils.meditation_utils import get_exit_transition_probs, get_preferred_tran
 class Layer3Monitor(nn.Module):
     """Layer 3 monitoring + policy module."""
     
-    def __init__(self, thoughtseeds: list, 
+    def __init__(self, thoughtseeds: list,
                  experience_level: str = 'novice',
-                 efe_risk_weight: float = 1.0,
                  efe_ambiguity_weight: float = 0.4,
                  l3tol2_precision_range: tuple = (0.4, 0.6),
                  get_meta_awareness_fn=None, blanket_l2l3=None,
@@ -24,7 +23,6 @@ class Layer3Monitor(nn.Module):
         
         self.thoughtseeds = thoughtseeds
         self.experience_level = experience_level
-        self.efe_risk_weight = efe_risk_weight
         self.efe_ambiguity_weight = efe_ambiguity_weight
         self.l3tol2_precision_range = l3tol2_precision_range
         self.get_meta_awareness_fn = get_meta_awareness_fn
@@ -32,7 +30,7 @@ class Layer3Monitor(nn.Module):
         self.vfe_ema_alpha = vfe_ema_alpha
         self.vfe_ema = 0.0
         self.efe_ema = 0.0
-        self.last_efe = 0.0
+        self.efe_value = 0.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
     
@@ -65,7 +63,7 @@ class Layer3Monitor(nn.Module):
                 p = float(np.clip(val, eps, 1.0 - eps))
                 ambiguity += float(p_s) * (-(p * np.log(p) + (1.0 - p) * np.log(1.0 - p)))
 
-        return (self.efe_risk_weight * risk) + (self.efe_ambiguity_weight * ambiguity)
+        return risk + (self.efe_ambiguity_weight * ambiguity)
 
     def compute_meta_awareness(self, current_state: str, z) -> float:
         """Compute meta-awareness using L3 signals with z as a calibrator."""
@@ -147,8 +145,8 @@ class Layer3Monitor(nn.Module):
         prescription_l1l2['l2tol1_enactive_bias'] = float(np.clip(precision, 0.0, 1.0))
 
         # Expected Free Energy uses previous-step drive to avoid same-step feedback.
-        self.last_efe = float(self._compute_efe(current_state, self.prev_transition_drive))
-        self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.last_efe)
+        self.efe_value = float(self._compute_efe(current_state, self.prev_transition_drive))
+        self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.efe_value)
 
         if self.efe_ema > 0.0:
             efe_gain = 0.35

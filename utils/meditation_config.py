@@ -118,33 +118,65 @@ PREFERRED_TRANSITION_BIAS = {
 # Layer 2: Thoughtseed priors and meta-awareness mapping
 # -----------------------------------------------------------------------------
 THOUGHTSEED_BASE_ACTIVATIONS = {
-    "breath_focus": {
-        "attend_breath": 0.75,
-        "equanimity": 0.35,
-        "pain_discomfort": 0.1,
-        "pending_tasks": 0.05,
-        "aha_moment": 0.15
+    "novice": {
+        "breath_focus": {
+            "attend_breath": 0.75,
+            "equanimity": 0.35,
+            "pain_discomfort": 0.1,
+            "pending_tasks": 0.05,
+            "aha_moment": 0.15
+        },
+        "mind_wandering": {
+            "attend_breath": 0.05,
+            "equanimity": 0.05,
+            "pain_discomfort": 0.75,
+            "pending_tasks": 0.8,
+            "aha_moment": 0.05
+        },
+        "meta_awareness": {
+            "attend_breath": 0.25,
+            "equanimity": 0.4,
+            "pain_discomfort": 0.1,
+            "pending_tasks": 0.1,
+            "aha_moment": 0.8
+        },
+        "redirect_breath": {
+            "attend_breath": 0.7,
+            "equanimity": 0.75,
+            "pain_discomfort": 0.12,
+            "pending_tasks": 0.05,
+            "aha_moment": 0.5
+        }
     },
-    "mind_wandering": {
-        "attend_breath": 0.05,
-        "equanimity": 0.05,
-        "pain_discomfort": 0.75,
-        "pending_tasks": 0.8,
-        "aha_moment": 0.05
-    },
-    "meta_awareness": {
-        "attend_breath": 0.25,
-        "equanimity": 0.4,
-        "pain_discomfort": 0.1,
-        "pending_tasks": 0.1,
-        "aha_moment": 0.8
-    },
-    "redirect_breath": {
-        "attend_breath": 0.7,
-        "equanimity": 0.75,
-        "pain_discomfort": 0.12,
-        "pending_tasks": 0.05,
-        "aha_moment": 0.5
+    "expert": {
+        "breath_focus": {
+            "attend_breath": 0.85,
+            "equanimity": 0.45,
+            "pain_discomfort": 0.1,
+            "pending_tasks": 0.05,
+            "aha_moment": 0.15
+        },
+        "mind_wandering": {
+            "attend_breath": 0.05,
+            "equanimity": 0.1,
+            "pain_discomfort": 1.05,
+            "pending_tasks": 1.1,
+            "aha_moment": 0.05
+        },
+        "meta_awareness": {
+            "attend_breath": 0.25,
+            "equanimity": 0.5,
+            "pain_discomfort": 0.1,
+            "pending_tasks": 0.1,
+            "aha_moment": 0.85
+        },
+        "redirect_breath": {
+            "attend_breath": 0.7,
+            "equanimity": 0.75,
+            "pain_discomfort": 0.12,
+            "pending_tasks": 0.05,
+            "aha_moment": 0.5
+        }
     }
 }
 
@@ -179,39 +211,6 @@ THOUGHTSEED_TARGET_ADJUSTMENTS = {
     }
 }
 
-THOUGHTSEED_LEVEL_OFFSETS = {
-    "expert": {
-        "breath_focus": {
-            "attend_breath": 0.1,
-            "equanimity": 0.1,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.0
-        },
-        "mind_wandering": {
-            "attend_breath": 0.0,
-            "equanimity": 0.05,
-            "pain_discomfort": 0.3,
-            "pending_tasks": 0.3,
-            "aha_moment": 0.0
-        },
-        "meta_awareness": {
-            "attend_breath": 0.0,
-            "equanimity": 0.1,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.05
-        },
-        "redirect_breath": {
-            "attend_breath": 0.0,
-            "equanimity": 0.0,
-            "pain_discomfort": 0.0,
-            "pending_tasks": 0.0,
-            "aha_moment": 0.0
-        }
-    }
-}
-
 META_BASE_AWARENESS = {
     "breath_focus": 0.4,
     "mind_wandering": 0.2,
@@ -229,14 +228,11 @@ META_THOUGHTSEED_INFLUENCES = {
 # -----------------------------------------------------------------------------
 ACTINF_DEFAULTS = {
     "learning_rate": 0.01,
-    "z_ema_alpha": 0.75,
     "z_noise_sigma": 0.05,
     "aha_accum_decay": 0.95,
     "aha_accum_inc": 0.05,
-    "state_embed_dim": 2,
     "vfe_ema_alpha": 0.9,
     "kl_beta": 1.0,
-    "efe_risk_weight": 1.0,
     "efe_ambiguity_weight": 0.4,
     "l3tol2_precision_range": (0.4, 0.6),
     "network_target_reg": 0.05,

@@ -39,7 +39,7 @@ class Layer2AttentionalModel(nn.Module):
         )
         
         self.mu_params = nn.ParameterDict()
-        self.state_embed_dim = int(self.params.get("state_embed_dim", 2))
+        self.state_embed_dim = 2
         self.state_embeddings = nn.ParameterDict()
         self.state_embed_to_bias = nn.Linear(self.state_embed_dim, len(self.networks), bias=False)
         
@@ -60,7 +60,6 @@ class Layer2AttentionalModel(nn.Module):
         self.monitor = Layer3Monitor(
             thoughtseeds=self.thoughtseeds,
             experience_level=self.experience_level,
-            efe_risk_weight=self.params.get('efe_risk_weight', 1.0),
             efe_ambiguity_weight=self.params.get('efe_ambiguity_weight', 0.4),
             l3tol2_precision_range=self.params.get('l3tol2_precision_range', (0.4, 0.6)),
             get_meta_awareness_fn=self.get_meta_awareness,
@@ -70,6 +69,7 @@ class Layer2AttentionalModel(nn.Module):
         
         self.init_noise_sigma = float(self.params.get('z_noise_sigma', 0.0))
         self.learning_rate = self.params['learning_rate']
+        self.z_ema_alpha = 0.75
 
 
     def get_meta_awareness(self, current_state: str, activations: torch.Tensor) -> float:
@@ -187,7 +187,7 @@ class Layer2AttentionalModel(nn.Module):
             DEFAULTS['ACTIVATION_CLIP_MAX']
         )
 
-        alpha = self.params['z_ema_alpha']
+        alpha = self.z_ema_alpha
         aha_idx = self.ts_index.get('aha_moment')
         if aha_idx is not None and (z_inferred[aha_idx].item() > 0.6 or van_spike_detected):
             alpha = min(alpha, 0.6)

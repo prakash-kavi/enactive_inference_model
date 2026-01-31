@@ -14,7 +14,6 @@ from utils.meditation_config import (
     NETWORKS,
     THOUGHTSEED_BASE_ACTIVATIONS,
     THOUGHTSEED_TARGET_ADJUSTMENTS,
-    THOUGHTSEED_LEVEL_OFFSETS,
     META_BASE_AWARENESS,
     META_THOUGHTSEED_INFLUENCES,
     ACTINF_DEFAULTS,
@@ -56,12 +55,11 @@ def get_preferred_transition_probs(experience_level: str, current_state: str) ->
 
 def get_thoughtseed_targets(state, meta_awareness, experience_level='novice'):
     """Get target activation values for each thoughtseed in the specified state."""
-    activations = THOUGHTSEED_BASE_ACTIVATIONS[state].copy()
+    level_map = THOUGHTSEED_BASE_ACTIVATIONS.get(experience_level, {})
+    activations = level_map[state].copy()
     for ts in activations:
         meta_mod = THOUGHTSEED_TARGET_ADJUSTMENTS[state][ts]
         activations[ts] += meta_mod * meta_awareness
-        level_offset = THOUGHTSEED_LEVEL_OFFSETS.get(experience_level, {}).get(state, {}).get(ts, 0.0)
-        activations[ts] += level_offset
     return activations
 
 def compute_meta_awareness(state, thoughtseed_activations):
