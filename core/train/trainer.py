@@ -143,7 +143,6 @@ class PracticeTrainer:
                 self.process.smoothed_x = self.process.smoothed_x.detach()
             
             with torch.no_grad():
-                self.agent.aha_accum_val.data = self.agent.aha_accum_val.detach()
                 if hasattr(self.agent, "z_ema"):
                     self.agent.z_ema = self.agent.z_ema.detach()
             

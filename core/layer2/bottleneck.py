@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 
 from utils.meditation_config import THOUGHTSEEDS, STATES, NETWORKS, DEFAULTS
 from utils.meditation_utils import get_actinf_params, get_thoughtseed_targets, compute_meta_awareness
@@ -27,8 +27,6 @@ class Layer2AttentionalModel(nn.Module):
         self.rng = np.random.RandomState(seed)
         
         self.params = get_actinf_params(experience_level)
-        
-        self.register_buffer('aha_accum_val', torch.tensor(0.0))
         
         self.van_history: List[float] = []
 
@@ -96,20 +94,6 @@ class Layer2AttentionalModel(nn.Module):
         is_spike = (current_van > spike_threshold) and ((current_van - prev_van) > spike_delta)
         return is_spike
 
-    def _update_van_signals(self, network_acts: Dict[str, torch.Tensor], current_state: str) -> Tuple[bool, float]:
-        """Update VAN spike and aha accumulator signals."""
-        van = network_acts.get('VAN', torch.tensor(0.0)).item()
-        van_spike_detected = self.detect_van_spike(van)
-        if van_spike_detected:
-            accum_update = 1.0
-        elif van > 0.6:
-            accum_update = 0.3
-        else:
-            accum_update = 0.0
-        new_accum = self.params['aha_accum_decay'] * self.aha_accum_val + self.params['aha_accum_inc'] * accum_update
-        self.aha_accum_val.copy_(new_accum.detach())
-        return van_spike_detected, van
-
     def perceptual_inference(self) -> torch.Tensor:
         """Perceptual inference (networks -> thoughtseed strengths)."""
         network_acts = self.blanket.sensory_states
@@ -148,7 +132,8 @@ class Layer2AttentionalModel(nn.Module):
                                    observed_networks: Dict[str, torch.Tensor],
                                    sensory_inference: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Update attentional-agent strengths."""
-        van_spike_detected, _current_van = self._update_van_signals(observed_networks, current_state)
+        van = observed_networks.get('VAN', torch.tensor(0.0)).item()
+        van_spike_detected = self.detect_van_spike(van)
 
         mu_prior = self.mu_params[current_state]
         progress = 0.0
@@ -204,10 +189,6 @@ class Layer2AttentionalModel(nn.Module):
 
         updated_activations = torch.clamp(self.z_ema, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
-        self.blanket_l2l3.update_sensory_states({
-            'aha_accumulator_value': float(self.aha_accum_val)
-        })
-        
         return updated_activations
 
     def prescriptive_action(self, z: torch.Tensor, vfe: torch.Tensor, current_state: str) -> dict:
@@ -217,16 +198,11 @@ class Layer2AttentionalModel(nn.Module):
         mu_goal = self.mu_params[current_state]
         agent_bias = self.decode_with_state(mu_goal, current_state)
         
-        # Recognition signal ties aha + current VFE proxy
         vfe_val = vfe.item() if isinstance(vfe, torch.Tensor) else float(vfe)
-        vfe_sig = 1.0 / (1.0 + np.exp(-vfe_val))
-        recognition = (0.7 * float(self.aha_accum_val)) + (0.3 * vfe_sig)
-
         self.blanket_l2l3.update_sensory_states({
             'thoughtseed_activations': z,
             'vfe': vfe_val,
-            'current_state': current_state,
-            'recognition_signal': recognition
+            'current_state': current_state
         })
         
         prescription_l1l2 = self.monitor.evaluate_policies()

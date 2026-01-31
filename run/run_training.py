@@ -10,7 +10,6 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 import json
 import numpy as np
 from core.layer2.bottleneck import Layer2AttentionalModel
-from utils.meditation_utils import ensure_directories
 from core.train.trainer import PracticeTrainer
 
 def run_convergence_for_level(level, seeds, timesteps, output_dir):
@@ -55,7 +54,6 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
         }
 
         # Observed network means (what Layer 1 actually expressed during training)
-        # Observed network means (what Layer 1 actually expressed during training)
         aggregates = trainer.logger.compute_aggregates(agent)
         observed_means = aggregates.get("average_network_activations_by_state", {})
         learned_weights["observed_network_means"] = observed_means
@@ -76,10 +74,7 @@ def run_convergence_for_level(level, seeds, timesteps, output_dir):
         'network_profiles_std': {},
         'convergence_metrics': {}
     }
-    
-    # Calculate mean and std based on OBSERVED network means (what the biology expressed),
-    # not just the internal state expectations. This sets realistic expectations for
-    # the separation that actually appears in training/simulation.
+
     for state in agent.states:
         summary['network_profiles_mean'][state] = {}
         summary['network_profiles_std'][state] = {}

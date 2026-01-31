@@ -84,33 +84,16 @@ DWELL_TIMES = {
 # Exit transition probabilities (self-transitions handled by dwell)
 STATE_TRANSITION_PROBS = {
     'expert': {
-        'breath_focus': {'mind_wandering': 0.40, 'meta_awareness': 0.40, 'redirect_breath': 0.20},
-        'mind_wandering': {'breath_focus': 0.20, 'meta_awareness': 0.55, 'redirect_breath': 0.25},
-        'meta_awareness': {'redirect_breath': 0.80, 'breath_focus': 0.15, 'mind_wandering': 0.05},
-        'redirect_breath': {'breath_focus': 0.60, 'meta_awareness': 0.30, 'mind_wandering': 0.10},
+        'breath_focus': {'mind_wandering': 0.35, 'meta_awareness': 0.45, 'redirect_breath': 0.20},
+        'mind_wandering': {'breath_focus': 0.18, 'meta_awareness': 0.56, 'redirect_breath': 0.26},
+        'meta_awareness': {'redirect_breath': 0.85, 'breath_focus': 0.14, 'mind_wandering': 0.01},
+        'redirect_breath': {'breath_focus': 0.59, 'meta_awareness': 0.34, 'mind_wandering': 0.07},
     },
     'novice': {
-        'breath_focus': {'mind_wandering': 0.88, 'meta_awareness': 0.08, 'redirect_breath': 0.04},
-        'mind_wandering': {'meta_awareness': 0.65, 'redirect_breath': 0.20, 'breath_focus': 0.15},
-        'meta_awareness': {'redirect_breath': 0.75, 'breath_focus': 0.15, 'mind_wandering': 0.10},
-        'redirect_breath': {'breath_focus': 0.85, 'mind_wandering': 0.10, 'meta_awareness': 0.05},
-    }
-}
-
-# Preferred transition bias (state-conditional preferences).
-# Values are small deltas added to base transition probs and renormalized.
-PREFERRED_TRANSITION_BIAS = {
-    'novice': {
-        'breath_focus': {'mind_wandering': 0.04, 'redirect_breath': -0.02},
-        'mind_wandering': {'meta_awareness': 0.06, 'redirect_breath': -0.02},
-        'meta_awareness': {'redirect_breath': 0.06, 'mind_wandering': -0.03},
-        'redirect_breath': {'breath_focus': 0.06, 'mind_wandering': -0.03},
-    },
-    'expert': {
-        'breath_focus': {'meta_awareness': 0.06, 'mind_wandering': -0.04},
-        'mind_wandering': {'meta_awareness': 0.07, 'redirect_breath': 0.03},
-        'meta_awareness': {'redirect_breath': 0.08, 'mind_wandering': -0.04},
-        'redirect_breath': {'meta_awareness': 0.05, 'mind_wandering': -0.03},
+        'breath_focus': {'mind_wandering': 0.90, 'meta_awareness': 0.08, 'redirect_breath': 0.02},
+        'mind_wandering': {'meta_awareness': 0.68, 'redirect_breath': 0.17, 'breath_focus': 0.15},
+        'meta_awareness': {'redirect_breath': 0.79, 'breath_focus': 0.15, 'mind_wandering': 0.06},
+        'redirect_breath': {'breath_focus': 0.88, 'mind_wandering': 0.07, 'meta_awareness': 0.05},
     }
 }
 
@@ -135,17 +118,17 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
         },
         "meta_awareness": {
             "attend_breath": 0.25,
-            "equanimity": 0.4,
+            "equanimity": 0.3,
             "pain_discomfort": 0.1,
             "pending_tasks": 0.1,
-            "aha_moment": 0.8
+            "aha_moment": 0.9
         },
         "redirect_breath": {
             "attend_breath": 0.7,
-            "equanimity": 0.75,
+            "equanimity": 0.85,
             "pain_discomfort": 0.12,
             "pending_tasks": 0.05,
-            "aha_moment": 0.5
+            "aha_moment": 0.35
         }
     },
     "expert": {
@@ -165,17 +148,17 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
         },
         "meta_awareness": {
             "attend_breath": 0.25,
-            "equanimity": 0.5,
+            "equanimity": 0.35,
             "pain_discomfort": 0.1,
             "pending_tasks": 0.1,
-            "aha_moment": 0.85
+            "aha_moment": 0.95
         },
         "redirect_breath": {
             "attend_breath": 0.7,
-            "equanimity": 0.75,
+            "equanimity": 0.85,
             "pain_discomfort": 0.12,
             "pending_tasks": 0.05,
-            "aha_moment": 0.5
+            "aha_moment": 0.35
         }
     }
 }
@@ -211,8 +194,6 @@ META_THOUGHTSEED_WEIGHTS = {
 ACTINF_DEFAULTS = {
     "learning_rate": 0.01,
     "z_noise_sigma": 0.05,
-    "aha_accum_decay": 0.95,
-    "aha_accum_inc": 0.05,
     "vfe_ema_alpha": 0.9,
     "kl_beta": 1.0,
     "efe_ambiguity_weight": 0.4,

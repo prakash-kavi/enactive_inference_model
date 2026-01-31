@@ -12,9 +12,8 @@ class MarkovBlanketL2L3:
         'meta_awareness',
         'current_state',
         'dwell_progress',
-        'aha_accumulator_value',
         'vfe',
-        'recognition_signal'
+        'opacity'
     }
 
     def __init__(self, smoothing: float = 0.7):

@@ -5,7 +5,6 @@ import logging
 import numpy as np
 from utils.meditation_config import (
     STATE_TRANSITION_PROBS,
-    PREFERRED_TRANSITION_BIAS,
     STATES,
     THOUGHTSEED_BASE_ACTIVATIONS,
     META_THOUGHTSEED_WEIGHTS,
@@ -36,15 +35,8 @@ def get_exit_transition_probs(experience_level: str, current_state: str) -> dict
     return _normalize_probs(base, [s for s in STATES if s != current_state])
 
 def get_preferred_transition_probs(experience_level: str, current_state: str) -> dict:
-    """Return preferred next-state distribution P*(s'|s) as normalized base + bias."""
-    base = get_exit_transition_probs(experience_level, current_state)
-    bias = PREFERRED_TRANSITION_BIAS.get(experience_level, {}).get(current_state, {})
-    if not base:
-        return {}
-    adjusted = {}
-    for state, prob in base.items():
-        adjusted[state] = max(0.0, float(prob) + float(bias.get(state, 0.0)))
-    return _normalize_probs(adjusted, list(adjusted.keys()))
+    """Return preferred next-state distribution P*(s'|s)."""
+    return get_exit_transition_probs(experience_level, current_state)
 
 def get_thoughtseed_targets(state, experience_level='novice'):
     """Get target activation values for each thoughtseed in the specified state."""

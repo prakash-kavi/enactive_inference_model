@@ -8,7 +8,6 @@ Role in Russian Doll Architecture:
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 class MeditationVAE(nn.Module):
     def __init__(self, input_dim=4, latent_dim=5, hidden_dim=32):

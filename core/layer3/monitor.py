@@ -80,7 +80,11 @@ class Layer3Monitor(nn.Module):
 
         meta = float(np.clip(self.meta_awareness_ema, 0.0, 1.0))
         if self.blanket_l2l3:
-            self.blanket_l2l3.update_sensory_states({'meta_awareness': meta})
+            opacity = float(np.clip(1.0 - meta, 0.0, 1.0))
+            self.blanket_l2l3.update_sensory_states({
+                'meta_awareness': meta,
+                'opacity': opacity
+            })
         return meta
 
     def evaluate_policies(self) -> dict:
@@ -99,8 +103,6 @@ class Layer3Monitor(nn.Module):
             vfe_sig = 1.0 / (1.0 + np.exp(-vfe_val))
             self.vfe_ema = (self.vfe_ema_alpha * self.vfe_ema) + ((1 - self.vfe_ema_alpha) * vfe_sig)
         
-        z_vals = z.detach().cpu().numpy() if isinstance(z, torch.Tensor) else np.array(z)
-        
         prescription_l1l2 = {
             'noise_reduction': 1.0,
         }
@@ -109,31 +111,19 @@ class Layer3Monitor(nn.Module):
             'precision_modulation': 0.5
         }
 
-        aha_idx = self.thoughtseeds.index('aha_moment')
-        aha_accum = sensory.get('aha_accumulator_value', 0.0)
-        recognition = sensory.get('recognition_signal', None)
-        if recognition is None:
-            recognition = max(z_vals[aha_idx], 0.0) * 0.7 + max(float(aha_accum), 0.0) * 0.3
-        recognition_drive = float(np.clip(recognition, 0.0, 1.0))
-
         ma = float(np.clip(sensory.get('meta_awareness', 0.0), 0.0, 1.0))
+        opacity = float(np.clip(sensory.get('opacity', 1.0 - ma), 0.0, 1.0))
         prec_min, prec_max = self.l3tol2_precision_range
-        precision_drive = 0.5 * (ma + recognition_drive)
+        transparency = 1.0 - opacity
+        precision_drive = transparency
         precision = prec_min + (prec_max - prec_min) * precision_drive
         precision = float(np.clip(precision, 0.0, 1.0))
-        if current_state in ('meta_awareness', 'redirect_breath'):
-            precision = float(np.clip(precision + 0.1, 0.0, 1.0))
         prescription_l2l3['precision_modulation'] = precision
 
         noise_reduction = 1.0 - (0.6 * precision)
         prescription_l1l2['noise_reduction'] = float(np.clip(noise_reduction, 0.4, 1.0))
 
-        transition_drive = (0.4 * ma) + (0.2 * self.vfe_ema) + (0.3 * recognition_drive)
-        if current_state == 'mind_wandering' and recognition_drive > 0.6:
-            transition_drive = float(np.clip(transition_drive + 0.2, 0.0, 1.0))
-        if current_state in ('meta_awareness', 'redirect_breath'):
-            progress = float(np.clip(sensory.get('dwell_progress', 0.0), 0.0, 1.0))
-            transition_drive = float(np.clip(transition_drive + (0.2 * progress), 0.0, 1.0))
+        transition_drive = 0.5 * (transparency + self.vfe_ema)
         prescription_l1l2['transition_drive'] = float(np.clip(transition_drive, 0.0, 1.0))
 
         # L2 -> L1 enactive bias tied to precision
