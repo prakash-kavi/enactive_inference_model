@@ -3,15 +3,10 @@
 import os
 import logging
 import numpy as np
-import json
-import torch
-
 from utils.meditation_config import (
     STATE_TRANSITION_PROBS,
     PREFERRED_TRANSITION_BIAS,
     STATES,
-    THOUGHTSEEDS,
-    NETWORKS,
     THOUGHTSEED_BASE_ACTIVATIONS,
     META_THOUGHTSEED_WEIGHTS,
     ACTINF_DEFAULTS,
@@ -51,7 +46,7 @@ def get_preferred_transition_probs(experience_level: str, current_state: str) ->
         adjusted[state] = max(0.0, float(prob) + float(bias.get(state, 0.0)))
     return _normalize_probs(adjusted, list(adjusted.keys()))
 
-def get_thoughtseed_targets(state, meta_awareness, experience_level='novice'):
+def get_thoughtseed_targets(state, experience_level='novice'):
     """Get target activation values for each thoughtseed in the specified state."""
     level_map = THOUGHTSEED_BASE_ACTIVATIONS.get(experience_level, {})
     return level_map[state].copy()

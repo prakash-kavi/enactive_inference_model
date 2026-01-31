@@ -23,8 +23,6 @@ class SimulationLogger:
         self.network_activations_history: List[Dict[str, float]] = []
         self.free_energy_history: List[float] = []
         self.precision_history: List[float] = []
-        self.neural_efficiency_history: List[float] = []
-        self.stability_indicators: List[float] = []
         self.dominant_ts_history: List[str] = []
         self.efe_history: List[float] = []
         self.transition_drive_history: List[float] = []
@@ -45,9 +43,7 @@ class SimulationLogger:
                     transition_drive: float,
                     precision: float,
                     efe: float,
-                    dominant_ts: str,
-                    neural_efficiency: Optional[float],
-                    stability_indicator: float):
+                    dominant_ts: str):
         """Log a single simulation timestep."""
         self.state_history.append(current_state)
         self.activations_history.append(activations)
@@ -62,11 +58,6 @@ class SimulationLogger:
         self.precision_history.append(precision)
         self.efe_history.append(efe)
         self.dominant_ts_history.append(dominant_ts)
-        
-        if neural_efficiency is not None:
-            self.neural_efficiency_history.append(neural_efficiency)
-        
-        self.stability_indicators.append(stability_indicator)
 
 
     def record_transition(

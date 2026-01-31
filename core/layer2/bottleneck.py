@@ -44,7 +44,7 @@ class Layer2AttentionalModel(nn.Module):
         self.state_embed_to_bias = nn.Linear(self.state_embed_dim, len(self.networks), bias=False)
         
         for state in self.states:
-            mu_dict = get_thoughtseed_targets(state, 0.5, self.experience_level)
+            mu_dict = get_thoughtseed_targets(state, self.experience_level)
             mu_vec = [mu_dict[ts] for ts in self.thoughtseeds]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32))
             embed = torch.randn(self.state_embed_dim, dtype=torch.float32) * 0.05

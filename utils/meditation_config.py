@@ -180,37 +180,6 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
     }
 }
 
-THOUGHTSEED_TARGET_ADJUSTMENTS = {
-    "breath_focus": {
-        "attend_breath": 0.1,
-        "equanimity": 0.25,
-        "pain_discomfort": 0.0,
-        "pending_tasks": 0.0,
-        "aha_moment": 0.1
-    },
-    "mind_wandering": {
-        "attend_breath": 0.0,
-        "equanimity": -0.05,
-        "pain_discomfort": -0.1,
-        "pending_tasks": -0.1,
-        "aha_moment": 0.3
-    },
-    "meta_awareness": {
-        "attend_breath": 0.1,
-        "equanimity": 0.1,
-        "pain_discomfort": 0.0,
-        "pending_tasks": 0.0,
-        "aha_moment": 0.1
-    },
-    "redirect_breath": {
-        "attend_breath": 0.2,
-        "equanimity": 0.25,
-        "pain_discomfort": -0.1,
-        "pending_tasks": 0.0,
-        "aha_moment": 0.1
-    }
-}
-
 # Meta-awareness: state-aware weighting over thoughtseed activations.
 # Meta-awareness is derived from content (thoughtseeds), not from a state bias.
 META_THOUGHTSEED_WEIGHTS = {

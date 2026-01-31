@@ -8,10 +8,6 @@ from utils.meditation_config import (
     DEFAULTS, NETWORK_PROFILES,
     THOUGHTSEED_BASE_ACTIVATIONS
 )
-from utils.meditation_diagnostics import (
-    compute_neural_efficiency_ratio,
-    compute_dmn_dan_anticorrelation
-)
 from ..layer1.process import Layer1Process
 
 from .logger import SimulationLogger
@@ -57,7 +53,7 @@ class PracticeTrainer:
             self._prior_cache[device] = cached
         return cached
 
-    def _get_prior_vector(self, state: str, meta_awareness: float, device: torch.device) -> torch.Tensor:
+    def _get_prior_vector(self, state: str, device: torch.device) -> torch.Tensor:
         idx = self.state_index[state]
         base = self._get_prior_tensors(device)
         return base[idx]
@@ -177,7 +173,7 @@ class PracticeTrainer:
         dwell_limit = self.process.current_max_dwell
         
         device = self.agent.vae.encoder_net[0].weight.device
-        prior = self._get_prior_vector(current_state, 0.6, device).detach().cpu().numpy()
+        prior = self._get_prior_vector(current_state, device).detach().cpu().numpy()
         activations_np = np.array(prior, dtype=np.float32)
         rng = getattr(self, "rng_np", None)
         init_sigma = float(getattr(self.agent, "init_noise_sigma", 0.0))
@@ -227,7 +223,7 @@ class PracticeTrainer:
         if z.dim() != 1:
             z = z.squeeze(0)
         z = torch.clamp(z, eps, 1.0 - eps)
-        prior_vec = self._get_prior_vector(current_state, meta_awareness, device)
+        prior_vec = self._get_prior_vector(current_state, device)
         prior = torch.clamp(prior_vec, eps, 1.0 - eps)
         kl_div = torch.mean(
             z * torch.log(z / prior) +
@@ -273,9 +269,6 @@ class PracticeTrainer:
         efe_val = getattr(self.agent.monitor, "efe_value", 0.0)
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
         
-        eff = compute_neural_efficiency_ratio(net_acts_float, current_state)
-        stability = compute_dmn_dan_anticorrelation(net_acts_float)
-        
         self.logger.record_step(
             current_state=current_state,
             activations=activations.detach().cpu().numpy(),
@@ -287,9 +280,7 @@ class PracticeTrainer:
             transition_drive=float(transition_drive),
             precision=prec,
             efe=float(efe_val),
-            dominant_ts=str(dom),
-            neural_efficiency=eff,
-            stability_indicator=stability
+            dominant_ts=str(dom)
         )
 
     def _save_results(self, output_dir):
