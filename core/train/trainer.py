@@ -1,13 +1,9 @@
 """Trainer orchestrating BPTT for the Layer 2 attentional model."""
-import os
-import json
 import numpy as np
 import torch
 import torch.optim as optim
-import torch.nn.functional as F
 from typing import Tuple, Dict, Optional
 
-from utils.meditation_utils import ensure_directories
 from utils.meditation_config import (
     DEFAULTS, NETWORK_PROFILES,
     THOUGHTSEED_BASE_ACTIVATIONS,
@@ -85,9 +81,7 @@ class PracticeTrainer:
         self.optimizer.zero_grad()
         current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness = self._initialize_simulation()
         
-        state_transition_patterns = []
-        transition_timestamps = []
-        old_state = current_state
+        last_free_energy = 0.0
         
         bptt_steps = 50
         total_steps = self.agent.timesteps
@@ -99,8 +93,6 @@ class PracticeTrainer:
             steps_to_run = min(bptt_steps, total_steps - t_start)
             
             loss = torch.tensor(0.0, device=self.agent.vae.encoder_net[0].weight.device)
-            state_net_accum = {s: [] for s in self.agent.states}
-            
             for t_sub in range(steps_to_run):
                 t = t_start + t_sub
 
@@ -108,8 +100,14 @@ class PracticeTrainer:
                 
                 state_changed = (process_state != current_state)
                 if state_changed:
-                    self._record_transition(state_transition_patterns, transition_timestamps, t, old_state, process_state, activations, network_acts, 0.0)
-                    old_state = current_state
+                    self._record_transition(
+                        t,
+                        current_state,
+                        process_state,
+                        activations,
+                        network_acts,
+                        last_free_energy
+                    )
                     current_state = process_state
                     current_dwell = 0
                     dwell_limit = self.process.current_max_dwell
@@ -130,6 +128,7 @@ class PracticeTrainer:
                 )
                 
                 loss = loss + free_energy
+                last_free_energy = free_energy.detach().item()
                 
                 self._action_top_down(activations, free_energy, current_state)
                 
@@ -139,16 +138,10 @@ class PracticeTrainer:
                     free_energy, recon_loss, transition_drive, kl_div
                 )
 
-                net_vec = torch.stack([network_acts[net] for net in self.agent.networks])
-                state_net_accum[current_state].append(net_vec)
-                
+            if steps_to_run > 0:
+                loss = loss / float(steps_to_run)
+
             if enable_learning and loss.requires_grad:
-                contrastive_weight = self.agent.params.get("state_contrastive_weight", 0.0)
-                if contrastive_weight > 0.0:
-                    structural_loss = self._compute_structural_loss(state_net_accum)
-                    if structural_loss is not None:
-                        loss = loss + (contrastive_weight * structural_loss)
-                
                 loss.backward()
                 
                 torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_norm=1.0)
@@ -178,7 +171,7 @@ class PracticeTrainer:
             
         # Save results
         if save_outputs:
-            self._save_results(output_dir, state_transition_patterns, transition_timestamps)
+            self._save_results(output_dir)
             
         return self.agent
 
@@ -249,7 +242,6 @@ class PracticeTrainer:
 
         reg_weight = self.agent.params.get("network_target_reg", 0.0)
         target_loss = torch.tensor(0.0, device=device)
-        van_boost_loss = torch.tensor(0.0, device=device)
         if reg_weight > 0.0 and current_state in NETWORK_PROFILES:
             prof = NETWORK_PROFILES[current_state][self.agent.experience_level]
             target_vec = torch.tensor([prof[n] for n in self.agent.networks], device=device, dtype=torch.float32)
@@ -264,43 +256,17 @@ class PracticeTrainer:
     def _action_top_down(self, activations: torch.Tensor, free_energy: torch.Tensor, current_state: str) -> dict:
         return self.agent.prescriptive_action(activations, free_energy, current_state)
 
-    def _compute_structural_loss(self, state_net_accum: Dict[str, list]) -> Optional[torch.Tensor]:
-        state_means = {}
-        for s, vecs in state_net_accum.items():
-            if vecs:
-                state_means[s] = torch.stack(vecs, dim=0).mean(dim=0)
-
-        states = list(state_means.keys())
-        if len(states) < 2:
-            return None
-
-        pair_weights = {
-            ('breath_focus', 'mind_wandering'): 2.0,
-            ('mind_wandering', 'meta_awareness'): 1.5,
-            ('mind_wandering', 'redirect_breath'): 1.5,
-            ('breath_focus', 'meta_awareness'): 1.2,
-            ('breath_focus', 'redirect_breath'): 1.2,
-            ('meta_awareness', 'redirect_breath'): 1.0
-        }
-
-        sims = []
-        for i in range(len(states)):
-            for j in range(i + 1, len(states)):
-                a = state_means[states[i]]
-                b = state_means[states[j]]
-                key = tuple(sorted((states[i], states[j])))
-                weight = pair_weights.get(key, 1.0)
-                sims.append(weight * F.cosine_similarity(a, b, dim=0))
-
-        if not sims:
-            return None
-        return torch.stack(sims).clamp(min=0.0).mean()
-
-    def _record_transition(self, patterns, timestamps, t, old, new, acts, nets, vfe):
+    def _record_transition(self, t, old, new, acts, nets, vfe):
         acts_dict = {ts: acts[i].detach().item() for i, ts in enumerate(self.agent.thoughtseeds)}
         nets_dict = {k: v.detach().item() for k, v in nets.items()}
-        patterns.append((old, new, acts_dict, nets_dict, float(vfe)))
-        timestamps.append(t)
+        self.logger.record_transition(
+            timestamp=t,
+            from_state=old,
+            to_state=new,
+            thoughtseed_activations=acts_dict,
+            network_acts=nets_dict,
+            free_energy=float(vfe)
+        )
 
     def _record_history(self, current_state, activations, meta_awareness, network_acts, free_energy, recon_loss, transition_drive, kl_div):
         # Calculate derived metrics for logging
@@ -308,6 +274,7 @@ class PracticeTrainer:
         
         prec_min, prec_max = self.agent.params.get('l3tol2_precision_range', (0.4, 0.6))
         prec = prec_min + (prec_max - prec_min) * meta_awareness
+        prec = float(np.clip(prec, min(prec_min, prec_max), max(prec_min, prec_max)))
         
         efe_val = getattr(self.agent.monitor, "efe_value", 0.0)
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
@@ -331,5 +298,5 @@ class PracticeTrainer:
             stability_indicator=stability
         )
 
-    def _save_results(self, output_dir, state_transition_patterns, transition_timestamps):
-        self.logger.save_results(self.agent, state_transition_patterns, transition_timestamps, output_dir)
+    def _save_results(self, output_dir):
+        self.logger.save_results(self.agent, output_dir)

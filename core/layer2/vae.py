@@ -65,27 +65,3 @@ class MeditationVAE(nn.Module):
         z = torch.sigmoid(logits)
         recon_x = self.decode(z)
         return recon_x, z, logits
-
-    def compute_loss(self, x, recon_x, logits):
-        """
-        Computes VAE Loss (VFE) for independent-strength latents.
-        Loss = Reconstruction (MSE) + KL Divergence (Bernoulli vs p=0.5)
-        """
-        # 1. Reconstruction Loss (MSE)
-        recon_loss = F.mse_loss(recon_x, x, reduction='sum')
-
-        # 2. KL Divergence (Bernoulli vs p=0.5)
-        z = torch.sigmoid(logits)
-        eps = 1e-6
-        z = torch.clamp(z, eps, 1.0 - eps)
-        prior = 0.5
-        kl_div = torch.sum(
-            z * torch.log(z / prior) +
-            (1 - z) * torch.log((1 - z) / (1 - prior))
-        )
-
-        # Total VFE
-        beta = 1.0
-        loss = recon_loss + beta * kl_div
-
-        return loss, recon_loss, kl_div

@@ -5,7 +5,7 @@ import json
 import logging
 import numpy as np
 import torch
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Iterable, Tuple
 
 class SimulationLogger:
     """Handles logging of simulation steps, transitions, and metrics."""
@@ -22,7 +22,6 @@ class SimulationLogger:
         self.meta_awareness_history: List[float] = []
         self.network_activations_history: List[Dict[str, float]] = []
         self.free_energy_history: List[float] = []
-        self.prediction_error_history: List[float] = []
         self.precision_history: List[float] = []
         self.neural_efficiency_history: List[float] = []
         self.stability_indicators: List[float] = []
@@ -31,9 +30,11 @@ class SimulationLogger:
         self.transition_drive_history: List[float] = []
         self.recon_loss_history: List[float] = []
         self.kl_div_history: List[float] = []
+        self.transition_timestamps: List[int] = []
+        self.state_transition_patterns: List[Tuple[str, str, Dict[str, float], Dict[str, float], float]] = []
 
 
-    def record_step(self, 
+    def record_step(self,
                     current_state: str,
                     activations: np.ndarray,
                     meta_awareness: float,
@@ -54,7 +55,6 @@ class SimulationLogger:
         self.network_activations_history.append(network_acts)
         
         self.free_energy_history.append(free_energy)
-        self.prediction_error_history.append(recon_loss) # recon_loss is used as approx for pred error
         self.recon_loss_history.append(recon_loss)
         self.kl_div_history.append(kl_div)
         
@@ -69,7 +69,28 @@ class SimulationLogger:
         self.stability_indicators.append(stability_indicator)
 
 
-    def save_results(self, agent: Any, state_transition_patterns: List, transition_timestamps: List, output_dir: str = None):
+    def record_transition(
+        self,
+        timestamp: int,
+        from_state: str,
+        to_state: str,
+        thoughtseed_activations: Dict[str, float],
+        network_acts: Dict[str, float],
+        free_energy: float,
+    ) -> None:
+        """Log a state transition event."""
+        self.transition_timestamps.append(int(timestamp))
+        self.state_transition_patterns.append(
+            (from_state, to_state, thoughtseed_activations, network_acts, float(free_energy))
+        )
+
+    def save_results(
+        self,
+        agent: Any,
+        output_dir: str = None,
+        state_transition_patterns: Optional[Iterable] = None,
+        transition_timestamps: Optional[Iterable] = None,
+    ):
         """Save simulation results to disk. Orchestrates aggregation and serialization."""
         out_dir = output_dir or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
         os.makedirs(out_dir, exist_ok=True)
@@ -77,11 +98,11 @@ class SimulationLogger:
 
         # Compute Aggregates internally
         aggregates = self.compute_aggregates(agent)
-        
+
         # Build Transition Stats
         transition_stats = self.build_transition_stats(
-            state_transition_patterns, 
-            transition_timestamps, 
+            list(state_transition_patterns) if state_transition_patterns is not None else self.state_transition_patterns,
+            list(transition_timestamps) if transition_timestamps is not None else self.transition_timestamps,
             aggregates
         )
         
@@ -117,7 +138,7 @@ class SimulationLogger:
         activations_history = self.activations_history
         network_history = self.network_activations_history
         free_energy_history = np.asarray(self.free_energy_history, dtype=float)
-        pred_error_history = np.asarray(self.prediction_error_history, dtype=float)
+        pred_error_history = np.asarray(self.recon_loss_history, dtype=float)
         precision_history = np.asarray(self.precision_history, dtype=float)
         efe_history = np.asarray(self.efe_history, dtype=float)
 
@@ -244,7 +265,7 @@ class SimulationLogger:
 
         params = getattr(agent, "params", {}) if hasattr(agent, "params") else {}
         active_inf_params = {
-        "l3tol2_precision_range": params.get("l3tol2_precision_range"),
+            "l3tol2_precision_range": params.get("l3tol2_precision_range"),
             "kl_beta": params.get("kl_beta"),
             "learning_rate": getattr(agent, "learning_rate", None),
             "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
