@@ -55,12 +55,16 @@ class Layer2AttentionalModel(nn.Module):
         self.blanket = MarkovBlanketL1L2(smoothing=0.7)
         self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.7)
         
+        def _meta_fn(current_state, z):
+            act_dict = {ts: z[i].item() for i, ts in enumerate(self.thoughtseeds)}
+            return compute_meta_awareness(current_state, act_dict)
+
         self.monitor = Layer3Monitor(
-            thoughtseeds=self.thoughtseeds,
             experience_level=self.experience_level,
             efe_ambiguity_weight=self.params.get('efe_ambiguity_weight', 0.4),
+            preference_sharpness=self.params.get('preference_sharpness', 1.3),
             l3tol2_precision_range=self.params.get('l3tol2_precision_range', (0.4, 0.6)),
-            get_meta_awareness_fn=self.get_meta_awareness,
+            get_meta_awareness_fn=_meta_fn,
             blanket_l2l3=self.blanket_l2l3,
             vfe_ema_alpha=self.params['vfe_ema_alpha']
         )
@@ -69,14 +73,6 @@ class Layer2AttentionalModel(nn.Module):
         self.learning_rate = self.params['learning_rate']
         self.z_ema_alpha = 0.75
 
-
-    def get_meta_awareness(self, current_state: str, activations: torch.Tensor) -> float:
-        """Compute meta-awareness (float)."""
-        act_dict = {ts: activations[i].item() for i, ts in enumerate(self.thoughtseeds)}
-        return compute_meta_awareness(
-            state=current_state,
-            thoughtseed_activations=act_dict
-        )
 
     def detect_van_spike(self, current_van: float) -> bool:
         """Detect VAN spike."""

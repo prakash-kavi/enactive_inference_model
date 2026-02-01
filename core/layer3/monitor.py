@@ -3,27 +3,26 @@
 Observes Layer 2 summary signals and emits lightweight control policies.
 """
 
-import torch
 import torch.nn as nn
 import numpy as np
 
 from utils.meditation_config import STATES, NETWORK_PROFILES
-from utils.meditation_utils import get_exit_transition_probs, get_preferred_transition_probs
+from utils.meditation_utils import get_exit_transition_probs
 
 class Layer3Monitor(nn.Module):
     """Layer 3 monitoring + policy module."""
     
-    def __init__(self, thoughtseeds: list,
-                 experience_level: str = 'novice',
+    def __init__(self, experience_level: str = 'novice',
                  efe_ambiguity_weight: float = 0.4,
+                 preference_sharpness: float = 1.3,
                  l3tol2_precision_range: tuple = (0.4, 0.6),
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
         super().__init__()
         
-        self.thoughtseeds = thoughtseeds
         self.experience_level = experience_level
         self.efe_ambiguity_weight = efe_ambiguity_weight
+        self.preference_sharpness = preference_sharpness
         self.l3tol2_precision_range = l3tol2_precision_range
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
@@ -39,7 +38,11 @@ class Layer3Monitor(nn.Module):
         if not base:
             return 0.0
         drive = float(np.clip(transition_drive, 0.0, 1.0))
-        pref = get_preferred_transition_probs(self.experience_level, current_state)
+        sharpness = float(max(self.preference_sharpness, 1.0))
+        pref = {s: float(max(0.0, p)) ** sharpness for s, p in base.items()}
+        total = sum(pref.values())
+        if total > 0.0:
+            pref = {s: v / total for s, v in pref.items()}
         if not pref:
             return 0.0
         pred = dict(base)
@@ -65,8 +68,8 @@ class Layer3Monitor(nn.Module):
 
         return risk + (self.efe_ambiguity_weight * ambiguity)
 
-    def compute_meta_awareness(self, current_state: str, z) -> float:
-        """Compute meta-awareness from Layer 2 thoughtseed dynamics."""
+    def update_meta_awareness(self, current_state: str, z) -> float:
+        """Update meta-awareness from Layer 2 thoughtseed dynamics."""
         raw = 0.0
         if self.get_meta_awareness_fn:
             raw = float(self.get_meta_awareness_fn(current_state, z))
@@ -90,7 +93,6 @@ class Layer3Monitor(nn.Module):
     def evaluate_policies(self) -> dict:
         """Evaluate policies and return prescriptions (non-differentiable)."""
         sensory = self.blanket_l2l3.sensory_states
-        z = sensory['thoughtseed_activations'] # Tensor
         current_state = sensory['current_state']
 
         vfe_val = sensory.get('vfe', None)
@@ -107,12 +109,9 @@ class Layer3Monitor(nn.Module):
             'noise_reduction': 1.0,
         }
         
-        prescription_l2l3 = {
-            'precision_modulation': 0.5
-        }
+        prescription_l2l3 = {}
 
-        ma = float(np.clip(sensory.get('meta_awareness', 0.0), 0.0, 1.0))
-        opacity = float(np.clip(sensory.get('opacity', 1.0 - ma), 0.0, 1.0))
+        opacity = float(np.clip(sensory.get('opacity', 1.0), 0.0, 1.0))
         prec_min, prec_max = self.l3tol2_precision_range
         transparency = 1.0 - opacity
         precision_drive = transparency

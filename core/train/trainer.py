@@ -31,7 +31,6 @@ class PracticeTrainer:
 
     def _init_prior_cache(self):
         self.state_index = {s: i for i, s in enumerate(self.agent.states)}
-        self.ts_index = {ts: i for i, ts in enumerate(self.agent.thoughtseeds)}
 
         num_states = len(self.agent.states)
         num_ts = len(self.agent.thoughtseeds)
@@ -40,16 +39,21 @@ class PracticeTrainer:
             s_idx = self.state_index[s]
             base_map = THOUGHTSEED_BASE_ACTIVATIONS.get(self.agent.experience_level, {}).get(s, {})
             for ts in self.agent.thoughtseeds:
-                t_idx = self.ts_index[ts]
+                t_idx = self.agent.thoughtseeds.index(ts)
                 base[s_idx, t_idx] = float(base_map.get(ts, 0.0))
         self._prior_base_np = base
         self._prior_cache = {}
 
+    @staticmethod
+    def _detach_active_states(active_states: dict) -> None:
+        for key, value in list(active_states.items()):
+            if isinstance(value, torch.Tensor):
+                active_states[key] = value.detach()
+
     def _get_prior_tensors(self, device: torch.device):
         cached = self._prior_cache.get(device)
         if cached is None:
-            base = torch.tensor(self._prior_base_np, device=device)
-            cached = base
+            cached = torch.tensor(self._prior_base_np, device=device)
             self._prior_cache[device] = cached
         return cached
 
@@ -69,7 +73,7 @@ class PracticeTrainer:
              self.process.set_rng(self.rng_np)
 
         self.optimizer.zero_grad()
-        current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness = self._initialize_simulation()
+        current_state, current_dwell, dwell_limit, activations = self._initialize_simulation()
         
         last_free_energy = 0.0
         
@@ -82,7 +86,7 @@ class PracticeTrainer:
             
             steps_to_run = min(bptt_steps, total_steps - t_start)
             
-            loss = torch.tensor(0.0, device=self.agent.vae.encoder_net[0].weight.device)
+            loss = torch.tensor(0.0, device=activations.device)
             for t_sub in range(steps_to_run):
                 t = t_start + t_sub
 
@@ -114,13 +118,13 @@ class PracticeTrainer:
                 )
                 
                 free_energy, recon_loss, kl_div = self._perception_bottom_up(
-                     current_state, activations, meta_awareness, network_acts
+                     current_state, activations, network_acts
                 )
                 
                 loss = loss + free_energy
                 last_free_energy = free_energy.detach().item()
                 
-                self._action_top_down(activations, free_energy, current_state)
+                self.agent.prescriptive_action(activations, free_energy, current_state)
                 
                 transition_drive = float(self.agent.blanket.active_states.get('transition_drive', 0.0))
                 self._record_history(
@@ -146,15 +150,8 @@ class PracticeTrainer:
                 if hasattr(self.agent, "z_ema"):
                     self.agent.z_ema = self.agent.z_ema.detach()
             
-            for k in list(self.agent.blanket.active_states.keys()):
-                v = self.agent.blanket.active_states[k]
-                if isinstance(v, torch.Tensor):
-                    self.agent.blanket.active_states[k] = v.detach()
-                    
-            for k in list(self.agent.blanket_l2l3.active_states.keys()):
-                v = self.agent.blanket_l2l3.active_states[k]
-                if isinstance(v, torch.Tensor):
-                    self.agent.blanket_l2l3.active_states[k] = v.detach()
+            self._detach_active_states(self.agent.blanket.active_states)
+            self._detach_active_states(self.agent.blanket_l2l3.active_states)
             
             activations = activations.detach()
             
@@ -164,14 +161,14 @@ class PracticeTrainer:
             
         return self.agent
 
-    def _initialize_simulation(self) -> Tuple[str, int, int, torch.Tensor, Dict[str, torch.Tensor], float]:
+    def _initialize_simulation(self) -> Tuple[str, int, int, torch.Tensor]:
         """Initialize simulation."""
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
         current_dwell = 0
         dwell_limit = self.process.current_max_dwell
         
-        device = self.agent.vae.encoder_net[0].weight.device
+        device = self.agent.z_ema.device
         prior = self._get_prior_vector(current_state, device).detach().cpu().numpy()
         activations_np = np.array(prior, dtype=np.float32)
         rng = getattr(self, "rng_np", None)
@@ -188,9 +185,9 @@ class PracticeTrainer:
         
         self.agent.blanket_l2l3.reset()
         
-        meta_awareness = self.agent.get_meta_awareness(current_state, activations)
+        self.agent.monitor.update_meta_awareness(current_state, activations)
         
-        return current_state, current_dwell, dwell_limit, activations, network_acts, meta_awareness
+        return current_state, current_dwell, dwell_limit, activations
 
     def _update_latents(self, current_state: str, current_dwell: int, dwell_limit: int,
                         activations: torch.Tensor, observed_networks: Dict[str, torch.Tensor],
@@ -202,19 +199,17 @@ class PracticeTrainer:
             'current_state': current_state,
             'dwell_progress': (current_dwell / max(1, dwell_limit)) if dwell_limit else 0.0
         })
-        meta_awareness = self.agent.monitor.compute_meta_awareness(current_state, activations)
+        meta_awareness = self.agent.monitor.update_meta_awareness(current_state, activations)
 
         return meta_awareness, activations
 
-    def _perception_bottom_up(self, current_state: str, activations: torch.Tensor, meta_awareness: float,
+    def _perception_bottom_up(self, current_state: str, activations: torch.Tensor,
                               observed_networks: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         recon_x = self.agent.decode_with_state(activations, current_state)
         
-        device = self.agent.vae.encoder_net[0].weight.device
+        device = activations.device
         
         x = torch.stack([observed_networks[net] for net in self.agent.networks]).to(device)
-        recon_x = recon_x.to(device)
-
         recon_loss = torch.nn.functional.mse_loss(recon_x, x, reduction='mean')
 
         eps = 1e-6
@@ -241,9 +236,6 @@ class PracticeTrainer:
 
         free_energy = loss
         return free_energy, recon_loss, kl_div
-
-    def _action_top_down(self, activations: torch.Tensor, free_energy: torch.Tensor, current_state: str) -> dict:
-        return self.agent.prescriptive_action(activations, free_energy, current_state)
 
     def _record_transition(self, t, old, new, acts, nets, vfe):
         acts_dict = {ts: acts[i].detach().item() for i, ts in enumerate(self.agent.thoughtseeds)}

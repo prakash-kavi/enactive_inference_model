@@ -1,8 +1,8 @@
 """Small utility helpers used across the simulation."""
 
+import numpy as np
 import os
 import logging
-import numpy as np
 from utils.meditation_config import (
     STATE_TRANSITION_PROBS,
     STATES,
@@ -11,15 +11,6 @@ from utils.meditation_config import (
     ACTINF_DEFAULTS,
     ACTINF_EXPERT_OVERRIDES,
 )
-
-def ensure_directories(base_dir=None):
-    """Create `data/` and `plots/` under `base_dir` (or package root)."""
-    if not base_dir:
-        base_dir = os.getcwd()
-    base_dir = os.fspath(base_dir)
-    os.makedirs(os.path.join(base_dir, "data"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
-    logging.info("Directories created/verified: data/, plots/")
 
 def _normalize_probs(probs: dict, states: list) -> dict:
     vals = {s: max(0.0, float(probs.get(s, 0.0))) for s in states}
@@ -37,6 +28,15 @@ def get_exit_transition_probs(experience_level: str, current_state: str) -> dict
 def get_preferred_transition_probs(experience_level: str, current_state: str) -> dict:
     """Return preferred next-state distribution P*(s'|s)."""
     return get_exit_transition_probs(experience_level, current_state)
+
+def ensure_directories(base_dir=None):
+    """Create `data/` and `plots/` under `base_dir` (or package root)."""
+    if not base_dir:
+        base_dir = os.getcwd()
+    base_dir = os.fspath(base_dir)
+    os.makedirs(os.path.join(base_dir, "data"), exist_ok=True)
+    os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
+    logging.info("Directories created/verified: data/, plots/")
 
 def get_thoughtseed_targets(state, experience_level='novice'):
     """Get target activation values for each thoughtseed in the specified state."""

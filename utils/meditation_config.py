@@ -56,12 +56,12 @@ NETWORK_PROFILES = {
         "expert": {"DMN": 0.65, "VAN": 0.50, "DAN": 0.40, "FPN": 0.50}
     },
     "meta_awareness": {
-        "novice": {"DMN": 0.45, "VAN": 0.78, "DAN": 0.45, "FPN": 0.52},
-        "expert": {"DMN": 0.40, "VAN": 0.70, "DAN": 0.45, "FPN": 0.50}
+        "novice": {"DMN": 0.45, "VAN": 0.85, "DAN": 0.42, "FPN": 0.56},
+        "expert": {"DMN": 0.40, "VAN": 0.78, "DAN": 0.42, "FPN": 0.55}
     },
     "redirect_breath": {
-        "novice": {"DMN": 0.40, "VAN": 0.55, "DAN": 0.72, "FPN": 0.78},
-        "expert": {"DMN": 0.35, "VAN": 0.55, "DAN": 0.70, "FPN": 0.75}
+        "novice": {"DMN": 0.40, "VAN": 0.50, "DAN": 0.78, "FPN": 0.74},
+        "expert": {"DMN": 0.35, "VAN": 0.50, "DAN": 0.78, "FPN": 0.70}
     }
 }
 
@@ -164,7 +164,6 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
 }
 
 # Meta-awareness: state-aware weighting over thoughtseed activations.
-# Meta-awareness is derived from content (thoughtseeds), not from a state bias.
 META_THOUGHTSEED_WEIGHTS = {
     "breath_focus": {
         "attend_breath": 0.25,
@@ -197,6 +196,7 @@ ACTINF_DEFAULTS = {
     "vfe_ema_alpha": 0.9,
     "kl_beta": 1.0,
     "efe_ambiguity_weight": 0.4,
+    "preference_sharpness": 1.3,
     "l3tol2_precision_range": (0.4, 0.6),
     "network_target_reg": 0.05,
 }
