@@ -3,7 +3,8 @@
 import argparse
 import numpy as np
 
-from core.layer1.process import StateMachine
+from core.layer1.state_machine import StateMachine
+from core.layer1.layer1_config import L1_GENERATIVE_COSTS
 from utils.meditation_config import DEFAULTS, STATES
 
 
@@ -30,7 +31,8 @@ def _summarize(values, dt):
 
 def run(level, steps, seed, transition_drive):
     dt = DEFAULTS["DEFAULT_DT"]
-    sm = StateMachine(level, dt, seed)
+    costs = L1_GENERATIVE_COSTS[level]
+    sm = StateMachine(level, dt, seed, generative_costs=costs)
 
     dwell_steps_by_state = {s: [] for s in STATES}
     limit_steps_by_state = {s: [] for s in STATES}

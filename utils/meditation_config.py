@@ -7,6 +7,7 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Common definitions
 # -----------------------------------------------------------------------------
+EXPERIENCE_LEVELS = ['novice', 'expert']
 STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_attention']
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
@@ -18,84 +19,8 @@ DEFAULTS = {
     'REFRACTORY_SEC': 0.4,
 }
 
-# -----------------------------------------------------------------------------
-# Layer 1: Generative process (MVOU) and state dynamics
-# -----------------------------------------------------------------------------
-# Base Multivariate Ornstein-Uhlenbeck (OU) coupling terms per state (dX = -Theta * dt).
-# Positive = Inhibition/Restoring force (keeps activation stable).
-# Negative = Synergy/Divergent force (drives co-activation).
-THETA_BASE = {
-    'breath_focus': {
-        ('DMN', 'DAN'): 0.50, ('DAN', 'DMN'): 0.50,
-        ('DAN', 'FPN'): 0.15, ('FPN', 'DAN'): 0.15
-    },
-    'mind_wandering': {
-        ('DMN', 'VAN'): -0.30, ('VAN', 'DMN'): -0.30,
-        ('DMN', 'FPN'): -0.15, ('FPN', 'DMN'): -0.15
-    },
-    'meta_awareness': {
-        ('VAN', 'FPN'): -0.75, ('FPN', 'VAN'): -0.75,
-        ('DMN', 'DAN'): -0.25, ('DAN', 'DMN'): -0.25,
-        ('DMN', 'FPN'): -0.25, ('FPN', 'DMN'): -0.25
-    },
-    'redirect_attention': {
-        ('DMN', 'DAN'): -0.40, ('DAN', 'DMN'): -0.40,
-        ('DMN', 'FPN'): -0.30, ('FPN', 'DMN'): -0.30,
-        ('DAN', 'FPN'): 0.40, ('FPN', 'DAN'): 0.40
-    }
-}
-
-# Network profiles for mediative states (used for agent learning initialization)
-NETWORK_PROFILES = {
-    "breath_focus": {
-        "novice": {"DMN": 0.50, "VAN": 0.45, "DAN": 0.58, "FPN": 0.60},
-        "expert": {"DMN": 0.40, "VAN": 0.45, "DAN": 0.60, "FPN": 0.65}
-    },
-    "mind_wandering": {
-        "novice": {"DMN": 0.82, "VAN": 0.35, "DAN": 0.30, "FPN": 0.33},
-        "expert": {"DMN": 0.65, "VAN": 0.50, "DAN": 0.40, "FPN": 0.50}
-    },
-    "meta_awareness": {
-        "novice": {"DMN": 0.45, "VAN": 0.85, "DAN": 0.42, "FPN": 0.56},
-        "expert": {"DMN": 0.40, "VAN": 0.78, "DAN": 0.42, "FPN": 0.55}
-    },
-    "redirect_attention": {
-        "novice": {"DMN": 0.40, "VAN": 0.50, "DAN": 0.78, "FPN": 0.74},
-        "expert": {"DMN": 0.35, "VAN": 0.50, "DAN": 0.78, "FPN": 0.70}
-    }
-}
-
-# Dwell Times (Seconds) for State Transitions (level-specific)
-DWELL_TIMES = {
-    'expert': {
-        'breath_focus': (15, 30),
-        'mind_wandering': (10, 20),
-        'meta_awareness': (1, 4),
-        'redirect_attention': (1, 4)
-    },
-    'novice': {
-        'breath_focus': (5, 15),
-        'mind_wandering': (20, 40),
-        'meta_awareness': (2, 6),
-        'redirect_attention': (2, 5)
-    }
-}
-
-# Exit transition probabilities (self-transitions handled by dwell)
-STATE_TRANSITION_PROBS = {
-    'expert': {
-        'breath_focus': {'mind_wandering': 0.35, 'meta_awareness': 0.45, 'redirect_attention': 0.20},
-        'mind_wandering': {'breath_focus': 0.18, 'meta_awareness': 0.56, 'redirect_attention': 0.26},
-        'meta_awareness': {'redirect_attention': 0.85, 'breath_focus': 0.14, 'mind_wandering': 0.01},
-        'redirect_attention': {'breath_focus': 0.59, 'meta_awareness': 0.34, 'mind_wandering': 0.07},
-    },
-    'novice': {
-        'breath_focus': {'mind_wandering': 0.90, 'meta_awareness': 0.08, 'redirect_attention': 0.02},
-        'mind_wandering': {'meta_awareness': 0.68, 'redirect_attention': 0.17, 'breath_focus': 0.15},
-        'meta_awareness': {'redirect_attention': 0.79, 'breath_focus': 0.15, 'mind_wandering': 0.06},
-        'redirect_attention': {'breath_focus': 0.88, 'mind_wandering': 0.07, 'meta_awareness': 0.05},
-    }
-}
+# Numerical stability epsilon
+EPS = 1e-6
 
 # -----------------------------------------------------------------------------
 # Layer 2: Thoughtseed priors and meta-awareness mapping
@@ -195,9 +120,25 @@ ACTINF_DEFAULTS = {
     "z_noise_sigma": 0.05,
     "vfe_ema_alpha": 0.9,
     "kl_beta": 1.0,
+    "l2_vi_steps": 2,
+    "l2_vi_lr": 0.24,
+    "l2_vi_obs_weight": 1.0,
+    "l2_vi_prior_weight": 1.0,
+    "l2_vi_sensory_weight": 0.35,
+    "l2_vi_temporal_weight": 0.12,
+    "l2_vi_grad_clip": 5.0,
     "efe_ambiguity_weight": 0.4,
     "efe_cycle_strength": 0.35,
     "efe_gain": 0.35,
+    "policy_horizon": 1,
+    "policy_temperature": 1.0,
+    "policy_temperature_by_state": {
+        "breath_focus": 1.8,
+        "mind_wandering": 1.15,
+        "meta_awareness": 0.95,
+        "redirect_attention": 1.0,
+    },
+    "policy_horizon_discount": 0.6,
     "l3tol2_precision_range": (0.4, 0.6),
     "network_target_reg": 0.05,
 }
@@ -206,5 +147,11 @@ ACTINF_EXPERT_OVERRIDES = {
     "learning_rate": 0.02,
     "efe_ambiguity_weight": 0.35,
     "kl_beta": 0.55,
-    "z_noise_sigma": 0.02
+    "z_noise_sigma": 0.02,
+    "policy_temperature_by_state": {
+        "breath_focus": 1.05,
+        "mind_wandering": 0.95,
+        "meta_awareness": 0.85,
+        "redirect_attention": 0.9,
+    },
 }

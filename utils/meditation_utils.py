@@ -4,13 +4,13 @@ import numpy as np
 import os
 import logging
 from utils.meditation_config import (
-    STATE_TRANSITION_PROBS,
     STATES,
     THOUGHTSEED_BASE_ACTIVATIONS,
     META_THOUGHTSEED_WEIGHTS,
     ACTINF_DEFAULTS,
     ACTINF_EXPERT_OVERRIDES,
 )
+from core.layer1.layer1_config import STATE_TRANSITION_PROBS
 
 def _normalize_probs(probs: dict, states: list) -> dict:
     vals = {s: max(0.0, float(probs.get(s, 0.0))) for s in states}

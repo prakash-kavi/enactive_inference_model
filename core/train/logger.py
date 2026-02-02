@@ -27,11 +27,25 @@ class SimulationLogger:
         self.efe_history: List[float] = []
         self.efe_risk_history: List[float] = []
         self.efe_ambiguity_history: List[float] = []
+        self.selected_policy_history: List[str] = []
+        self.policy_confidence_history: List[float] = []
+        self.policy_entropy_history: List[float] = []
+        self.policy_posterior_history: List[Dict[str, float]] = []
+        self.mw_burden_history: List[float] = []
+        self.transition_hazard_history: List[float] = []
+        self.activation_burden_component_history: List[float] = []
+        self.coupling_burden_component_history: List[float] = []
         self.transition_drive_history: List[float] = []
         self.recon_loss_history: List[float] = []
         self.kl_div_history: List[float] = []
+        self.latent_reconstruction_history: List[float] = []
+        self.latent_prior_kl_history: List[float] = []
+        self.latent_sensory_consistency_history: List[float] = []
+        self.latent_temporal_consistency_history: List[float] = []
+        self.latent_vfe_total_history: List[float] = []
         self.transition_timestamps: List[int] = []
         self.state_transition_patterns: List[Tuple[str, str, Dict[str, float], Dict[str, float], float]] = []
+        self.ra_reorienting_success_rate: float = 0.0
 
 
     def record_step(self,
@@ -47,6 +61,19 @@ class SimulationLogger:
                     efe: float,
                     efe_risk: float,
                     efe_ambiguity: float,
+                    selected_policy: str,
+                    policy_confidence: float,
+                    policy_entropy: float,
+                    policy_posterior: Dict[str, float],
+                    mw_burden: float,
+                    transition_hazard: float,
+                    activation_burden_component: float,
+                    coupling_burden_component: float,
+                    latent_reconstruction: float,
+                    latent_prior_kl: float,
+                    latent_sensory_consistency: float,
+                    latent_temporal_consistency: float,
+                    latent_vfe_total: float,
                     dominant_ts: str):
         """Log a single simulation timestep."""
         self.state_history.append(current_state)
@@ -63,6 +90,19 @@ class SimulationLogger:
         self.efe_history.append(efe)
         self.efe_risk_history.append(efe_risk)
         self.efe_ambiguity_history.append(efe_ambiguity)
+        self.selected_policy_history.append(selected_policy)
+        self.policy_confidence_history.append(policy_confidence)
+        self.policy_entropy_history.append(policy_entropy)
+        self.policy_posterior_history.append(policy_posterior)
+        self.mw_burden_history.append(mw_burden)
+        self.transition_hazard_history.append(transition_hazard)
+        self.activation_burden_component_history.append(activation_burden_component)
+        self.coupling_burden_component_history.append(coupling_burden_component)
+        self.latent_reconstruction_history.append(latent_reconstruction)
+        self.latent_prior_kl_history.append(latent_prior_kl)
+        self.latent_sensory_consistency_history.append(latent_sensory_consistency)
+        self.latent_temporal_consistency_history.append(latent_temporal_consistency)
+        self.latent_vfe_total_history.append(latent_vfe_total)
         self.dominant_ts_history.append(dominant_ts)
 
 
@@ -112,7 +152,8 @@ class SimulationLogger:
         
         try:
             rel = os.path.relpath(out_dir, start=os.getcwd())
-        except Exception:
+        except (ValueError, OSError) as e:
+            # ValueError on Windows with different drives, OSError for permission issues
             rel = out_dir
         logging.info("  - JSON parameter files saved to %s directory", rel)
 
@@ -128,6 +169,17 @@ class SimulationLogger:
         efe_means = {}
         efe_risk_means = {}
         efe_ambiguity_means = {}
+        policy_confidence_means = {}
+        policy_entropy_means = {}
+        mw_burden_means = {}
+        transition_hazard_means = {}
+        activation_burden_component_means = {}
+        coupling_burden_component_means = {}
+        latent_recon_means = {}
+        latent_prior_kl_means = {}
+        latent_sensory_means = {}
+        latent_temporal_means = {}
+        latent_total_means = {}
 
         state_indices = {
             state: [j for j, s in enumerate(self.state_history) if s == state]
@@ -142,6 +194,17 @@ class SimulationLogger:
         efe_history = np.asarray(self.efe_history, dtype=float)
         efe_risk_history = np.asarray(self.efe_risk_history, dtype=float)
         efe_ambiguity_history = np.asarray(self.efe_ambiguity_history, dtype=float)
+        policy_confidence_history = np.asarray(self.policy_confidence_history, dtype=float)
+        policy_entropy_history = np.asarray(self.policy_entropy_history, dtype=float)
+        mw_burden_history = np.asarray(self.mw_burden_history, dtype=float)
+        transition_hazard_history = np.asarray(self.transition_hazard_history, dtype=float)
+        activation_burden_component_history = np.asarray(self.activation_burden_component_history, dtype=float)
+        coupling_burden_component_history = np.asarray(self.coupling_burden_component_history, dtype=float)
+        latent_recon_history = np.asarray(self.latent_reconstruction_history, dtype=float)
+        latent_prior_kl_history = np.asarray(self.latent_prior_kl_history, dtype=float)
+        latent_sensory_history = np.asarray(self.latent_sensory_consistency_history, dtype=float)
+        latent_temporal_history = np.asarray(self.latent_temporal_consistency_history, dtype=float)
+        latent_total_history = np.asarray(self.latent_vfe_total_history, dtype=float)
 
         for state in states:
             indices = state_indices.get(state, [])
@@ -176,6 +239,28 @@ class SimulationLogger:
                 efe_risk_means[state] = float(np.mean(efe_risk_history[indices]))
             if efe_ambiguity_history.size == len(self.state_history):
                 efe_ambiguity_means[state] = float(np.mean(efe_ambiguity_history[indices]))
+            if policy_confidence_history.size == len(self.state_history):
+                policy_confidence_means[state] = float(np.mean(policy_confidence_history[indices]))
+            if policy_entropy_history.size == len(self.state_history):
+                policy_entropy_means[state] = float(np.mean(policy_entropy_history[indices]))
+            if mw_burden_history.size == len(self.state_history):
+                mw_burden_means[state] = float(np.mean(mw_burden_history[indices]))
+            if transition_hazard_history.size == len(self.state_history):
+                transition_hazard_means[state] = float(np.mean(transition_hazard_history[indices]))
+            if activation_burden_component_history.size == len(self.state_history):
+                activation_burden_component_means[state] = float(np.mean(activation_burden_component_history[indices]))
+            if coupling_burden_component_history.size == len(self.state_history):
+                coupling_burden_component_means[state] = float(np.mean(coupling_burden_component_history[indices]))
+            if latent_recon_history.size == len(self.state_history):
+                latent_recon_means[state] = float(np.mean(latent_recon_history[indices]))
+            if latent_prior_kl_history.size == len(self.state_history):
+                latent_prior_kl_means[state] = float(np.mean(latent_prior_kl_history[indices]))
+            if latent_sensory_history.size == len(self.state_history):
+                latent_sensory_means[state] = float(np.mean(latent_sensory_history[indices]))
+            if latent_temporal_history.size == len(self.state_history):
+                latent_temporal_means[state] = float(np.mean(latent_temporal_history[indices]))
+            if latent_total_history.size == len(self.state_history):
+                latent_total_means[state] = float(np.mean(latent_total_history[indices]))
 
         aggregates["activation_means_by_state"] = activation_means
         aggregates["average_network_activations_by_state"] = network_means
@@ -185,6 +270,17 @@ class SimulationLogger:
         aggregates["average_efe_by_state"] = efe_means
         aggregates["average_efe_risk_by_state"] = efe_risk_means
         aggregates["average_efe_ambiguity_by_state"] = efe_ambiguity_means
+        aggregates["average_policy_confidence_by_state"] = policy_confidence_means
+        aggregates["average_policy_entropy_by_state"] = policy_entropy_means
+        aggregates["average_mw_burden_by_state"] = mw_burden_means
+        aggregates["average_transition_hazard_by_state"] = transition_hazard_means
+        aggregates["average_activation_burden_component_by_state"] = activation_burden_component_means
+        aggregates["average_coupling_burden_component_by_state"] = coupling_burden_component_means
+        aggregates["average_latent_reconstruction_by_state"] = latent_recon_means
+        aggregates["average_latent_prior_kl_by_state"] = latent_prior_kl_means
+        aggregates["average_latent_sensory_consistency_by_state"] = latent_sensory_means
+        aggregates["average_latent_temporal_consistency_by_state"] = latent_temporal_means
+        aggregates["average_latent_vfe_total_by_state"] = latent_total_means
 
         return aggregates
 
@@ -199,12 +295,20 @@ class SimulationLogger:
                 'network_acts': {k: float(v) for k, v in net_dict.items()},
                 'free_energy': float(fe)
             })
+        ra_exits = [row for row in serial_patterns if row.get('from') == 'redirect_attention']
+        if ra_exits:
+            ra_to_bf = [row for row in ra_exits if row.get('to') == 'breath_focus']
+            ra_success_rate = float(len(ra_to_bf) / max(1, len(ra_exits)))
+        else:
+            ra_success_rate = 0.0
+        self.ra_reorienting_success_rate = ra_success_rate
 
         return {
             'transition_timestamps': [int(x) for x in transition_timestamps],
             'state_transition_patterns': serial_patterns,
             'average_network_activations_by_state': aggregates.get('average_network_activations_by_state', {}),
             'average_free_energy_by_state': aggregates.get('average_free_energy_by_state', {}),
+            'ra_reorienting_success_rate': ra_success_rate,
         }
 
     def save_json(self, agent: Any, output_dir: str, aggregates: Dict):
@@ -262,9 +366,22 @@ class SimulationLogger:
             "efe_history": self.efe_history,
             "efe_risk_history": self.efe_risk_history,
             "efe_ambiguity_history": self.efe_ambiguity_history,
+            "selected_policy_history": self.selected_policy_history,
+            "policy_confidence_history": self.policy_confidence_history,
+            "policy_entropy_history": self.policy_entropy_history,
+            "policy_posterior_history": convert(self.policy_posterior_history),
+            "mw_burden_history": self.mw_burden_history,
+            "transition_hazard_history": self.transition_hazard_history,
+            "activation_burden_component_history": self.activation_burden_component_history,
+            "coupling_burden_component_history": self.coupling_burden_component_history,
             "transition_drive_history": self.transition_drive_history,
             "recon_loss_history": self.recon_loss_history,
             "kl_div_history": self.kl_div_history,
+            "latent_reconstruction_history": self.latent_reconstruction_history,
+            "latent_prior_kl_history": self.latent_prior_kl_history,
+            "latent_sensory_consistency_history": self.latent_sensory_consistency_history,
+            "latent_temporal_consistency_history": self.latent_temporal_consistency_history,
+            "latent_vfe_total_history": self.latent_vfe_total_history,
             "state_history": self.state_history,
             "dominant_ts_history": self.dominant_ts_history,
         }
@@ -276,14 +393,37 @@ class SimulationLogger:
         active_inf_params = {
             "l3tol2_precision_range": params.get("l3tol2_precision_range"),
             "kl_beta": params.get("kl_beta"),
+            "l2_vi_steps": params.get("l2_vi_steps"),
+            "l2_vi_lr": params.get("l2_vi_lr"),
+            "l2_vi_obs_weight": params.get("l2_vi_obs_weight"),
+            "l2_vi_prior_weight": params.get("l2_vi_prior_weight"),
+            "l2_vi_sensory_weight": params.get("l2_vi_sensory_weight"),
+            "l2_vi_temporal_weight": params.get("l2_vi_temporal_weight"),
+            "l2_vi_grad_clip": params.get("l2_vi_grad_clip"),
             "efe_ambiguity_weight": params.get("efe_ambiguity_weight"),
             "efe_cycle_strength": params.get("efe_cycle_strength"),
             "efe_gain": params.get("efe_gain"),
+            "policy_horizon": params.get("policy_horizon"),
+            "policy_temperature": params.get("policy_temperature"),
+            "policy_temperature_by_state": params.get("policy_temperature_by_state"),
+            "policy_horizon_discount": params.get("policy_horizon_discount"),
             "learning_rate": getattr(agent, "learning_rate", None),
             "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
             "average_efe_by_state": aggregates.get("average_efe_by_state", {}),
             "average_efe_risk_by_state": aggregates.get("average_efe_risk_by_state", {}),
             "average_efe_ambiguity_by_state": aggregates.get("average_efe_ambiguity_by_state", {}),
+            "average_policy_confidence_by_state": aggregates.get("average_policy_confidence_by_state", {}),
+            "average_policy_entropy_by_state": aggregates.get("average_policy_entropy_by_state", {}),
+            "average_mw_burden_by_state": aggregates.get("average_mw_burden_by_state", {}),
+            "average_transition_hazard_by_state": aggregates.get("average_transition_hazard_by_state", {}),
+            "average_activation_burden_component_by_state": aggregates.get("average_activation_burden_component_by_state", {}),
+            "average_coupling_burden_component_by_state": aggregates.get("average_coupling_burden_component_by_state", {}),
+            "ra_reorienting_success_rate": self.ra_reorienting_success_rate,
+            "average_latent_reconstruction_by_state": aggregates.get("average_latent_reconstruction_by_state", {}),
+            "average_latent_prior_kl_by_state": aggregates.get("average_latent_prior_kl_by_state", {}),
+            "average_latent_sensory_consistency_by_state": aggregates.get("average_latent_sensory_consistency_by_state", {}),
+            "average_latent_temporal_consistency_by_state": aggregates.get("average_latent_temporal_consistency_by_state", {}),
+            "average_latent_vfe_total_by_state": aggregates.get("average_latent_vfe_total_by_state", {}),
             "average_prediction_error_by_state": aggregates.get("average_prediction_error_by_state", {}),
             "average_precision_by_state": aggregates.get("average_precision_by_state", {}),
         }

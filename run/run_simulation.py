@@ -12,7 +12,7 @@ import numpy as np
 from core.layer2.bottleneck import Layer2AttentionalModel
 from utils.meditation_utils import ensure_directories
 from core.train.trainer import PracticeTrainer
-from core.layer1.process import Layer1Process
+from core.layer1.generative_process import Layer1Process
 
 def load_trained_attractors(level: str, training_dir: str = "data/training") -> dict:
     """Load mean state-network attractors from training convergence summary."""

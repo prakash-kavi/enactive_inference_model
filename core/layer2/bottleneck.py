@@ -7,6 +7,7 @@ from typing import Optional, Dict, List
 
 from utils.meditation_config import THOUGHTSEEDS, STATES, NETWORKS, DEFAULTS
 from utils.meditation_utils import get_actinf_params, get_thoughtseed_targets, compute_meta_awareness
+from ..generative_model import ObservationModel
 from ..blankets.l1_l2 import MarkovBlanketL1L2
 from ..blankets.l2_l3 import MarkovBlanketL2L3
 from ..layer3.monitor import Layer3Monitor
@@ -64,6 +65,10 @@ class Layer2AttentionalModel(nn.Module):
             efe_ambiguity_weight=self.params['efe_ambiguity_weight'],
             efe_cycle_strength=self.params['efe_cycle_strength'],
             efe_gain=self.params['efe_gain'],
+            policy_horizon=self.params['policy_horizon'],
+            policy_temperature=self.params['policy_temperature'],
+            policy_temperature_by_state=self.params['policy_temperature_by_state'],
+            policy_horizon_discount=self.params['policy_horizon_discount'],
             l3tol2_precision_range=self.params['l3tol2_precision_range'],
             get_meta_awareness_fn=_meta_fn,
             blanket_l2l3=self.blanket_l2l3,
@@ -73,6 +78,14 @@ class Layer2AttentionalModel(nn.Module):
         self.init_noise_sigma = float(self.params.get('z_noise_sigma', 0.0))
         self.learning_rate = self.params['learning_rate']
         self.z_ema_alpha = 0.75
+        self.obs_model = ObservationModel(eps=1e-6)
+        self.last_latent_vfe_terms = {
+            'reconstruction': 0.0,
+            'prior_kl': 0.0,
+            'sensory_consistency': 0.0,
+            'temporal_consistency': 0.0,
+            'total': 0.0,
+        }
 
 
     def detect_van_spike(self, current_van: float) -> bool:
@@ -124,6 +137,80 @@ class Layer2AttentionalModel(nn.Module):
             decoded = decoded + bias
         return torch.clamp(decoded, 0.0, 1.0)
 
+    def _latent_variational_inference(
+        self,
+        current_state: str,
+        current_activations: torch.Tensor,
+        observed_networks: Dict[str, torch.Tensor],
+        sensory_inference: Optional[torch.Tensor],
+        precision_modulation: float,
+    ) -> torch.Tensor:
+        """Run explicit variational updates over latent thoughtseed activations."""
+        device = current_activations.device
+        clip_min = DEFAULTS['ACTIVATION_CLIP_MIN']
+        clip_max = DEFAULTS['ACTIVATION_CLIP_MAX']
+
+        observed_vec = torch.stack([
+            observed_networks.get(net, torch.tensor(0.0, device=device))
+            for net in self.networks
+        ]).to(device)
+
+        z_prev = torch.clamp(current_activations.detach(), clip_min, clip_max)
+        if sensory_inference is None:
+            sensory_target = z_prev
+        else:
+            sensory_target = torch.clamp(sensory_inference.detach(), clip_min, clip_max)
+        prior_target = torch.clamp(self.mu_params[current_state].detach(), clip_min, clip_max)
+
+        z_init = 0.5 * z_prev + 0.5 * sensory_target
+        z_init = ((1.0 - (0.5 * precision_modulation)) * z_init) + ((0.5 * precision_modulation) * prior_target)
+        z_var = torch.clamp(z_init, clip_min, clip_max).requires_grad_(True)
+
+        vi_steps = max(1, int(self.params['l2_vi_steps']))
+        vi_lr = float(self.params['l2_vi_lr'])
+        vi_grad_clip = float(self.params['l2_vi_grad_clip'])
+        obs_w = float(self.params['l2_vi_obs_weight'])
+        prior_w = float(self.params['l2_vi_prior_weight'])
+        sensory_w = float(self.params['l2_vi_sensory_weight']) * (1.0 - precision_modulation)
+        temporal_w = float(self.params['l2_vi_temporal_weight'])
+
+        final_terms = None
+        for _ in range(vi_steps):
+            recon_x = self.decode_with_state(z_var, current_state)
+            terms = self.obs_model.latent_variational_terms(
+                z=z_var,
+                prior=prior_target,
+                recon_x=recon_x,
+                observed_x=observed_vec,
+                precision=precision_modulation,
+                sensory_target=sensory_target,
+                temporal_target=z_prev,
+                obs_weight=obs_w,
+                prior_weight=prior_w,
+                sensory_weight=sensory_w,
+                temporal_weight=temporal_w,
+            )
+            final_terms = terms
+            grad = torch.autograd.grad(terms.total, z_var, retain_graph=False, create_graph=False)[0]
+            if vi_grad_clip > 0.0:
+                grad = torch.clamp(grad, -vi_grad_clip, vi_grad_clip)
+            with torch.no_grad():
+                z_var = torch.clamp(z_var - (vi_lr * grad), clip_min, clip_max)
+            z_var.requires_grad_(True)
+
+        if final_terms is None:
+            raise RuntimeError('Latent VI did not produce terms')
+
+        self.last_latent_vfe_terms = {
+            'reconstruction': float(final_terms.reconstruction.detach().item()),
+            'prior_kl': float(final_terms.prior_kl.detach().item()),
+            'sensory_consistency': float(final_terms.sensory_consistency.detach().item()),
+            'temporal_consistency': float(final_terms.temporal_consistency.detach().item()),
+            'total': float(final_terms.total.detach().item()),
+        }
+
+        return z_var.detach()
+
     def update_thoughtseed_dynamics(self, current_activations: torch.Tensor, 
                                    current_state: str, current_dwell: int, dwell_limit: int,
                                    observed_networks: Dict[str, torch.Tensor],
@@ -132,7 +219,6 @@ class Layer2AttentionalModel(nn.Module):
         van = observed_networks.get('VAN', torch.tensor(0.0)).item()
         van_spike_detected = self.detect_van_spike(van)
 
-        mu_prior = self.mu_params[current_state]
         progress = 0.0
         if dwell_limit > 0:
             progress = min(1.0, current_dwell / max(1, dwell_limit))
@@ -141,13 +227,13 @@ class Layer2AttentionalModel(nn.Module):
             prec_mod = prec_mod.item()
         prec_mod = float(np.clip(prec_mod, 0.0, 1.0))
 
-        if sensory_inference is None:
-            z_inferred = mu_prior
-        else:
-            w_prior = 0.2 + 0.6 * prec_mod + 0.2 * progress
-            w_prior = max(0.15, min(w_prior, 0.85))
-            z_inferred = (w_prior * mu_prior) + ((1 - w_prior) * sensory_inference)
-        z_inferred = torch.clamp(z_inferred, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+        z_inferred = self._latent_variational_inference(
+            current_state=current_state,
+            current_activations=current_activations,
+            observed_networks=observed_networks,
+            sensory_inference=sensory_inference,
+            precision_modulation=prec_mod,
+        )
 
         # Dwell-scheduled latent noise for richer dynamics
         noise_sigma = self.params['z_noise_sigma']

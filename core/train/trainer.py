@@ -5,11 +5,12 @@ import torch.optim as optim
 from typing import Tuple, Dict, Optional
 
 from utils.meditation_config import (
-    DEFAULTS, NETWORK_PROFILES,
+    DEFAULTS,
     THOUGHTSEED_BASE_ACTIVATIONS
 )
+from core.layer1.layer1_config import NETWORK_PROFILES
 from ..generative_model import ObservationModel
-from ..layer1.process import Layer1Process
+from ..layer1.generative_process import Layer1Process
 
 from .logger import SimulationLogger
 
@@ -42,7 +43,12 @@ class PracticeTrainer:
             base_map = THOUGHTSEED_BASE_ACTIVATIONS.get(self.agent.experience_level, {}).get(s, {})
             for ts in self.agent.thoughtseeds:
                 t_idx = self.agent.thoughtseeds.index(ts)
-                base[s_idx, t_idx] = float(base_map.get(ts, 0.0))
+                raw_val = float(base_map.get(ts, 0.0))
+                base[s_idx, t_idx] = float(np.clip(
+                    raw_val,
+                    DEFAULTS['ACTIVATION_CLIP_MIN'],
+                    DEFAULTS['ACTIVATION_CLIP_MAX']
+                ))
         self._prior_base_np = base
         self._prior_cache = {}
 
@@ -256,6 +262,15 @@ class PracticeTrainer:
         efe_val = float(self.agent.monitor.efe_value)
         efe_risk = float(self.agent.monitor.efe_risk)
         efe_ambiguity = float(self.agent.monitor.efe_ambiguity)
+        selected_policy = str(self.agent.monitor.selected_policy)
+        policy_confidence = float(self.agent.monitor.policy_confidence)
+        policy_entropy = float(self.agent.monitor.policy_entropy)
+        policy_posterior = dict(self.agent.monitor.policy_posterior)
+        latent_terms = self.agent.last_latent_vfe_terms
+        mw_burden = float(getattr(self.process, 'last_network_burden', 0.0))
+        transition_hazard = float(getattr(self.process, 'last_transition_hazard', 0.0))
+        activation_burden_component = float(getattr(self.process, 'last_activation_burden_component', 0.0))
+        coupling_burden_component = float(getattr(self.process, 'last_coupling_burden_component', 0.0))
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
         
         self.logger.record_step(
@@ -271,6 +286,19 @@ class PracticeTrainer:
             efe=efe_val,
             efe_risk=efe_risk,
             efe_ambiguity=efe_ambiguity,
+            selected_policy=selected_policy,
+            policy_confidence=policy_confidence,
+            policy_entropy=policy_entropy,
+            policy_posterior=policy_posterior,
+            mw_burden=mw_burden,
+            transition_hazard=transition_hazard,
+            activation_burden_component=activation_burden_component,
+            coupling_burden_component=coupling_burden_component,
+            latent_reconstruction=latent_terms['reconstruction'],
+            latent_prior_kl=latent_terms['prior_kl'],
+            latent_sensory_consistency=latent_terms['sensory_consistency'],
+            latent_temporal_consistency=latent_terms['temporal_consistency'],
+            latent_vfe_total=latent_terms['total'],
             dominant_ts=str(dom)
         )
 

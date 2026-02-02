@@ -15,6 +15,10 @@ class Layer3Monitor(nn.Module):
                  efe_ambiguity_weight: float = 0.4,
                  efe_cycle_strength: float = 0.35,
                  efe_gain: float = 0.35,
+                 policy_horizon: int = 1,
+                 policy_temperature: float = 1.0,
+                 policy_temperature_by_state: dict = None,
+                 policy_horizon_discount: float = 0.6,
                  l3tol2_precision_range: tuple = (0.4, 0.6),
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
@@ -24,6 +28,19 @@ class Layer3Monitor(nn.Module):
         self.efe_ambiguity_weight = efe_ambiguity_weight
         self.efe_cycle_strength = efe_cycle_strength
         self.efe_gain = efe_gain
+        self.policy_horizon = max(1, int(policy_horizon))
+        self.policy_temperature = max(1e-6, float(policy_temperature))
+        
+        # Validate temperature config
+        if policy_temperature_by_state is None:
+            raise ValueError("policy_temperature_by_state required")
+        from utils.meditation_config import STATES
+        missing = [s for s in STATES if s not in policy_temperature_by_state]
+        if missing:
+            raise ValueError(f"policy_temperature_by_state missing states: {missing}")
+        self.policy_temperature_by_state = dict(policy_temperature_by_state)
+        
+        self.policy_horizon_discount = float(np.clip(policy_horizon_discount, 0.0, 1.0))
         self.l3tol2_precision_range = l3tol2_precision_range
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
@@ -38,6 +55,11 @@ class Layer3Monitor(nn.Module):
         self.efe_value = 0.0
         self.efe_risk = 0.0
         self.efe_ambiguity = 0.0
+        self.policy_posterior = {}
+        self.policy_efe = {}
+        self.selected_policy = ""
+        self.policy_confidence = 0.0
+        self.policy_entropy = 0.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
 
@@ -67,20 +89,20 @@ class Layer3Monitor(nn.Module):
         """Evaluate L3 policies and return Layer-2-facing prescriptions."""
         sensory = self.blanket_l2l3.sensory_states
         current_state = sensory['current_state']
+        opacity = float(np.clip(sensory['opacity'], 0.0, 1.0))
 
         vfe_val = sensory.get('vfe', None)
         if vfe_val is not None:
             try:
                 vfe_val = float(vfe_val)
-            except Exception:
-                vfe_val = None
-        if vfe_val is not None:
-            vfe_sig = 1.0 / (1.0 + np.exp(-vfe_val))
-            self.vfe_ema = (self.vfe_ema_alpha * self.vfe_ema) + ((1 - self.vfe_ema_alpha) * vfe_sig)
+                vfe_sig = 1.0 / (1.0 + np.exp(-vfe_val))
+                self.vfe_ema = (self.vfe_ema_alpha * self.vfe_ema) + ((1 - self.vfe_ema_alpha) * vfe_sig)
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Invalid VFE: {e}")
         
         prescription_l2l3 = {}
 
-        opacity = float(np.clip(sensory.get('opacity', 1.0), 0.0, 1.0))
+        opacity = float(np.clip(sensory['opacity'], 0.0, 1.0))
         prec_min, prec_max = self.l3tol2_precision_range
         transparency = 1.0 - opacity
         precision_drive = transparency
@@ -89,11 +111,24 @@ class Layer3Monitor(nn.Module):
         prescription_l2l3['precision_modulation'] = precision
         transition_drive = float(np.clip(0.5 * (transparency + self.vfe_ema), 0.0, 1.0))
 
-        # Expected Free Energy uses previous-step drive to avoid same-step feedback.
-        efe_terms = self.policy_energy_model.compute_efe_terms(current_state, self.prev_transition_drive)
-        self.efe_risk = float(efe_terms.risk)
-        self.efe_ambiguity = float(efe_terms.ambiguity)
-        self.efe_value = float(efe_terms.total)
+        # Policy inference with state-specific temperature
+        state_temp = self.policy_temperature_by_state[current_state]
+        policy_result = self.policy_energy_model.infer_policies(
+            current_state=current_state,
+            transition_pressure=self.prev_transition_drive,
+            policy_horizon=self.policy_horizon,
+            policy_temperature=float(max(1e-6, state_temp)),
+            policy_horizon_discount=self.policy_horizon_discount,
+        )
+        self.policy_posterior = dict(policy_result.posterior)
+        self.policy_efe = dict(policy_result.efe_by_policy)
+        self.selected_policy = str(policy_result.selected_policy)
+        self.policy_confidence = float(policy_result.selected_confidence)
+        self.policy_entropy = float(policy_result.posterior_entropy)
+
+        self.efe_risk = float(policy_result.expected_risk)
+        self.efe_ambiguity = float(policy_result.expected_ambiguity)
+        self.efe_value = float(policy_result.expected_total)
         self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.efe_value)
 
         if self.efe_ema > 0.0:
@@ -110,4 +145,7 @@ class Layer3Monitor(nn.Module):
         return {
             'precision_modulation': precision,
             'transition_pressure': transition_drive,
+            'selected_policy': self.selected_policy,
+            'policy_confidence': self.policy_confidence,
+            'policy_entropy': self.policy_entropy,
         }

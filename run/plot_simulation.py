@@ -24,6 +24,7 @@ from viz.plot_attractors import (
     plot_attractor_landscape_3d,
     load_cohort_series,
 )
+from viz.plot_fe_policy import generate_plots as generate_fe_policy_plots
 from viz.plotting_utils import load_json_data_from
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -105,6 +106,14 @@ def generate_simulation_plots():
         save_path=SIMULATION_PLOT_DIR / "Fig5B_Attractor3D.png"
     )
     logging.info("OK 3D Attractor Landscape")
+
+    # ===== FE + POLICY DIAGNOSTICS =====
+    logging.info("\nGenerating FE/Policy Plots...")
+    generate_fe_policy_plots(
+        data_dir=sim_data_dir,
+        output_dir=SIMULATION_PLOT_DIR,
+    )
+    logging.info("OK FE/Policy Diagnostics")
 
     logging.info("\n" + "=" * 60)
     logging.info("All simulation plots generated in %s", SIMULATION_PLOT_DIR)
