@@ -215,13 +215,13 @@ class Layer2AttentionalModel(nn.Module):
         
         l3_policy = self.monitor.evaluate_policies()
 
-        precision = l3_policy.get('precision_modulation')
-        if precision is None:
-            precision = self.blanket_l2l3.active_states.get('precision_modulation', 0.5)
+        # Use the smoothed precision stored on the L2<->L3 blanket for consistency
+        # with latent dynamics updates.
+        precision = self.blanket_l2l3.active_states['precision_modulation']
         if isinstance(precision, torch.Tensor):
             precision = precision.item()
 
-        transition_pressure = l3_policy.get('transition_pressure', 0.0)
+        transition_pressure = l3_policy['transition_pressure']
         if isinstance(transition_pressure, torch.Tensor):
             transition_pressure = transition_pressure.item()
 

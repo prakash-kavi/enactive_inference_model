@@ -30,7 +30,6 @@ class Layer3Monitor(nn.Module):
         self.efe_value = 0.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
-        self.transition_pressure = 0.0
     
     def _compute_efe(self, current_state: str, transition_drive: float) -> float:
         base = get_exit_transition_probs(self.experience_level, current_state)
@@ -135,7 +134,6 @@ class Layer3Monitor(nn.Module):
 
         # Store final drive for next-step EFE
         self.prev_transition_drive = transition_drive
-        self.transition_pressure = transition_drive
             
         if self.blanket_l2l3:
             self.blanket_l2l3.update_active_states(prescription_l2l3)
