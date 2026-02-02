@@ -30,6 +30,7 @@ class Layer3Monitor(nn.Module):
         self.efe_value = 0.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
+        self.transition_pressure = 0.0
     
     def _compute_efe(self, current_state: str, transition_drive: float) -> float:
         base = get_exit_transition_probs(self.experience_level, current_state)
@@ -97,7 +98,7 @@ class Layer3Monitor(nn.Module):
         return meta
 
     def evaluate_policies(self) -> dict:
-        """Evaluate policies and return prescriptions (non-differentiable)."""
+        """Evaluate L3 policies and return Layer-2-facing prescriptions."""
         sensory = self.blanket_l2l3.sensory_states
         current_state = sensory['current_state']
 
@@ -111,10 +112,6 @@ class Layer3Monitor(nn.Module):
             vfe_sig = 1.0 / (1.0 + np.exp(-vfe_val))
             self.vfe_ema = (self.vfe_ema_alpha * self.vfe_ema) + ((1 - self.vfe_ema_alpha) * vfe_sig)
         
-        prescription_l1l2 = {
-            'noise_reduction': 1.0,
-        }
-        
         prescription_l2l3 = {}
 
         opacity = float(np.clip(sensory.get('opacity', 1.0), 0.0, 1.0))
@@ -124,15 +121,7 @@ class Layer3Monitor(nn.Module):
         precision = prec_min + (prec_max - prec_min) * precision_drive
         precision = float(np.clip(precision, 0.0, 1.0))
         prescription_l2l3['precision_modulation'] = precision
-
-        noise_reduction = 1.0 - (0.6 * precision)
-        prescription_l1l2['noise_reduction'] = float(np.clip(noise_reduction, 0.4, 1.0))
-
-        transition_drive = 0.5 * (transparency + self.vfe_ema)
-        prescription_l1l2['transition_drive'] = float(np.clip(transition_drive, 0.0, 1.0))
-
-        # L2 -> L1 enactive bias tied to precision
-        prescription_l1l2['l2tol1_enactive_bias'] = float(np.clip(precision, 0.0, 1.0))
+        transition_drive = float(np.clip(0.5 * (transparency + self.vfe_ema), 0.0, 1.0))
 
         # Expected Free Energy uses previous-step drive to avoid same-step feedback.
         self.efe_value = float(self._compute_efe(current_state, self.prev_transition_drive))
@@ -143,12 +132,15 @@ class Layer3Monitor(nn.Module):
             transition_drive = float(np.clip(
                 transition_drive + (efe_gain * self.efe_ema), 0.0, 1.0
             ))
-            prescription_l1l2['transition_drive'] = transition_drive
 
         # Store final drive for next-step EFE
         self.prev_transition_drive = transition_drive
+        self.transition_pressure = transition_drive
             
         if self.blanket_l2l3:
             self.blanket_l2l3.update_active_states(prescription_l2l3)
 
-        return prescription_l1l2
+        return {
+            'precision_modulation': precision,
+            'transition_pressure': transition_drive,
+        }

@@ -186,8 +186,21 @@ class Layer2AttentionalModel(nn.Module):
         
         return updated_activations
 
+    @staticmethod
+    def _compose_l1_policy(agent_bias: torch.Tensor, precision: float, transition_pressure: float) -> dict:
+        """Compose Layer-1 control signals from Layer-2 state and Layer-3 modulation."""
+        precision = float(np.clip(precision, 0.0, 1.0))
+        transition_pressure = float(np.clip(transition_pressure, 0.0, 1.0))
+        noise_reduction = float(np.clip(1.0 - (0.6 * precision), 0.4, 1.0))
+        return {
+            'agent_bias': agent_bias,
+            'l2tol1_enactive_bias': precision,
+            'noise_reduction': noise_reduction,
+            'transition_drive': transition_pressure,
+        }
+
     def prescriptive_action(self, z: torch.Tensor, vfe: torch.Tensor, current_state: str) -> dict:
-        """Delegate policy to Layer 3."""
+        """Run hierarchical policy: L3 modulates L2, then L2 controls L1."""
         
         # Agent bias: decode current mu into brain-network space (state-aware)
         mu_goal = self.mu_params[current_state]
@@ -200,10 +213,23 @@ class Layer2AttentionalModel(nn.Module):
             'current_state': current_state
         })
         
-        prescription_l1l2 = self.monitor.evaluate_policies()
-        
-        # Inject Agent Bias into the prescription for Layer 1
-        prescription_l1l2['agent_bias'] = agent_bias
+        l3_policy = self.monitor.evaluate_policies()
+
+        precision = l3_policy.get('precision_modulation')
+        if precision is None:
+            precision = self.blanket_l2l3.active_states.get('precision_modulation', 0.5)
+        if isinstance(precision, torch.Tensor):
+            precision = precision.item()
+
+        transition_pressure = l3_policy.get('transition_pressure', 0.0)
+        if isinstance(transition_pressure, torch.Tensor):
+            transition_pressure = transition_pressure.item()
+
+        prescription_l1l2 = self._compose_l1_policy(
+            agent_bias=agent_bias,
+            precision=float(precision),
+            transition_pressure=float(transition_pressure),
+        )
         
         self.blanket.update_active_states(prescription_l1l2)
         
