@@ -41,6 +41,21 @@ class MeditationVAE(nn.Module):
             nn.Sigmoid() # Output: 0-1 Activation space
         )
         
+        # --- Forward Model (Phase 4: Enactive Inference) ---
+        # Predicts next observation given current observation and latent thoughtseed
+        # Input: [x_t (4 networks), z_t (5 thoughtseeds)]
+        # Output: x̂_{t+1} (4 networks)
+        self.forward_net = nn.Sequential(
+            nn.Linear(input_dim + latent_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, input_dim),
+            nn.Sigmoid()
+        )
+        
     def encode(self, x):
         """
         Input: x (Batch, 4) - Network Activations
@@ -64,3 +79,26 @@ class MeditationVAE(nn.Module):
         z = torch.sigmoid(logits)
         recon_x = self.decode(z)
         return recon_x, z, logits
+    
+    def predict_next(self, x_t, z_t):
+        """
+        Forward dynamics: predict next observation.
+        
+        Args:
+            x_t: Current networks (Batch, 4) or (4,)
+            z_t: Current thoughtseed strengths (Batch, 5) or (5,)
+        
+        Returns:
+            x̂_{t+1}: Predicted next networks (same shape as x_t)
+        """
+        # Handle single sample
+        if x_t.dim() == 1:
+            x_in = x_t.unsqueeze(0)
+            z_in = z_t.unsqueeze(0)
+            combined = torch.cat([x_in, z_in], dim=-1)
+            x_next_pred = self.forward_net(combined).squeeze(0)
+        else:
+            combined = torch.cat([x_t, z_t], dim=-1)
+            x_next_pred = self.forward_net(combined)
+        
+        return x_next_pred

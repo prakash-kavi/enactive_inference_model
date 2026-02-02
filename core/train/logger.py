@@ -43,6 +43,7 @@ class SimulationLogger:
         self.latent_sensory_consistency_history: List[float] = []
         self.latent_temporal_consistency_history: List[float] = []
         self.latent_vfe_total_history: List[float] = []
+        self.action_pred_error_history: List[float] = []  # Phase 4: forward prediction error
         self.transition_timestamps: List[int] = []
         self.state_transition_patterns: List[Tuple[str, str, Dict[str, float], Dict[str, float], float]] = []
         self.ra_reorienting_success_rate: float = 0.0
@@ -74,7 +75,8 @@ class SimulationLogger:
                     latent_sensory_consistency: float,
                     latent_temporal_consistency: float,
                     latent_vfe_total: float,
-                    dominant_ts: str):
+                    dominant_ts: str,
+                    action_pred_error: float = 0.0):  # Phase 4: optional action error
         """Log a single simulation timestep."""
         self.state_history.append(current_state)
         self.activations_history.append(activations)
@@ -84,6 +86,7 @@ class SimulationLogger:
         self.free_energy_history.append(free_energy)
         self.recon_loss_history.append(recon_loss)
         self.kl_div_history.append(kl_div)
+        self.action_pred_error_history.append(action_pred_error)  # Phase 4
         
         self.transition_drive_history.append(transition_drive)
         self.precision_history.append(precision)
@@ -382,6 +385,7 @@ class SimulationLogger:
             "latent_sensory_consistency_history": self.latent_sensory_consistency_history,
             "latent_temporal_consistency_history": self.latent_temporal_consistency_history,
             "latent_vfe_total_history": self.latent_vfe_total_history,
+            "action_pred_error_history": self.action_pred_error_history,  # Phase 4
             "state_history": self.state_history,
             "dominant_ts_history": self.dominant_ts_history,
         }

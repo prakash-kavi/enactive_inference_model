@@ -85,6 +85,10 @@ class PracticeTrainer:
         
         last_free_energy = 0.0
         
+        # Phase 4: Track previous observation for forward prediction
+        self._last_x_pred = None
+        self._last_x_actual = None
+        
         bptt_steps = 50
         total_steps = self.agent.timesteps
         
@@ -132,12 +136,34 @@ class PracticeTrainer:
                 loss = loss + free_energy
                 last_free_energy = free_energy.detach().item()
                 
+                # Phase 4: Action prediction error (enactive inference)
+                # Compute how well previous action predicted current observation
+                action_pred_error = torch.tensor(0.0, device=activations.device)
+                action_pred_error_val = 0.0
+                if self._last_x_pred is not None and self._last_x_actual is not None:
+                    x_actual = torch.stack([network_acts[net] for net in self.agent.networks])
+                    action_pred_error = torch.mean((x_actual - self._last_x_pred)**2)
+                    action_pred_error_val = action_pred_error.detach().item()
+                    
+                    # TODO Phase 4: Enable action loss once main model converges
+                    # Weight by L3 precision modulation
+                    # precision = self.agent.blanket_l2l3.active_states.get('precision_modulation', 0.5)
+                    # if isinstance(precision, torch.Tensor):
+                    #     precision = precision.item()
+                    # loss = loss + (precision * action_pred_error)
+                
+                # Predict next observation for next timestep
+                x_current = torch.stack([network_acts[net] for net in self.agent.networks])
+                x_next_pred = self.agent.vae.predict_next(x_current, activations)
+                self._last_x_pred = x_next_pred.detach()
+                self._last_x_actual = x_current.detach()
+                
                 self.agent.prescriptive_action(activations, free_energy, current_state)
                 
                 transition_drive = float(self.agent.blanket.active_states.get('transition_drive', 0.0))
                 self._record_history(
                     current_state, activations, meta_awareness, network_acts,
-                    free_energy, recon_loss, transition_drive, kl_div
+                    free_energy, recon_loss, transition_drive, kl_div, action_pred_error_val
                 )
 
             if steps_to_run > 0:
@@ -251,7 +277,8 @@ class PracticeTrainer:
             free_energy=float(vfe)
         )
 
-    def _record_history(self, current_state, activations, meta_awareness, network_acts, free_energy, recon_loss, transition_drive, kl_div):
+    def _record_history(self, current_state, activations, meta_awareness, network_acts, 
+                       free_energy, recon_loss, transition_drive, kl_div, action_pred_error=0.0):
         # Calculate derived metrics for logging
         net_acts_float = {k: v.detach().item() for k, v in network_acts.items()}
         
@@ -299,7 +326,8 @@ class PracticeTrainer:
             latent_sensory_consistency=latent_terms['sensory_consistency'],
             latent_temporal_consistency=latent_terms['temporal_consistency'],
             latent_vfe_total=latent_terms['total'],
-            dominant_ts=str(dom)
+            dominant_ts=str(dom),
+            action_pred_error=float(action_pred_error)  # Phase 4
         )
 
     def _save_results(self, output_dir):
