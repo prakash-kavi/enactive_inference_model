@@ -19,21 +19,21 @@ STATE_DISPLAY_NAMES = {
     "breath_focus": "Breath Focus",
     "mind_wandering": "Mind Wandering",
     "meta_awareness": "Meta Awareness",
-    "redirect_breath": "Redirect Attention"
+    "redirect_attention": "Redirect Attention"
 }
 
 STATE_SHORT_NAMES = {
     "breath_focus": "BF",
     "mind_wandering": "MW",
     "meta_awareness": "MA",
-    "redirect_breath": "RA",
+    "redirect_attention": "RA",
 }
 
 STATE_COLORS = {
     "breath_focus": "#2ca02c",
     "mind_wandering": "#1f77b4",
     "meta_awareness": "#d62728",
-    "redirect_breath": "#ff7f0e",
+    "redirect_attention": "#ff7f0e",
 }
 
 from utils.meditation_config import NETWORKS

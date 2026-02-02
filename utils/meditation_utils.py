@@ -25,10 +25,6 @@ def get_exit_transition_probs(experience_level: str, current_state: str) -> dict
     base = STATE_TRANSITION_PROBS.get(experience_level, {}).get(current_state, {})
     return _normalize_probs(base, [s for s in STATES if s != current_state])
 
-def get_preferred_transition_probs(experience_level: str, current_state: str) -> dict:
-    """Return preferred next-state distribution P*(s'|s)."""
-    return get_exit_transition_probs(experience_level, current_state)
-
 def ensure_directories(base_dir=None):
     """Create `data/` and `plots/` under `base_dir` (or package root)."""
     if not base_dir:

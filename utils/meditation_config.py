@@ -7,7 +7,7 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Common definitions
 # -----------------------------------------------------------------------------
-STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_breath']
+STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_attention']
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
@@ -38,7 +38,7 @@ THETA_BASE = {
         ('DMN', 'DAN'): -0.25, ('DAN', 'DMN'): -0.25,
         ('DMN', 'FPN'): -0.25, ('FPN', 'DMN'): -0.25
     },
-    'redirect_breath': {
+    'redirect_attention': {
         ('DMN', 'DAN'): -0.40, ('DAN', 'DMN'): -0.40,
         ('DMN', 'FPN'): -0.30, ('FPN', 'DMN'): -0.30,
         ('DAN', 'FPN'): 0.40, ('FPN', 'DAN'): 0.40
@@ -59,7 +59,7 @@ NETWORK_PROFILES = {
         "novice": {"DMN": 0.45, "VAN": 0.85, "DAN": 0.42, "FPN": 0.56},
         "expert": {"DMN": 0.40, "VAN": 0.78, "DAN": 0.42, "FPN": 0.55}
     },
-    "redirect_breath": {
+    "redirect_attention": {
         "novice": {"DMN": 0.40, "VAN": 0.50, "DAN": 0.78, "FPN": 0.74},
         "expert": {"DMN": 0.35, "VAN": 0.50, "DAN": 0.78, "FPN": 0.70}
     }
@@ -71,29 +71,29 @@ DWELL_TIMES = {
         'breath_focus': (15, 30),
         'mind_wandering': (10, 20),
         'meta_awareness': (1, 4),
-        'redirect_breath': (1, 4)
+        'redirect_attention': (1, 4)
     },
     'novice': {
         'breath_focus': (5, 15),
         'mind_wandering': (20, 40),
         'meta_awareness': (2, 6),
-        'redirect_breath': (2, 5)
+        'redirect_attention': (2, 5)
     }
 }
 
 # Exit transition probabilities (self-transitions handled by dwell)
 STATE_TRANSITION_PROBS = {
     'expert': {
-        'breath_focus': {'mind_wandering': 0.35, 'meta_awareness': 0.45, 'redirect_breath': 0.20},
-        'mind_wandering': {'breath_focus': 0.18, 'meta_awareness': 0.56, 'redirect_breath': 0.26},
-        'meta_awareness': {'redirect_breath': 0.85, 'breath_focus': 0.14, 'mind_wandering': 0.01},
-        'redirect_breath': {'breath_focus': 0.59, 'meta_awareness': 0.34, 'mind_wandering': 0.07},
+        'breath_focus': {'mind_wandering': 0.35, 'meta_awareness': 0.45, 'redirect_attention': 0.20},
+        'mind_wandering': {'breath_focus': 0.18, 'meta_awareness': 0.56, 'redirect_attention': 0.26},
+        'meta_awareness': {'redirect_attention': 0.85, 'breath_focus': 0.14, 'mind_wandering': 0.01},
+        'redirect_attention': {'breath_focus': 0.59, 'meta_awareness': 0.34, 'mind_wandering': 0.07},
     },
     'novice': {
-        'breath_focus': {'mind_wandering': 0.90, 'meta_awareness': 0.08, 'redirect_breath': 0.02},
-        'mind_wandering': {'meta_awareness': 0.68, 'redirect_breath': 0.17, 'breath_focus': 0.15},
-        'meta_awareness': {'redirect_breath': 0.79, 'breath_focus': 0.15, 'mind_wandering': 0.06},
-        'redirect_breath': {'breath_focus': 0.88, 'mind_wandering': 0.07, 'meta_awareness': 0.05},
+        'breath_focus': {'mind_wandering': 0.90, 'meta_awareness': 0.08, 'redirect_attention': 0.02},
+        'mind_wandering': {'meta_awareness': 0.68, 'redirect_attention': 0.17, 'breath_focus': 0.15},
+        'meta_awareness': {'redirect_attention': 0.79, 'breath_focus': 0.15, 'mind_wandering': 0.06},
+        'redirect_attention': {'breath_focus': 0.88, 'mind_wandering': 0.07, 'meta_awareness': 0.05},
     }
 }
 
@@ -123,7 +123,7 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
             "pending_tasks": 0.1,
             "aha_moment": 0.9
         },
-        "redirect_breath": {
+        "redirect_attention": {
             "attend_breath": 0.7,
             "equanimity": 0.85,
             "pain_discomfort": 0.12,
@@ -153,7 +153,7 @@ THOUGHTSEED_BASE_ACTIVATIONS = {
             "pending_tasks": 0.1,
             "aha_moment": 0.95
         },
-        "redirect_breath": {
+        "redirect_attention": {
             "attend_breath": 0.7,
             "equanimity": 0.85,
             "pain_discomfort": 0.12,
@@ -180,7 +180,7 @@ META_THOUGHTSEED_WEIGHTS = {
         "equanimity": 0.35,
         "aha_moment": 0.60
     },
-    "redirect_breath": {
+    "redirect_attention": {
         "attend_breath": 0.30,
         "equanimity": 0.30,
         "aha_moment": 0.50
@@ -196,7 +196,6 @@ ACTINF_DEFAULTS = {
     "vfe_ema_alpha": 0.9,
     "kl_beta": 1.0,
     "efe_ambiguity_weight": 0.4,
-    "preference_sharpness": 1.3,
     "l3tol2_precision_range": (0.4, 0.6),
     "network_target_reg": 0.05,
 }

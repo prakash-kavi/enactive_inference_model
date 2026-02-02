@@ -7,7 +7,6 @@ from typing import Dict, Tuple, Optional
 from utils.meditation_config import (
     DEFAULTS, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS, STATES, NETWORKS, THETA_BASE
 )
-from utils.meditation_utils import get_preferred_transition_probs
 
 IDX = {n: i for i, n in enumerate(NETWORKS)}
 
@@ -22,42 +21,30 @@ class StateMachine:
         self.current_state = STATES[0]
         self.timer_steps = 0
         self.current_max_steps = 0
-        self.steps_since_transition = 0
         self.refractory_steps = max(1, int(DEFAULTS['REFRACTORY_SEC'] / self.dt))
-        self.spontaneous_max = 0.18
-
         self.dwell_ranges_sec = DWELL_TIMES.get(level, DWELL_TIMES['novice'])
         self.transition_probs = STATE_TRANSITION_PROBS.get(level, STATE_TRANSITION_PROBS['novice'])
         self._sample_next_dwell()
 
     def _sample_next_dwell(self):
         min_s, max_s = self.dwell_ranges_sec[self.current_state]
-        min_steps = max(1, int(round(min_s / self.dt)))
-        max_steps = max(min_steps, int(round(max_s / self.dt)))
-        mean = 0.5 * (min_steps + max_steps)
-        std = max(1.0, (max_steps - min_steps) / 3.0)
-        sampled = self._truncated_normal(mean, std, min_steps, max_steps)
-        self.current_max_steps = int(round(sampled))
+        min_steps = max(1.0, min_s / self.dt)
+        max_steps = max(min_steps, max_s / self.dt)
+        if max_steps == min_steps:
+            self.current_max_steps = min_steps
+        else:
+            # U-shaped dwell sampling for higher variability within the same bounds.
+            u = float(self.rng.beta(0.6, 0.6))
+            self.current_max_steps = min_steps + u * (max_steps - min_steps)
         self.timer_steps = 0
-        self.steps_since_transition = 0
-
-    def _truncated_normal(self, mean: float, std: float, low: float, high: float, max_tries: int = 10) -> float:
-        """Sample a bounded Gaussian dwell time."""
-        val = mean
-        for _ in range(max_tries):
-            val = self.rng.normal(mean, std)
-            if low <= val <= high:
-                return float(val)
-        return float(np.clip(val, low, high))
 
     def check_transition(self, transition_drive: float = 0.0) -> str:
         self.timer_steps += 1
-        self.steps_since_transition += 1
 
         min_s, _ = self.dwell_ranges_sec[self.current_state]
-        min_steps = int(min_s / self.dt)
+        min_steps = min_s / self.dt
 
-        if self.steps_since_transition < self.refractory_steps:
+        if self.timer_steps < self.refractory_steps:
             return self.current_state
 
         drive = max(0.0, min(transition_drive, 1.0))
@@ -65,11 +52,6 @@ class StateMachine:
             return self.current_state
 
         if self.timer_steps >= self.current_max_steps:
-            self.transition(drive)
-            return self.current_state
-
-        p_spont = self.spontaneous_max * drive
-        if self.rng.rand() < p_spont:
             self.transition(drive)
             return self.current_state
 
@@ -83,12 +65,15 @@ class StateMachine:
             weights = weights / max(weights.sum(), 1e-6)
             drive = max(0.0, min(float(transition_drive), 1.0))
             if drive > 0.0:
-                pref = get_preferred_transition_probs(self.level, self.current_state)
-                if pref:
-                    pref_w = np.array([pref.get(s, 0.0) for s in states], dtype=float)
-                    if pref_w.sum() > 0.0:
-                        pref_w = pref_w / pref_w.sum()
-                        weights = (1.0 - drive) * weights + drive * pref_w
+                cycle_strength = 0.35
+                drive = drive * cycle_strength
+                try:
+                    next_state = STATES[(STATES.index(self.current_state) + 1) % len(STATES)]
+                except ValueError:
+                    next_state = None
+                if next_state in states:
+                    pref_w = np.array([1.0 if s == next_state else 0.0 for s in states], dtype=float)
+                    weights = (1.0 - drive) * weights + drive * pref_w
             # If mind wandering has persisted, bias exit toward meta-awareness (noticing)
             if self.current_state == 'mind_wandering' and self.current_max_steps > 0:
                 progress = min(1.0, self.timer_steps / max(1, self.current_max_steps))
@@ -154,7 +139,7 @@ class Layer1Process(nn.Module):
         if self.level == 'expert':
             if state == 'breath_focus':
                 theta = theta + torch.eye(4, device=device) * 0.4
-            elif state == 'redirect_breath':
+            elif state == 'redirect_attention':
                 r, c = IDX['DMN'], IDX['DAN']
                 if theta[r, c] > 0:
                     theta[r, c] *= 1.5
@@ -228,7 +213,7 @@ class Layer1Process(nn.Module):
         sigma = np.sqrt(variance)
 
         n_substeps = 2
-        dt_sub = self.dt
+        dt_sub = self.dt / n_substeps
         curr_x = self.x
 
         for _ in range(n_substeps):

@@ -258,7 +258,6 @@ class SimulationLogger:
         active_inf_params = {
             "l3tol2_precision_range": params.get("l3tol2_precision_range"),
             "kl_beta": params.get("kl_beta"),
-            "preference_sharpness": params.get("preference_sharpness"),
             "learning_rate": getattr(agent, "learning_rate", None),
             "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
             "average_efe_by_state": aggregates.get("average_efe_by_state", {}),

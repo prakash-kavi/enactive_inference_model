@@ -14,7 +14,6 @@ class Layer3Monitor(nn.Module):
     
     def __init__(self, experience_level: str = 'novice',
                  efe_ambiguity_weight: float = 0.4,
-                 preference_sharpness: float = 1.3,
                  l3tol2_precision_range: tuple = (0.4, 0.6),
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
@@ -22,7 +21,6 @@ class Layer3Monitor(nn.Module):
         
         self.experience_level = experience_level
         self.efe_ambiguity_weight = efe_ambiguity_weight
-        self.preference_sharpness = preference_sharpness
         self.l3tol2_precision_range = l3tol2_precision_range
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
@@ -38,17 +36,25 @@ class Layer3Monitor(nn.Module):
         if not base:
             return 0.0
         drive = float(np.clip(transition_drive, 0.0, 1.0))
-        sharpness = float(max(self.preference_sharpness, 1.0))
-        pref = {s: float(max(0.0, p)) ** sharpness for s, p in base.items()}
-        total = sum(pref.values())
-        if total > 0.0:
-            pref = {s: v / total for s, v in pref.items()}
+        try:
+            next_state = STATES[(STATES.index(current_state) + 1) % len(STATES)]
+        except ValueError:
+            next_state = None
+        cycle_strength = 0.35
+        if next_state in base:
+            pref = {
+                s: ((1.0 - cycle_strength) * base.get(s, 0.0) + (cycle_strength * (1.0 if s == next_state else 0.0)))
+                for s in base
+            }
+        else:
+            pref = dict(base)
         if not pref:
             return 0.0
         pred = dict(base)
         if drive > 0.0:
+            blend = drive * cycle_strength
             for s in pred.keys():
-                pred[s] = (1.0 - drive) * base.get(s, 0.0) + drive * pref.get(s, 0.0)
+                pred[s] = (1.0 - blend) * base.get(s, 0.0) + blend * pref.get(s, 0.0)
 
         eps = 1e-8
         risk = 0.0
