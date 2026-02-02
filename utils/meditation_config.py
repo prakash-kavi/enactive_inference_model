@@ -196,6 +196,8 @@ ACTINF_DEFAULTS = {
     "vfe_ema_alpha": 0.9,
     "kl_beta": 1.0,
     "efe_ambiguity_weight": 0.4,
+    "efe_cycle_strength": 0.35,
+    "efe_gain": 0.35,
     "l3tol2_precision_range": (0.4, 0.6),
     "network_target_reg": 0.05,
 }

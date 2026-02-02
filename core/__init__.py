@@ -7,6 +7,7 @@ from .layer3.monitor import Layer3Monitor
 from .blankets.l1_l2 import MarkovBlanketL1L2
 from .blankets.l2_l3 import MarkovBlanketL2L3
 from .train.trainer import PracticeTrainer
+from .generative_model import ObservationModel, PolicyEnergyModel, EFETerms
 
 __all__ = [
     'Layer1Process',
@@ -16,4 +17,7 @@ __all__ = [
     'MarkovBlanketL1L2',
     'MarkovBlanketL2L3',
     'PracticeTrainer',
+    'ObservationModel',
+    'PolicyEnergyModel',
+    'EFETerms',
 ]

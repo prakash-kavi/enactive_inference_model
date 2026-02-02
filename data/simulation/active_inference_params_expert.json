@@ -4,6 +4,9 @@
     0.6
   ],
   "kl_beta": 0.55,
+  "efe_ambiguity_weight": 0.35,
+  "efe_cycle_strength": 0.35,
+  "efe_gain": 0.35,
   "learning_rate": 0.02,
   "average_free_energy_by_state": {
     "breath_focus": 0.06377996457740664,
@@ -16,6 +19,18 @@
     "mind_wandering": 0.9274180632745528,
     "meta_awareness": 0.8841496871176083,
     "redirect_attention": 0.9506616330943626
+  },
+  "average_efe_risk_by_state": {
+    "breath_focus": 0.05035632014166067,
+    "mind_wandering": 0.02945119469368105,
+    "meta_awareness": 0.007069953562008642,
+    "redirect_attention": 0.023571532343937347
+  },
+  "average_efe_ambiguity_by_state": {
+    "breath_focus": 2.610336762644715,
+    "mind_wandering": 2.565619624516777,
+    "meta_awareness": 2.5059420958731424,
+    "redirect_attention": 2.6488288592869296
   },
   "average_prediction_error_by_state": {
     "breath_focus": 0.003989892927764929,

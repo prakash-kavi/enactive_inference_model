@@ -61,8 +61,10 @@ class Layer2AttentionalModel(nn.Module):
 
         self.monitor = Layer3Monitor(
             experience_level=self.experience_level,
-            efe_ambiguity_weight=self.params.get('efe_ambiguity_weight', 0.4),
-            l3tol2_precision_range=self.params.get('l3tol2_precision_range', (0.4, 0.6)),
+            efe_ambiguity_weight=self.params['efe_ambiguity_weight'],
+            efe_cycle_strength=self.params['efe_cycle_strength'],
+            efe_gain=self.params['efe_gain'],
+            l3tol2_precision_range=self.params['l3tol2_precision_range'],
             get_meta_awareness_fn=_meta_fn,
             blanket_l2l3=self.blanket_l2l3,
             vfe_ema_alpha=self.params['vfe_ema_alpha']

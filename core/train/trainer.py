@@ -8,6 +8,7 @@ from utils.meditation_config import (
     DEFAULTS, NETWORK_PROFILES,
     THOUGHTSEED_BASE_ACTIVATIONS
 )
+from ..generative_model import ObservationModel
 from ..layer1.process import Layer1Process
 
 from .logger import SimulationLogger
@@ -26,6 +27,7 @@ class PracticeTrainer:
             self.process = generative_process
             
         self.optimizer = optim.Adam(self.agent.parameters(), lr=agent.learning_rate)
+        self.obs_model = ObservationModel(eps=1e-6)
         self._init_prior_cache()
         self.logger = SimulationLogger(agent.experience_level)
 
@@ -210,19 +212,13 @@ class PracticeTrainer:
         device = activations.device
         
         x = torch.stack([observed_networks[net] for net in self.agent.networks]).to(device)
-        recon_loss = torch.nn.functional.mse_loss(recon_x, x, reduction='mean')
+        recon_loss = self.obs_model.reconstruction_nll(recon_x, x)
 
-        eps = 1e-6
         z = activations
         if z.dim() != 1:
             z = z.squeeze(0)
-        z = torch.clamp(z, eps, 1.0 - eps)
         prior_vec = self._get_prior_vector(current_state, device)
-        prior = torch.clamp(prior_vec, eps, 1.0 - eps)
-        kl_div = torch.mean(
-            z * torch.log(z / prior) +
-            (1 - z) * torch.log((1 - z) / (1 - prior))
-        )
+        kl_div = self.obs_model.latent_bernoulli_kl(z, prior_vec)
 
         reg_weight = self.agent.params.get("network_target_reg", 0.0)
         target_loss = torch.tensor(0.0, device=device)
@@ -257,7 +253,9 @@ class PracticeTrainer:
         prec = prec_min + (prec_max - prec_min) * meta_awareness
         prec = float(np.clip(prec, min(prec_min, prec_max), max(prec_min, prec_max)))
         
-        efe_val = getattr(self.agent.monitor, "efe_value", 0.0)
+        efe_val = float(self.agent.monitor.efe_value)
+        efe_risk = float(self.agent.monitor.efe_risk)
+        efe_ambiguity = float(self.agent.monitor.efe_ambiguity)
         dom = self.agent.thoughtseeds[torch.argmax(activations).item()]
         
         self.logger.record_step(
@@ -270,7 +268,9 @@ class PracticeTrainer:
             kl_div=kl_div.detach().item(),
             transition_drive=float(transition_drive),
             precision=prec,
-            efe=float(efe_val),
+            efe=efe_val,
+            efe_risk=efe_risk,
+            efe_ambiguity=efe_ambiguity,
             dominant_ts=str(dom)
         )
 

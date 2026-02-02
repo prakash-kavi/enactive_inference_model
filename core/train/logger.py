@@ -25,6 +25,8 @@ class SimulationLogger:
         self.precision_history: List[float] = []
         self.dominant_ts_history: List[str] = []
         self.efe_history: List[float] = []
+        self.efe_risk_history: List[float] = []
+        self.efe_ambiguity_history: List[float] = []
         self.transition_drive_history: List[float] = []
         self.recon_loss_history: List[float] = []
         self.kl_div_history: List[float] = []
@@ -43,6 +45,8 @@ class SimulationLogger:
                     transition_drive: float,
                     precision: float,
                     efe: float,
+                    efe_risk: float,
+                    efe_ambiguity: float,
                     dominant_ts: str):
         """Log a single simulation timestep."""
         self.state_history.append(current_state)
@@ -57,6 +61,8 @@ class SimulationLogger:
         self.transition_drive_history.append(transition_drive)
         self.precision_history.append(precision)
         self.efe_history.append(efe)
+        self.efe_risk_history.append(efe_risk)
+        self.efe_ambiguity_history.append(efe_ambiguity)
         self.dominant_ts_history.append(dominant_ts)
 
 
@@ -120,6 +126,8 @@ class SimulationLogger:
         pred_error_means = {}
         precision_means = {}
         efe_means = {}
+        efe_risk_means = {}
+        efe_ambiguity_means = {}
 
         state_indices = {
             state: [j for j, s in enumerate(self.state_history) if s == state]
@@ -132,6 +140,8 @@ class SimulationLogger:
         pred_error_history = np.asarray(self.recon_loss_history, dtype=float)
         precision_history = np.asarray(self.precision_history, dtype=float)
         efe_history = np.asarray(self.efe_history, dtype=float)
+        efe_risk_history = np.asarray(self.efe_risk_history, dtype=float)
+        efe_ambiguity_history = np.asarray(self.efe_ambiguity_history, dtype=float)
 
         for state in states:
             indices = state_indices.get(state, [])
@@ -162,6 +172,10 @@ class SimulationLogger:
             precision_means[state] = float(np.mean(precision_history[indices]))
             if efe_history.size == len(self.state_history):
                 efe_means[state] = float(np.mean(efe_history[indices]))
+            if efe_risk_history.size == len(self.state_history):
+                efe_risk_means[state] = float(np.mean(efe_risk_history[indices]))
+            if efe_ambiguity_history.size == len(self.state_history):
+                efe_ambiguity_means[state] = float(np.mean(efe_ambiguity_history[indices]))
 
         aggregates["activation_means_by_state"] = activation_means
         aggregates["average_network_activations_by_state"] = network_means
@@ -169,6 +183,8 @@ class SimulationLogger:
         aggregates["average_prediction_error_by_state"] = pred_error_means
         aggregates["average_precision_by_state"] = precision_means
         aggregates["average_efe_by_state"] = efe_means
+        aggregates["average_efe_risk_by_state"] = efe_risk_means
+        aggregates["average_efe_ambiguity_by_state"] = efe_ambiguity_means
 
         return aggregates
 
@@ -244,6 +260,8 @@ class SimulationLogger:
             "meta_awareness_history": self.meta_awareness_history,
             "free_energy_history": self.free_energy_history,
             "efe_history": self.efe_history,
+            "efe_risk_history": self.efe_risk_history,
+            "efe_ambiguity_history": self.efe_ambiguity_history,
             "transition_drive_history": self.transition_drive_history,
             "recon_loss_history": self.recon_loss_history,
             "kl_div_history": self.kl_div_history,
@@ -258,9 +276,14 @@ class SimulationLogger:
         active_inf_params = {
             "l3tol2_precision_range": params.get("l3tol2_precision_range"),
             "kl_beta": params.get("kl_beta"),
+            "efe_ambiguity_weight": params.get("efe_ambiguity_weight"),
+            "efe_cycle_strength": params.get("efe_cycle_strength"),
+            "efe_gain": params.get("efe_gain"),
             "learning_rate": getattr(agent, "learning_rate", None),
             "average_free_energy_by_state": aggregates.get("average_free_energy_by_state", {}),
             "average_efe_by_state": aggregates.get("average_efe_by_state", {}),
+            "average_efe_risk_by_state": aggregates.get("average_efe_risk_by_state", {}),
+            "average_efe_ambiguity_by_state": aggregates.get("average_efe_ambiguity_by_state", {}),
             "average_prediction_error_by_state": aggregates.get("average_prediction_error_by_state", {}),
             "average_precision_by_state": aggregates.get("average_precision_by_state", {}),
         }

@@ -6,14 +6,15 @@ Observes Layer 2 summary signals and emits lightweight control policies.
 import torch.nn as nn
 import numpy as np
 
-from utils.meditation_config import STATES, NETWORK_PROFILES
-from utils.meditation_utils import get_exit_transition_probs
+from ..generative_model import PolicyEnergyModel
 
 class Layer3Monitor(nn.Module):
     """Layer 3 monitoring + policy module."""
     
     def __init__(self, experience_level: str = 'novice',
                  efe_ambiguity_weight: float = 0.4,
+                 efe_cycle_strength: float = 0.35,
+                 efe_gain: float = 0.35,
                  l3tol2_precision_range: tuple = (0.4, 0.6),
                  get_meta_awareness_fn=None, blanket_l2l3=None,
                  vfe_ema_alpha: float = 0.9):
@@ -21,58 +22,24 @@ class Layer3Monitor(nn.Module):
         
         self.experience_level = experience_level
         self.efe_ambiguity_weight = efe_ambiguity_weight
+        self.efe_cycle_strength = efe_cycle_strength
+        self.efe_gain = efe_gain
         self.l3tol2_precision_range = l3tol2_precision_range
         self.get_meta_awareness_fn = get_meta_awareness_fn
         self.blanket_l2l3 = blanket_l2l3
+        self.policy_energy_model = PolicyEnergyModel(
+            experience_level=self.experience_level,
+            ambiguity_weight=self.efe_ambiguity_weight,
+            cycle_strength=self.efe_cycle_strength,
+        )
         self.vfe_ema_alpha = vfe_ema_alpha
         self.vfe_ema = 0.0
         self.efe_ema = 0.0
         self.efe_value = 0.0
+        self.efe_risk = 0.0
+        self.efe_ambiguity = 0.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
-    
-    def _compute_efe(self, current_state: str, transition_drive: float) -> float:
-        base = get_exit_transition_probs(self.experience_level, current_state)
-        if not base:
-            return 0.0
-        drive = float(np.clip(transition_drive, 0.0, 1.0))
-        try:
-            next_state = STATES[(STATES.index(current_state) + 1) % len(STATES)]
-        except ValueError:
-            next_state = None
-        cycle_strength = 0.35
-        if next_state in base:
-            pref = {
-                s: ((1.0 - cycle_strength) * base.get(s, 0.0) + (cycle_strength * (1.0 if s == next_state else 0.0)))
-                for s in base
-            }
-        else:
-            pref = dict(base)
-        if not pref:
-            return 0.0
-        pred = dict(base)
-        if drive > 0.0:
-            blend = drive * cycle_strength
-            for s in pred.keys():
-                pred[s] = (1.0 - blend) * base.get(s, 0.0) + blend * pref.get(s, 0.0)
-
-        eps = 1e-8
-        risk = 0.0
-        for s in STATES:
-            p_s = max(eps, float(pred.get(s, 0.0)))
-            q_s = max(eps, float(pref.get(s, 0.0)))
-            risk += p_s * (np.log(p_s) - np.log(q_s))
-
-        ambiguity = 0.0
-        for s, p_s in pred.items():
-            profile = NETWORK_PROFILES.get(s, {}).get(self.experience_level, {})
-            if not profile:
-                continue
-            for val in profile.values():
-                p = float(np.clip(val, eps, 1.0 - eps))
-                ambiguity += float(p_s) * (-(p * np.log(p) + (1.0 - p) * np.log(1.0 - p)))
-
-        return risk + (self.efe_ambiguity_weight * ambiguity)
 
     def update_meta_awareness(self, current_state: str, z) -> float:
         """Update meta-awareness from Layer 2 thoughtseed dynamics."""
@@ -123,13 +90,15 @@ class Layer3Monitor(nn.Module):
         transition_drive = float(np.clip(0.5 * (transparency + self.vfe_ema), 0.0, 1.0))
 
         # Expected Free Energy uses previous-step drive to avoid same-step feedback.
-        self.efe_value = float(self._compute_efe(current_state, self.prev_transition_drive))
+        efe_terms = self.policy_energy_model.compute_efe_terms(current_state, self.prev_transition_drive)
+        self.efe_risk = float(efe_terms.risk)
+        self.efe_ambiguity = float(efe_terms.ambiguity)
+        self.efe_value = float(efe_terms.total)
         self.efe_ema = (self.vfe_ema_alpha * self.efe_ema) + ((1.0 - self.vfe_ema_alpha) * self.efe_value)
 
         if self.efe_ema > 0.0:
-            efe_gain = 0.35
             transition_drive = float(np.clip(
-                transition_drive + (efe_gain * self.efe_ema), 0.0, 1.0
+                transition_drive + (self.efe_gain * self.efe_ema), 0.0, 1.0
             ))
 
         # Store final drive for next-step EFE

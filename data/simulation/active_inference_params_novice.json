@@ -4,29 +4,44 @@
     0.6
   ],
   "kl_beta": 1.0,
+  "efe_ambiguity_weight": 0.4,
+  "efe_cycle_strength": 0.35,
+  "efe_gain": 0.35,
   "learning_rate": 0.01,
   "average_free_energy_by_state": {
-    "breath_focus": 0.14549553080940167,
-    "mind_wandering": 0.21374623990498434,
-    "meta_awareness": 0.09680106105363888,
-    "redirect_attention": 0.09892148228242384
+    "breath_focus": 0.16150041717431834,
+    "mind_wandering": 0.28441267060027764,
+    "meta_awareness": 0.12552037112738776,
+    "redirect_attention": 0.11930755791608354
   },
   "average_efe_by_state": {
-    "breath_focus": 0.9538584758493321,
-    "mind_wandering": 1.0222935006373628,
-    "meta_awareness": 1.0087044703350732,
-    "redirect_attention": 1.08506237081185
+    "breath_focus": 0.9537650900492772,
+    "mind_wandering": 1.02176890445878,
+    "meta_awareness": 1.008507350598872,
+    "redirect_attention": 1.0849981138223497
+  },
+  "average_efe_risk_by_state": {
+    "breath_focus": 0.004263066835909765,
+    "mind_wandering": 0.017724401521654023,
+    "meta_awareness": 0.009895798093747655,
+    "redirect_attention": 0.004841228280898483
+  },
+  "average_efe_ambiguity_by_state": {
+    "breath_focus": 2.373755058033418,
+    "mind_wandering": 2.510111257342815,
+    "meta_awareness": 2.496528881262811,
+    "redirect_attention": 2.700392213853628
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 0.008791079984803218,
-    "mind_wandering": 0.017695202823384007,
-    "meta_awareness": 0.007974829136535687,
-    "redirect_attention": 0.006528133588566646
+    "breath_focus": 0.007043028192190439,
+    "mind_wandering": 0.011330566470389216,
+    "meta_awareness": 0.004264315322001019,
+    "redirect_attention": 0.009329431569094809
   },
   "average_precision_by_state": {
-    "breath_focus": 0.5137719190550408,
-    "mind_wandering": 0.466269330424432,
-    "meta_awareness": 0.5049446641199766,
-    "redirect_attention": 0.5288462773053179
+    "breath_focus": 0.5208856501544701,
+    "mind_wandering": 0.4741706574078319,
+    "meta_awareness": 0.5097852052154275,
+    "redirect_attention": 0.5363174709389203
   }
 }
