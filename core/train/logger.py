@@ -208,6 +208,7 @@ class SimulationLogger:
         latent_sensory_history = np.asarray(self.latent_sensory_consistency_history, dtype=float)
         latent_temporal_history = np.asarray(self.latent_temporal_consistency_history, dtype=float)
         latent_total_history = np.asarray(self.latent_vfe_total_history, dtype=float)
+        action_pred_error_history = np.asarray(self.action_pred_error_history, dtype=float)  # Phase 4
 
         for state in states:
             indices = state_indices.get(state, [])
@@ -265,10 +266,18 @@ class SimulationLogger:
             if latent_total_history.size == len(self.state_history):
                 latent_total_means[state] = float(np.mean(latent_total_history[indices]))
 
+        # Phase 4: Add action prediction error aggregates
+        action_pred_error_means = {}
+        for state in states:
+            indices = state_indices.get(state, [])
+            if indices and action_pred_error_history.size == len(self.state_history):
+                action_pred_error_means[state] = float(np.mean(action_pred_error_history[indices]))
+
         aggregates["activation_means_by_state"] = activation_means
         aggregates["average_network_activations_by_state"] = network_means
         aggregates["average_free_energy_by_state"] = free_energy_means
         aggregates["average_prediction_error_by_state"] = pred_error_means
+        aggregates["average_action_pred_error_by_state"] = action_pred_error_means  # Phase 4
         aggregates["average_precision_by_state"] = precision_means
         aggregates["average_efe_by_state"] = efe_means
         aggregates["average_efe_risk_by_state"] = efe_risk_means
@@ -422,6 +431,7 @@ class SimulationLogger:
             "average_transition_hazard_by_state": aggregates.get("average_transition_hazard_by_state", {}),
             "average_activation_burden_component_by_state": aggregates.get("average_activation_burden_component_by_state", {}),
             "average_coupling_burden_component_by_state": aggregates.get("average_coupling_burden_component_by_state", {}),
+            "average_action_pred_error_by_state": aggregates.get("average_action_pred_error_by_state", {}),  # Phase 4
             "ra_reorienting_success_rate": self.ra_reorienting_success_rate,
             "average_latent_reconstruction_by_state": aggregates.get("average_latent_reconstruction_by_state", {}),
             "average_latent_prior_kl_by_state": aggregates.get("average_latent_prior_kl_by_state", {}),

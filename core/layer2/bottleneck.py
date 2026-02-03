@@ -290,9 +290,50 @@ class Layer2AttentionalModel(nn.Module):
     def prescriptive_action(self, z: torch.Tensor, vfe: torch.Tensor, current_state: str) -> dict:
         """Run hierarchical policy: L3 modulates L2, then L2 controls L1."""
         
-        # Agent bias: decode current mu into brain-network space (state-aware)
-        mu_goal = self.mu_params[current_state]
-        agent_bias = self.decode_with_state(mu_goal, current_state)
+        # Phase 4: Evaluate candidate actions via forward prediction
+        candidate_states = [current_state]  # Primary: stay in current state
+        # Add transition candidates based on state machine
+        if current_state == 'mind_wandering':
+            candidate_states.append('meta_awareness')
+        elif current_state == 'meta_awareness':
+            candidate_states.append('redirect_attention')
+        elif current_state == 'redirect_attention':
+            candidate_states.append('breath_focus')
+        
+        best_action = None
+        min_predicted_error = float('inf')
+        
+        # Get current networks for forward prediction
+        x_current = torch.stack([
+            self.blanket.sensory_states.get(net, torch.tensor(0.0, device=z.device))
+            for net in self.networks
+        ])
+        
+        for candidate_state in candidate_states:
+            # Decode candidate action to get target thoughtseed activation
+            mu_candidate = self.mu_params[candidate_state]
+            
+            # Phase 4 FIX: Use candidate mu as the "action" input to forward model
+            # This represents taking action toward candidate_state attractor
+            with torch.no_grad():
+                x_next_pred = self.vae.predict_next(x_current, mu_candidate)
+            
+            # Decode candidate to get expected network activations
+            action_candidate = self.decode_with_state(mu_candidate, candidate_state)
+            
+            # Evaluate predicted deviation from candidate goal
+            prediction_error = torch.mean((x_next_pred - action_candidate)**2).item()
+            
+            if prediction_error < min_predicted_error:
+                min_predicted_error = prediction_error
+                best_action = (candidate_state, action_candidate, mu_candidate)
+        
+        # Use best action (or fallback to current state)
+        if best_action is not None:
+            _, agent_bias, selected_mu = best_action  # State not needed after selection
+        else:
+            selected_mu = self.mu_params[current_state]
+            agent_bias = self.decode_with_state(selected_mu, current_state)
         
         vfe_val = vfe.item() if isinstance(vfe, torch.Tensor) else float(vfe)
         self.blanket_l2l3.update_sensory_states({
@@ -318,6 +359,9 @@ class Layer2AttentionalModel(nn.Module):
             precision=float(precision),
             transition_pressure=float(transition_pressure),
         )
+        
+        # Phase 4: Store selected action for forward prediction
+        prescription_l1l2['selected_action_mu'] = selected_mu
         
         self.blanket.update_active_states(prescription_l1l2)
         

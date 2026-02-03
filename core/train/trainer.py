@@ -85,8 +85,7 @@ class PracticeTrainer:
         
         last_free_energy = 0.0
         
-        # Phase 4: Track previous observation for forward prediction
-        self._last_x_pred = None
+        # Phase 4: Track previous actual observation for forward model training
         self._last_x_actual = None
         
         bptt_steps = 50
@@ -136,29 +135,38 @@ class PracticeTrainer:
                 loss = loss + free_energy
                 last_free_energy = free_energy.detach().item()
                 
-                # Phase 4: Action prediction error (enactive inference)
-                # Compute how well previous action predicted current observation
+                # Forward-informed action selection: Choose action FIRST
+                prescription = self.agent.prescriptive_action(activations, free_energy, current_state)
+                
+                # Current observation and selected action
+                x_current = torch.stack([network_acts[net] for net in self.agent.networks])
+                selected_action_mu = prescription['selected_action_mu']
+                
+                # Phase 4: Forward model loss (enactive inference)
+                # Predict what current observation should be, given previous state+action
                 action_pred_error = torch.tensor(0.0, device=activations.device)
                 action_pred_error_val = 0.0
-                if self._last_x_pred is not None and self._last_x_actual is not None:
-                    x_actual = torch.stack([network_acts[net] for net in self.agent.networks])
-                    action_pred_error = torch.mean((x_actual - self._last_x_pred)**2)
+                if self._last_x_actual is not None:
+                    # Predict current observation from previous state+action (gradients flow here!)
+                    x_pred_from_last = self.agent.vae.predict_next(self._last_x_actual['x'], 
+                                                                     self._last_x_actual['action'])
+                    action_pred_error = torch.mean((x_current.detach() - x_pred_from_last)**2)
                     action_pred_error_val = action_pred_error.detach().item()
                     
-                    # TODO Phase 4: Enable action loss once main model converges
                     # Weight by L3 precision modulation
-                    # precision = self.agent.blanket_l2l3.active_states.get('precision_modulation', 0.5)
-                    # if isinstance(precision, torch.Tensor):
-                    #     precision = precision.item()
-                    # loss = loss + (precision * action_pred_error)
+                    precision = self.agent.blanket_l2l3.active_states.get('precision_modulation', 0.5)
+                    if isinstance(precision, torch.Tensor):
+                        precision = precision.item()
+                    
+                    # Scale precision to reasonable loss weight (0.05 to 0.15 range)
+                    action_loss_weight = 0.05 + (0.1 * precision)
+                    loss = loss + (action_loss_weight * action_pred_error)
                 
-                # Predict next observation for next timestep
-                x_current = torch.stack([network_acts[net] for net in self.agent.networks])
-                x_next_pred = self.agent.vae.predict_next(x_current, activations)
-                self._last_x_pred = x_next_pred.detach()
-                self._last_x_actual = x_current.detach()
-                
-                self.agent.prescriptive_action(activations, free_energy, current_state)
+                # Store current state+action for next iteration's forward loss
+                self._last_x_actual = {
+                    'x': x_current.detach(),
+                    'action': selected_action_mu.detach()
+                }
                 
                 transition_drive = float(self.agent.blanket.active_states.get('transition_drive', 0.0))
                 self._record_history(
