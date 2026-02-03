@@ -15,8 +15,13 @@ from ..layer3.monitor import Layer3Monitor
 class Layer2AttentionalModel(nn.Module):
     """Layer 2: attentional agents + learnable dynamics."""
     
-    def __init__(self, experience_level: str = 'novice', timesteps_per_cycle: int = 200, seed: Optional[int] = None):
+    def __init__(self, experience_level: str = 'novice', timesteps_per_cycle: int = 200, seed: Optional[int] = None,
+                 enable_forward_model: bool = True, enable_forward_actions: bool = True):
         super().__init__()
+        
+        # Ablation flags
+        self.enable_forward_model = enable_forward_model
+        self.enable_forward_actions = enable_forward_actions
         
         self.experience_level = experience_level
         self.timesteps = timesteps_per_cycle
@@ -34,7 +39,8 @@ class Layer2AttentionalModel(nn.Module):
         from .vae import MeditationVAE
         self.vae = MeditationVAE(
             input_dim=len(self.networks),
-            latent_dim=self.num_thoughtseeds
+            latent_dim=self.num_thoughtseeds,
+            enable_forward_model=self.enable_forward_model
         )
         
         self.mu_params = nn.ParameterDict()
@@ -290,48 +296,53 @@ class Layer2AttentionalModel(nn.Module):
     def prescriptive_action(self, z: torch.Tensor, vfe: torch.Tensor, current_state: str) -> dict:
         """Run hierarchical policy: L3 modulates L2, then L2 controls L1."""
         
-        # Phase 4: Evaluate candidate actions via forward prediction
-        candidate_states = [current_state]  # Primary: stay in current state
-        # Add transition candidates based on state machine
-        if current_state == 'mind_wandering':
-            candidate_states.append('meta_awareness')
-        elif current_state == 'meta_awareness':
-            candidate_states.append('redirect_attention')
-        elif current_state == 'redirect_attention':
-            candidate_states.append('breath_focus')
-        
-        best_action = None
-        min_predicted_error = float('inf')
-        
-        # Get current networks for forward prediction
-        x_current = torch.stack([
-            self.blanket.sensory_states.get(net, torch.tensor(0.0, device=z.device))
-            for net in self.networks
-        ])
-        
-        for candidate_state in candidate_states:
-            # Decode candidate action to get target thoughtseed activation
-            mu_candidate = self.mu_params[candidate_state]
+        # Phase 4: Evaluate candidate actions via forward prediction (if enabled)
+        if self.enable_forward_actions:
+            candidate_states = [current_state]  # Primary: stay in current state
+            # Add transition candidates based on state machine
+            if current_state == 'mind_wandering':
+                candidate_states.append('meta_awareness')
+            elif current_state == 'meta_awareness':
+                candidate_states.append('redirect_attention')
+            elif current_state == 'redirect_attention':
+                candidate_states.append('breath_focus')
             
-            # Phase 4 FIX: Use candidate mu as the "action" input to forward model
-            # This represents taking action toward candidate_state attractor
-            with torch.no_grad():
-                x_next_pred = self.vae.predict_next(x_current, mu_candidate)
+            best_action = None
+            min_predicted_error = float('inf')
             
-            # Decode candidate to get expected network activations
-            action_candidate = self.decode_with_state(mu_candidate, candidate_state)
+            # Get current networks for forward prediction
+            x_current = torch.stack([
+                self.blanket.sensory_states.get(net, torch.tensor(0.0, device=z.device))
+                for net in self.networks
+            ])
             
-            # Evaluate predicted deviation from candidate goal
-            prediction_error = torch.mean((x_next_pred - action_candidate)**2).item()
+            for candidate_state in candidate_states:
+                # Decode candidate action to get target thoughtseed activation
+                mu_candidate = self.mu_params[candidate_state]
+                
+                # Phase 4 FIX: Use candidate mu as the "action" input to forward model
+                # This represents taking action toward candidate_state attractor
+                with torch.no_grad():
+                    x_next_pred = self.vae.predict_next(x_current, mu_candidate)
+                
+                # Decode candidate to get expected network activations
+                action_candidate = self.decode_with_state(mu_candidate, candidate_state)
+                
+                # Evaluate predicted deviation from candidate goal
+                prediction_error = torch.mean((x_next_pred - action_candidate)**2).item()
+                
+                if prediction_error < min_predicted_error:
+                    min_predicted_error = prediction_error
+                    best_action = (candidate_state, action_candidate, mu_candidate)
             
-            if prediction_error < min_predicted_error:
-                min_predicted_error = prediction_error
-                best_action = (candidate_state, action_candidate, mu_candidate)
-        
-        # Use best action (or fallback to current state)
-        if best_action is not None:
-            _, agent_bias, selected_mu = best_action  # State not needed after selection
+            # Use best action (or fallback to current state)
+            if best_action is not None:
+                _, agent_bias, selected_mu = best_action  # State not needed after selection
+            else:
+                selected_mu = self.mu_params[current_state]
+                agent_bias = self.decode_with_state(selected_mu, current_state)
         else:
+            # Ablation: forward-informed actions disabled, use current state only
             selected_mu = self.mu_params[current_state]
             agent_bias = self.decode_with_state(selected_mu, current_state)
         

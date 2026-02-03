@@ -10,11 +10,12 @@ import torch
 import torch.nn as nn
 
 class MeditationVAE(nn.Module):
-    def __init__(self, input_dim=4, latent_dim=5, hidden_dim=32):
+    def __init__(self, input_dim=4, latent_dim=5, hidden_dim=32, enable_forward_model=True):
         super().__init__()
 
         self.input_dim = input_dim  # 4 Networks
         self.latent_dim = latent_dim  # 5 Thoughtseeds
+        self.enable_forward_model = enable_forward_model
         
         # --- Encoder (Recognition Model q(z|x)) ---
         # Maps 4 Networks -> 5 Thoughtseed Logits
@@ -45,16 +46,19 @@ class MeditationVAE(nn.Module):
         # Predicts next observation given current observation and latent thoughtseed
         # Input: [x_t (4 networks), z_t (5 thoughtseeds)]
         # Output: x̂_{t+1} (4 networks)
-        self.forward_net = nn.Sequential(
-            nn.Linear(input_dim + latent_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim),
-            nn.Sigmoid()
-        )
+        if self.enable_forward_model:
+            self.forward_net = nn.Sequential(
+                nn.Linear(input_dim + latent_dim, hidden_dim),
+                nn.LayerNorm(hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.LayerNorm(hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, input_dim),
+                nn.Sigmoid()
+            )
+        else:
+            self.forward_net = None
         
     def encode(self, x):
         """
@@ -91,6 +95,10 @@ class MeditationVAE(nn.Module):
         Returns:
             x̂_{t+1}: Predicted next networks (same shape as x_t)
         """
+        if self.forward_net is None:
+            # Ablation: forward model disabled, return zeros
+            return torch.zeros_like(x_t)
+        
         # Handle single sample
         if x_t.dim() == 1:
             x_in = x_t.unsqueeze(0)

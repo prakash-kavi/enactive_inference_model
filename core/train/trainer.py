@@ -17,8 +17,11 @@ from .logger import SimulationLogger
 class PracticeTrainer:
     """Orchestrates the BPTT simulation loop."""
     
-    def __init__(self, agent, generative_process: Optional[Layer1Process] = None):
+    def __init__(self, agent, generative_process: Optional[Layer1Process] = None, 
+                 enable_l3_weighting: bool = True):
         self.agent = agent
+        self.enable_l3_weighting = enable_l3_weighting
+        
         if generative_process is None:
             self.process = Layer1Process(
                 experience_level=agent.experience_level,
@@ -146,20 +149,23 @@ class PracticeTrainer:
                 # Predict what current observation should be, given previous state+action
                 action_pred_error = torch.tensor(0.0, device=activations.device)
                 action_pred_error_val = 0.0
-                if self._last_x_actual is not None:
+                if self._last_x_actual is not None and self.agent.enable_forward_model:
                     # Predict current observation from previous state+action (gradients flow here!)
                     x_pred_from_last = self.agent.vae.predict_next(self._last_x_actual['x'], 
                                                                      self._last_x_actual['action'])
                     action_pred_error = torch.mean((x_current.detach() - x_pred_from_last)**2)
                     action_pred_error_val = action_pred_error.detach().item()
                     
-                    # Weight by L3 precision modulation
-                    precision = self.agent.blanket_l2l3.active_states.get('precision_modulation', 0.5)
-                    if isinstance(precision, torch.Tensor):
-                        precision = precision.item()
-                    
-                    # Scale precision to reasonable loss weight (0.05 to 0.15 range)
-                    action_loss_weight = 0.05 + (0.1 * precision)
+                    # Ablation: L3 precision weighting (if enabled)
+                    if self.enable_l3_weighting:
+                        precision = self.agent.blanket_l2l3.active_states.get('precision_modulation', 0.5)
+                        if isinstance(precision, torch.Tensor):
+                            precision = precision.item()
+                        # Scale precision to reasonable loss weight (0.05 to 0.15 range)
+                        action_loss_weight = 0.05 + (0.1 * precision)
+                    else:
+                        # Ablation: Fixed weight (no L3 modulation)
+                        action_loss_weight = 0.1
                     loss = loss + (action_loss_weight * action_pred_error)
                 
                 # Store current state+action for next iteration's forward loss

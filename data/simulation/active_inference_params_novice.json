@@ -25,58 +25,58 @@
   "policy_horizon_discount": 0.6,
   "learning_rate": 0.01,
   "average_free_energy_by_state": {
-    "breath_focus": 0.11700562980177218,
-    "mind_wandering": 0.1744103852914989,
-    "meta_awareness": 0.11613244924581412,
-    "redirect_attention": 0.08806241167864452
+    "breath_focus": 0.2089071631211636,
+    "mind_wandering": 0.26056224976912673,
+    "meta_awareness": 0.2168282816162357,
+    "redirect_attention": 0.16111697507504788
   },
   "average_efe_by_state": {
-    "breath_focus": 1.9655444540436156,
+    "breath_focus": 1.9654118117149537,
     "mind_wandering": 4.24398402417384,
     "meta_awareness": 3.0340941506167027,
     "redirect_attention": 2.1954464904551525
   },
   "average_efe_risk_by_state": {
-    "breath_focus": 1.0169533468813474,
+    "breath_focus": 1.0168211277440256,
     "mind_wandering": 3.2434249560247115,
     "meta_awareness": 2.0387554574885907,
     "redirect_attention": 1.111713596261257
   },
   "average_efe_ambiguity_by_state": {
-    "breath_focus": 2.3714777679056707,
+    "breath_focus": 2.3714767099273213,
     "mind_wandering": 2.501397670372822,
     "meta_awareness": 2.4883467328202835,
     "redirect_attention": 2.709332235484739
   },
   "average_policy_confidence_by_state": {
-    "breath_focus": 0.9908366292811812,
+    "breath_focus": 0.9908303084519942,
     "mind_wandering": 0.9886741269536189,
     "meta_awareness": 0.9993992199426988,
     "redirect_attention": 0.9998138667267179
   },
   "average_policy_entropy_by_state": {
-    "breath_focus": 0.058274997618428366,
+    "breath_focus": 0.05831130322573891,
     "mind_wandering": 0.06978868795811269,
     "meta_awareness": 0.0054104962115447556,
     "redirect_attention": 0.0019126671183780706
   },
   "average_mw_burden_by_state": {
-    "breath_focus": 0.03437200758377051,
-    "mind_wandering": 0.3044651816549651,
-    "meta_awareness": 0.2170041921021097,
-    "redirect_attention": 0.07389989433116523
+    "breath_focus": 0.03407214573644534,
+    "mind_wandering": 0.2963962273282334,
+    "meta_awareness": 0.21524282648843335,
+    "redirect_attention": 0.07325688375015733
   },
   "average_transition_hazard_by_state": {
-    "breath_focus": 0.030044740373942804,
-    "mind_wandering": 0.0036330315794483752,
-    "meta_awareness": 0.09433843029369593,
-    "redirect_attention": 0.056630032108835535
+    "breath_focus": 0.030043020362766286,
+    "mind_wandering": 0.003630106998746763,
+    "meta_awareness": 0.09406105625494238,
+    "redirect_attention": 0.05660310133273332
   },
   "average_activation_burden_component_by_state": {
-    "breath_focus": 0.5194822937100376,
-    "mind_wandering": 0.3389188983394116,
-    "meta_awareness": 0.5461013672875709,
-    "redirect_attention": 0.7944346815116256
+    "breath_focus": 0.5132678205398984,
+    "mind_wandering": 0.32937594557001876,
+    "meta_awareness": 0.4659408056768095,
+    "redirect_attention": 0.7464278878943433
   },
   "average_coupling_burden_component_by_state": {
     "breath_focus": 0.24374999105930328,
@@ -85,52 +85,52 @@
     "redirect_attention": 0.4125000089406967
   },
   "average_action_pred_error_by_state": {
-    "breath_focus": 0.02223471129859533,
-    "mind_wandering": 0.0171152354628011,
-    "meta_awareness": 0.011752510033230383,
-    "redirect_attention": 0.024634455008102425
+    "breath_focus": 0.030920421550431842,
+    "mind_wandering": 0.01855743877794315,
+    "meta_awareness": 0.02010095820185684,
+    "redirect_attention": 0.03710982814704443
   },
   "ra_reorienting_success_rate": 0.875,
   "average_latent_reconstruction_by_state": {
-    "breath_focus": 0.009939378545326576,
-    "mind_wandering": 0.017111129458917303,
-    "meta_awareness": 0.015286622562917409,
-    "redirect_attention": 0.015757975687948702
+    "breath_focus": 0.010581253385942384,
+    "mind_wandering": 0.021367673684812623,
+    "meta_awareness": 0.014425460664450607,
+    "redirect_attention": 0.014147680673583332
   },
   "average_latent_prior_kl_by_state": {
-    "breath_focus": 0.027527895510347896,
-    "mind_wandering": 0.06878202939775876,
-    "meta_awareness": 0.033555746247822586,
-    "redirect_attention": 0.030182338746575017
+    "breath_focus": 0.06766554197757006,
+    "mind_wandering": 0.09579884748888606,
+    "meta_awareness": 0.0734098291758335,
+    "redirect_attention": 0.05549334482445071
   },
   "average_latent_sensory_consistency_by_state": {
-    "breath_focus": 0.022050927942996755,
-    "mind_wandering": 0.05470465571879418,
-    "meta_awareness": 0.01782710605917813,
-    "redirect_attention": 0.0390827737800363
+    "breath_focus": 0.03527236008686718,
+    "mind_wandering": 0.05372985199674034,
+    "meta_awareness": 0.03141184720851771,
+    "redirect_attention": 0.04071226964717627
   },
   "average_latent_temporal_consistency_by_state": {
-    "breath_focus": 0.01168364150160958,
-    "mind_wandering": 0.010380796330936288,
-    "meta_awareness": 0.012216498016972433,
-    "redirect_attention": 0.013571457188744616
+    "breath_focus": 0.008197173648049911,
+    "mind_wandering": 0.008346355331426678,
+    "meta_awareness": 0.010758605511512333,
+    "redirect_attention": 0.010490682658403076
   },
   "average_latent_vfe_total_by_state": {
-    "breath_focus": 0.04259050505861255,
-    "mind_wandering": 0.09743994765671458,
-    "meta_awareness": 0.05349510740408134,
-    "redirect_attention": 0.05409524589776993
+    "breath_focus": 0.08506451641309086,
+    "mind_wandering": 0.1281196025765514,
+    "meta_awareness": 0.09465017234221165,
+    "redirect_attention": 0.07757239341218439
   },
   "average_prediction_error_by_state": {
-    "breath_focus": 0.009877079731687676,
-    "mind_wandering": 0.017192353041172066,
-    "meta_awareness": 0.015586853525762596,
-    "redirect_attention": 0.015804849235589953
+    "breath_focus": 0.010124377244935248,
+    "mind_wandering": 0.02124758151490981,
+    "meta_awareness": 0.014145275677687355,
+    "redirect_attention": 0.013821901399448203
   },
   "average_precision_by_state": {
-    "breath_focus": 0.5161347363065267,
-    "mind_wandering": 0.4602367404034715,
-    "meta_awareness": 0.49610765071560864,
-    "redirect_attention": 0.5264989118496659
+    "breath_focus": 0.5261679518722837,
+    "mind_wandering": 0.4688867226637208,
+    "meta_awareness": 0.5050843505728704,
+    "redirect_attention": 0.5358716762840101
   }
 }

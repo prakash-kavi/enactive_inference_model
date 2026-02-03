@@ -155,7 +155,7 @@ class SimulationLogger:
         
         try:
             rel = os.path.relpath(out_dir, start=os.getcwd())
-        except (ValueError, OSError) as e:
+        except (ValueError, OSError):
             # ValueError on Windows with different drives, OSError for permission issues
             rel = out_dir
         logging.info("  - JSON parameter files saved to %s directory", rel)

@@ -1,0 +1,5454 @@
+{
+  "transition_timestamps": [
+    73,
+    124,
+    131,
+    137,
+    215,
+    220,
+    298,
+    304,
+    309,
+    385,
+    392,
+    401,
+    477,
+    485,
+    567,
+    617,
+    631,
+    637,
+    642,
+    719,
+    769,
+    774,
+    779,
+    854,
+    905,
+    914,
+    923,
+    930,
+    937,
+    1027,
+    1033,
+    1039,
+    1122,
+    1172,
+    1183,
+    1190,
+    1270,
+    1329,
+    1405,
+    1414,
+    1425,
+    1503,
+    1517,
+    1594,
+    1645,
+    1653,
+    1659,
+    1738,
+    1743,
+    1822,
+    1872,
+    1884,
+    1960,
+    2015,
+    2092,
+    2144,
+    2154,
+    2159,
+    2242,
+    2251,
+    2329,
+    2379,
+    2385,
+    2390,
+    2467,
+    2517,
+    2522,
+    2531,
+    2613,
+    2663,
+    2669,
+    2674,
+    2750,
+    2801,
+    2807,
+    2820,
+    2895,
+    2908,
+    2918,
+    2925,
+    2931,
+    3006,
+    3017,
+    3022,
+    3102,
+    3154,
+    3161,
+    3171,
+    3247,
+    3254,
+    3329,
+    3379,
+    3385,
+    3392,
+    3468,
+    3518,
+    3523,
+    3531,
+    3611,
+    3616,
+    3624,
+    3701,
+    3751,
+    3756,
+    3840,
+    3891,
+    3902,
+    3913,
+    3998,
+    4003,
+    4011,
+    4026,
+    4035,
+    4110,
+    4118,
+    4169,
+    4174,
+    4250,
+    4256,
+    4261,
+    4336,
+    4386,
+    4393,
+    4400,
+    4405,
+    4413,
+    4493,
+    4498,
+    4576,
+    4586,
+    4594,
+    4674,
+    4726,
+    4732,
+    4807,
+    4857,
+    4862,
+    4870,
+    4949,
+    4999,
+    5004,
+    5010,
+    5087,
+    5094,
+    5171,
+    5176,
+    5226,
+    5306,
+    5312,
+    5317,
+    5393,
+    5445,
+    5453,
+    5532,
+    5541,
+    5547,
+    5623,
+    5675,
+    5751,
+    5763,
+    5840,
+    5852,
+    5858,
+    5934,
+    5984,
+    5990,
+    6068,
+    6119,
+    6127,
+    6132,
+    6213,
+    6219,
+    6230,
+    6306,
+    6356,
+    6364,
+    6369,
+    6374,
+    6388,
+    6469,
+    6520,
+    6525,
+    6540,
+    6618,
+    6670,
+    6675,
+    6750,
+    6800,
+    6807,
+    6813,
+    6896,
+    6904,
+    6979,
+    7032,
+    7044,
+    7049,
+    7056,
+    7061,
+    7139,
+    7189,
+    7265,
+    7315,
+    7322,
+    7401,
+    7454,
+    7460,
+    7466,
+    7548,
+    7598,
+    7604,
+    7609,
+    7684,
+    7735,
+    7743,
+    7749,
+    7757,
+    7768,
+    7845,
+    7895,
+    7900,
+    7910,
+    7915,
+    7995,
+    8045,
+    8051,
+    8061,
+    8137,
+    8142,
+    8150,
+    8225,
+    8275,
+    8282,
+    8287,
+    8362,
+    8413,
+    8423,
+    8500,
+    8508,
+    8514,
+    8528,
+    8613,
+    8626,
+    8635,
+    8645,
+    8655,
+    8661,
+    8672,
+    8677,
+    8684,
+    8772,
+    8827,
+    8834,
+    8839,
+    8918,
+    8926,
+    8937,
+    9012,
+    9063,
+    9140,
+    9145,
+    9154,
+    9249,
+    9299,
+    9308,
+    9383,
+    9433,
+    9439,
+    9521,
+    9571,
+    9580,
+    9588,
+    9668,
+    9674,
+    9681,
+    9763,
+    9813,
+    9820,
+    9826,
+    9879,
+    9885,
+    9891,
+    9898,
+    9910,
+    9985,
+    9995
+  ],
+  "state_transition_patterns": [
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.36203551292419434,
+        "pending_tasks": 0.24416929483413696,
+        "aha_moment": 0.4493452310562134,
+        "equanimity": 0.7272356748580933
+      },
+      "network_acts": {
+        "DMN": 0.4049522578716278,
+        "VAN": 0.4771187901496887,
+        "DAN": 0.5998075008392334,
+        "FPN": 0.6959457397460938
+      },
+      "free_energy": 0.1055174171924591
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4528660774230957,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8890311121940613,
+        "aha_moment": 0.3175552487373352,
+        "equanimity": 0.43960922956466675
+      },
+      "network_acts": {
+        "DMN": 0.4453025460243225,
+        "VAN": 0.4353419542312622,
+        "DAN": 0.4673812985420227,
+        "FPN": 0.549075722694397
+      },
+      "free_energy": 0.167794868350029
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6151816844940186,
+        "pain_discomfort": 0.4151986837387085,
+        "pending_tasks": 0.3205781579017639,
+        "aha_moment": 0.8955850601196289,
+        "equanimity": 0.6582053899765015
+      },
+      "network_acts": {
+        "DMN": 0.3457616865634918,
+        "VAN": 0.5324980020523071,
+        "DAN": 0.53675776720047,
+        "FPN": 0.559258222579956
+      },
+      "free_energy": 0.13008533418178558
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8961682915687561,
+        "pain_discomfort": 0.40848982334136963,
+        "pending_tasks": 0.2233036458492279,
+        "aha_moment": 0.5829585790634155,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.33608633279800415,
+        "VAN": 0.48756539821624756,
+        "DAN": 0.6279535293579102,
+        "FPN": 0.671472430229187
+      },
+      "free_energy": 0.07684649527072906
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.38966959714889526,
+        "pending_tasks": 0.2994939684867859,
+        "aha_moment": 0.46936213970184326,
+        "equanimity": 0.7268087863922119
+      },
+      "network_acts": {
+        "DMN": 0.4168323576450348,
+        "VAN": 0.407972514629364,
+        "DAN": 0.6221268177032471,
+        "FPN": 0.5693281888961792
+      },
+      "free_energy": 0.11852241307497025
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.40103399753570557,
+        "pending_tasks": 0.2111254632472992,
+        "aha_moment": 0.5896114706993103,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.3777583837509155,
+        "VAN": 0.4065472483634949,
+        "DAN": 0.640548586845398,
+        "FPN": 0.6255770325660706
+      },
+      "free_energy": 0.07872958481311798
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.38769662380218506,
+        "pending_tasks": 0.2982916831970215,
+        "aha_moment": 0.4698737859725952,
+        "equanimity": 0.74135422706604
+      },
+      "network_acts": {
+        "DMN": 0.4650627374649048,
+        "VAN": 0.46353375911712646,
+        "DAN": 0.56529700756073,
+        "FPN": 0.5676032304763794
+      },
+      "free_energy": 0.12107592821121216
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6660051345825195,
+        "pain_discomfort": 0.4102555513381958,
+        "pending_tasks": 0.2405804991722107,
+        "aha_moment": 0.8988898992538452,
+        "equanimity": 0.643250584602356
+      },
+      "network_acts": {
+        "DMN": 0.4593220353126526,
+        "VAN": 0.5544994473457336,
+        "DAN": 0.5859753489494324,
+        "FPN": 0.5763636231422424
+      },
+      "free_energy": 0.11833406239748001
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8991246223449707,
+        "pain_discomfort": 0.4181530773639679,
+        "pending_tasks": 0.21904820203781128,
+        "aha_moment": 0.619346559047699,
+        "equanimity": 0.8992364406585693
+      },
+      "network_acts": {
+        "DMN": 0.4011099338531494,
+        "VAN": 0.5163775682449341,
+        "DAN": 0.6141864061355591,
+        "FPN": 0.5951390862464905
+      },
+      "free_energy": 0.08980380743741989
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.35491812229156494,
+        "pending_tasks": 0.34610244631767273,
+        "aha_moment": 0.4747532904148102,
+        "equanimity": 0.7379811406135559
+      },
+      "network_acts": {
+        "DMN": 0.3430882394313812,
+        "VAN": 0.45962268114089966,
+        "DAN": 0.6981494426727295,
+        "FPN": 0.6079191565513611
+      },
+      "free_energy": 0.12824326753616333
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6565625071525574,
+        "pain_discomfort": 0.41581204533576965,
+        "pending_tasks": 0.20965704321861267,
+        "aha_moment": 0.8997794389724731,
+        "equanimity": 0.6207668781280518
+      },
+      "network_acts": {
+        "DMN": 0.4399387836456299,
+        "VAN": 0.5421792268753052,
+        "DAN": 0.6939483880996704,
+        "FPN": 0.583250880241394
+      },
+      "free_energy": 0.11104270815849304
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8997796177864075,
+        "pain_discomfort": 0.42367279529571533,
+        "pending_tasks": 0.21008624136447906,
+        "aha_moment": 0.5812522768974304,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.4454396367073059,
+        "VAN": 0.4586292505264282,
+        "DAN": 0.6638039350509644,
+        "FPN": 0.6338145732879639
+      },
+      "free_energy": 0.07806003093719482
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.3421122133731842,
+        "pending_tasks": 0.3438304364681244,
+        "aha_moment": 0.5000547766685486,
+        "equanimity": 0.7598775625228882
+      },
+      "network_acts": {
+        "DMN": 0.42720532417297363,
+        "VAN": 0.530177891254425,
+        "DAN": 0.5750306844711304,
+        "FPN": 0.6925821304321289
+      },
+      "free_energy": 0.13392238318920135
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.43049901723861694,
+        "pending_tasks": 0.24465367197990417,
+        "aha_moment": 0.5647584199905396,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.38308316469192505,
+        "VAN": 0.5054116249084473,
+        "DAN": 0.6238096952438354,
+        "FPN": 0.6635960340499878
+      },
+      "free_energy": 0.08280874043703079
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.31612709164619446,
+        "pending_tasks": 0.3613239526748657,
+        "aha_moment": 0.5143227577209473,
+        "equanimity": 0.7641798257827759
+      },
+      "network_acts": {
+        "DMN": 0.45523279905319214,
+        "VAN": 0.46820947527885437,
+        "DAN": 0.5400958061218262,
+        "FPN": 0.6625999212265015
+      },
+      "free_energy": 0.13640007376670837
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4844207763671875,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.886489748954773,
+        "aha_moment": 0.31649088859558105,
+        "equanimity": 0.39255809783935547
+      },
+      "network_acts": {
+        "DMN": 0.5163540840148926,
+        "VAN": 0.43332913517951965,
+        "DAN": 0.5073306560516357,
+        "FPN": 0.6064964532852173
+      },
+      "free_energy": 0.16431236267089844
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8998503684997559,
+        "pain_discomfort": 0.44302651286125183,
+        "pending_tasks": 0.24158605933189392,
+        "aha_moment": 0.5672651529312134,
+        "equanimity": 0.8999437093734741
+      },
+      "network_acts": {
+        "DMN": 0.44510960578918457,
+        "VAN": 0.4743961691856384,
+        "DAN": 0.5958420038223267,
+        "FPN": 0.6417228579521179
+      },
+      "free_energy": 0.08600176125764847
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6771984696388245,
+        "pain_discomfort": 0.4109136462211609,
+        "pending_tasks": 0.2137817144393921,
+        "aha_moment": 0.8999999761581421,
+        "equanimity": 0.6343511939048767
+      },
+      "network_acts": {
+        "DMN": 0.44057613611221313,
+        "VAN": 0.573428750038147,
+        "DAN": 0.60959792137146,
+        "FPN": 0.6192758679389954
+      },
+      "free_energy": 0.10904812812805176
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8989095687866211,
+        "pain_discomfort": 0.4553421139717102,
+        "pending_tasks": 0.2148725390434265,
+        "aha_moment": 0.588606595993042,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.4182179570198059,
+        "VAN": 0.5265679955482483,
+        "DAN": 0.6328416466712952,
+        "FPN": 0.6646511554718018
+      },
+      "free_energy": 0.08393967151641846
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.30801302194595337,
+        "pending_tasks": 0.3781123161315918,
+        "aha_moment": 0.5149509906768799,
+        "equanimity": 0.7704124450683594
+      },
+      "network_acts": {
+        "DMN": 0.444886714220047,
+        "VAN": 0.473585307598114,
+        "DAN": 0.5260691046714783,
+        "FPN": 0.6507478952407837
+      },
+      "free_energy": 0.13869455456733704
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4860050082206726,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8902774453163147,
+        "aha_moment": 0.30972376465797424,
+        "equanimity": 0.39111295342445374
+      },
+      "network_acts": {
+        "DMN": 0.5073266625404358,
+        "VAN": 0.43720385432243347,
+        "DAN": 0.4415156841278076,
+        "FPN": 0.4951270818710327
+      },
+      "free_energy": 0.15788888931274414
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6598603129386902,
+        "pain_discomfort": 0.4602191746234894,
+        "pending_tasks": 0.2805706858634949,
+        "aha_moment": 0.892417311668396,
+        "equanimity": 0.6033535599708557
+      },
+      "network_acts": {
+        "DMN": 0.3993900418281555,
+        "VAN": 0.4544404149055481,
+        "DAN": 0.45094648003578186,
+        "FPN": 0.5425041913986206
+      },
+      "free_energy": 0.12597770988941193
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.894099235534668,
+        "pain_discomfort": 0.44035717844963074,
+        "pending_tasks": 0.25826412439346313,
+        "aha_moment": 0.5861308574676514,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.35836002230644226,
+        "VAN": 0.46943968534469604,
+        "DAN": 0.5809305906295776,
+        "FPN": 0.6305053234100342
+      },
+      "free_energy": 0.09399733692407608
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.3078562915325165,
+        "pending_tasks": 0.37674662470817566,
+        "aha_moment": 0.5184218883514404,
+        "equanimity": 0.7808545827865601
+      },
+      "network_acts": {
+        "DMN": 0.5560163259506226,
+        "VAN": 0.5222757458686829,
+        "DAN": 0.5119423270225525,
+        "FPN": 0.715577244758606
+      },
+      "free_energy": 0.144043430685997
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4834819436073303,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.889806866645813,
+        "aha_moment": 0.31441378593444824,
+        "equanimity": 0.4005899429321289
+      },
+      "network_acts": {
+        "DMN": 0.5691672563552856,
+        "VAN": 0.5446079969406128,
+        "DAN": 0.3873906135559082,
+        "FPN": 0.5049373507499695
+      },
+      "free_energy": 0.16472472250461578
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6444348096847534,
+        "pain_discomfort": 0.4266405701637268,
+        "pending_tasks": 0.22580084204673767,
+        "aha_moment": 0.8990569114685059,
+        "equanimity": 0.6059945821762085
+      },
+      "network_acts": {
+        "DMN": 0.4000726044178009,
+        "VAN": 0.5013141632080078,
+        "DAN": 0.3960050940513611,
+        "FPN": 0.6347337365150452
+      },
+      "free_energy": 0.1099819540977478
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.899468719959259,
+        "pain_discomfort": 0.4415256381034851,
+        "pending_tasks": 0.24774092435836792,
+        "aha_moment": 0.5659894347190857,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.4163261651992798,
+        "VAN": 0.49778324365615845,
+        "DAN": 0.5959181785583496,
+        "FPN": 0.6179306507110596
+      },
+      "free_energy": 0.0873301550745964
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6468708515167236,
+        "pain_discomfort": 0.37089022994041443,
+        "pending_tasks": 0.21971194446086884,
+        "aha_moment": 0.8997037410736084,
+        "equanimity": 0.5811731815338135
+      },
+      "network_acts": {
+        "DMN": 0.46460914611816406,
+        "VAN": 0.5470843315124512,
+        "DAN": 0.627437949180603,
+        "FPN": 0.62470942735672
+      },
+      "free_energy": 0.09345147013664246
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8992511034011841,
+        "pain_discomfort": 0.4337071478366852,
+        "pending_tasks": 0.2378360480070114,
+        "aha_moment": 0.5544554591178894,
+        "equanimity": 0.8995108604431152
+      },
+      "network_acts": {
+        "DMN": 0.40915557742118835,
+        "VAN": 0.5077006816864014,
+        "DAN": 0.6535434126853943,
+        "FPN": 0.6719076037406921
+      },
+      "free_energy": 0.0838877484202385
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.2933976948261261,
+        "pending_tasks": 0.3975207507610321,
+        "aha_moment": 0.5260208249092102,
+        "equanimity": 0.7803616523742676
+      },
+      "network_acts": {
+        "DMN": 0.4564981460571289,
+        "VAN": 0.5068866610527039,
+        "DAN": 0.6156583428382874,
+        "FPN": 0.6136820316314697
+      },
+      "free_energy": 0.1468195766210556
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6701792478561401,
+        "pain_discomfort": 0.3718150854110718,
+        "pending_tasks": 0.19559001922607422,
+        "aha_moment": 0.8990514278411865,
+        "equanimity": 0.5839070677757263
+      },
+      "network_acts": {
+        "DMN": 0.4175468981266022,
+        "VAN": 0.5308860540390015,
+        "DAN": 0.5672023296356201,
+        "FPN": 0.6020833253860474
+      },
+      "free_energy": 0.09150239080190659
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8992602229118347,
+        "pain_discomfort": 0.434887558221817,
+        "pending_tasks": 0.26912152767181396,
+        "aha_moment": 0.5737099051475525,
+        "equanimity": 0.8971710205078125
+      },
+      "network_acts": {
+        "DMN": 0.39623743295669556,
+        "VAN": 0.4892539978027344,
+        "DAN": 0.625120222568512,
+        "FPN": 0.6439114212989807
+      },
+      "free_energy": 0.09058725833892822
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.301849901676178,
+        "pending_tasks": 0.41327646374702454,
+        "aha_moment": 0.5150460004806519,
+        "equanimity": 0.7800070643424988
+      },
+      "network_acts": {
+        "DMN": 0.4646294116973877,
+        "VAN": 0.4543681740760803,
+        "DAN": 0.6131901741027832,
+        "FPN": 0.6162519454956055
+      },
+      "free_energy": 0.14950121939182281
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4715569019317627,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8884434700012207,
+        "aha_moment": 0.31612080335617065,
+        "equanimity": 0.38622066378593445
+      },
+      "network_acts": {
+        "DMN": 0.47191208600997925,
+        "VAN": 0.5378638505935669,
+        "DAN": 0.5229047536849976,
+        "FPN": 0.55795818567276
+      },
+      "free_energy": 0.15630751848220825
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6387843489646912,
+        "pain_discomfort": 0.37652766704559326,
+        "pending_tasks": 0.23129737377166748,
+        "aha_moment": 0.8996717929840088,
+        "equanimity": 0.5672484636306763
+      },
+      "network_acts": {
+        "DMN": 0.34267014265060425,
+        "VAN": 0.47402071952819824,
+        "DAN": 0.4939694106578827,
+        "FPN": 0.589672327041626
+      },
+      "free_energy": 0.09108947217464447
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8978599309921265,
+        "pain_discomfort": 0.4516092538833618,
+        "pending_tasks": 0.2545069754123688,
+        "aha_moment": 0.5584407448768616,
+        "equanimity": 0.89980149269104
+      },
+      "network_acts": {
+        "DMN": 0.354078471660614,
+        "VAN": 0.4778591990470886,
+        "DAN": 0.6096985340118408,
+        "FPN": 0.6747669577598572
+      },
+      "free_energy": 0.08775586634874344
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.293684720993042,
+        "pending_tasks": 0.4266210198402405,
+        "aha_moment": 0.5025737285614014,
+        "equanimity": 0.7743101119995117
+      },
+      "network_acts": {
+        "DMN": 0.36617511510849,
+        "VAN": 0.45035862922668457,
+        "DAN": 0.6020745038986206,
+        "FPN": 0.6215987205505371
+      },
+      "free_energy": 0.14786987006664276
+    },
+    {
+      "from": "mind_wandering",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4418787360191345,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.886210560798645,
+        "aha_moment": 0.31385475397109985,
+        "equanimity": 0.38656166195869446
+      },
+      "network_acts": {
+        "DMN": 0.5236667394638062,
+        "VAN": 0.4642602801322937,
+        "DAN": 0.4760943055152893,
+        "FPN": 0.5761703252792358
+      },
+      "free_energy": 0.14749392867088318
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.2934652864933014,
+        "pending_tasks": 0.4426916837692261,
+        "aha_moment": 0.4965131878852844,
+        "equanimity": 0.7772386074066162
+      },
+      "network_acts": {
+        "DMN": 0.2930769920349121,
+        "VAN": 0.4573013186454773,
+        "DAN": 0.5952687859535217,
+        "FPN": 0.6319960951805115
+      },
+      "free_energy": 0.15453386306762695
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6201097369194031,
+        "pain_discomfort": 0.3306274712085724,
+        "pending_tasks": 0.22521206736564636,
+        "aha_moment": 0.8997175693511963,
+        "equanimity": 0.5469558238983154
+      },
+      "network_acts": {
+        "DMN": 0.38111329078674316,
+        "VAN": 0.48827046155929565,
+        "DAN": 0.5238912105560303,
+        "FPN": 0.6201101541519165
+      },
+      "free_energy": 0.07476665079593658
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8993628025054932,
+        "pain_discomfort": 0.4652877449989319,
+        "pending_tasks": 0.2758674621582031,
+        "aha_moment": 0.5515902638435364,
+        "equanimity": 0.8996791839599609
+      },
+      "network_acts": {
+        "DMN": 0.3686196208000183,
+        "VAN": 0.45802783966064453,
+        "DAN": 0.5939311981201172,
+        "FPN": 0.6250272989273071
+      },
+      "free_energy": 0.09447066485881805
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.3019653558731079,
+        "pending_tasks": 0.4425111413002014,
+        "aha_moment": 0.47872593998908997,
+        "equanimity": 0.7747588157653809
+      },
+      "network_acts": {
+        "DMN": 0.2888307273387909,
+        "VAN": 0.4765457808971405,
+        "DAN": 0.6494330167770386,
+        "FPN": 0.5658684968948364
+      },
+      "free_energy": 0.15551967918872833
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999931812286377,
+        "pain_discomfort": 0.4730140268802643,
+        "pending_tasks": 0.2899940609931946,
+        "aha_moment": 0.5321998000144958,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.3876931071281433,
+        "VAN": 0.4844164252281189,
+        "DAN": 0.6079334020614624,
+        "FPN": 0.6452955007553101
+      },
+      "free_energy": 0.09766019880771637
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.29846814274787903,
+        "pending_tasks": 0.450721800327301,
+        "aha_moment": 0.4833586812019348,
+        "equanimity": 0.7733517289161682
+      },
+      "network_acts": {
+        "DMN": 0.36788734793663025,
+        "VAN": 0.4272368848323822,
+        "DAN": 0.609758198261261,
+        "FPN": 0.5838339328765869
+      },
+      "free_energy": 0.15268689393997192
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4276635944843292,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8848361968994141,
+        "aha_moment": 0.31179946660995483,
+        "equanimity": 0.3988804817199707
+      },
+      "network_acts": {
+        "DMN": 0.45400407910346985,
+        "VAN": 0.5368569493293762,
+        "DAN": 0.5006412267684937,
+        "FPN": 0.6552796363830566
+      },
+      "free_energy": 0.14401176571846008
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.6129072904586792,
+        "pain_discomfort": 0.35807913541793823,
+        "pending_tasks": 0.24707728624343872,
+        "aha_moment": 0.8974655866622925,
+        "equanimity": 0.5313544869422913
+      },
+      "network_acts": {
+        "DMN": 0.4415626525878906,
+        "VAN": 0.5976482629776001,
+        "DAN": 0.5287540555000305,
+        "FPN": 0.6693758964538574
+      },
+      "free_energy": 0.08683241903781891
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8946088552474976,
+        "pain_discomfort": 0.48504558205604553,
+        "pending_tasks": 0.28291454911231995,
+        "aha_moment": 0.5609413981437683,
+        "equanimity": 0.8969520330429077
+      },
+      "network_acts": {
+        "DMN": 0.3633382320404053,
+        "VAN": 0.533997118473053,
+        "DAN": 0.6038186550140381,
+        "FPN": 0.665945827960968
+      },
+      "free_energy": 0.10179591923952103
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999165534973,
+        "pain_discomfort": 0.31014901399612427,
+        "pending_tasks": 0.46104657649993896,
+        "aha_moment": 0.4673457145690918,
+        "equanimity": 0.7727895975112915
+      },
+      "network_acts": {
+        "DMN": 0.2991100251674652,
+        "VAN": 0.5581632852554321,
+        "DAN": 0.6801531314849854,
+        "FPN": 0.580618143081665
+      },
+      "free_energy": 0.1627332717180252
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4776936173439026,
+        "pending_tasks": 0.30835115909576416,
+        "aha_moment": 0.5133495330810547,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.33615854382514954,
+        "VAN": 0.5122489929199219,
+        "DAN": 0.628937304019928,
+        "FPN": 0.6081176400184631
+      },
+      "free_energy": 0.10362805426120758
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.3461933434009552,
+        "pending_tasks": 0.4595538079738617,
+        "aha_moment": 0.46936172246932983,
+        "equanimity": 0.7698885202407837
+      },
+      "network_acts": {
+        "DMN": 0.40759754180908203,
+        "VAN": 0.41560670733451843,
+        "DAN": 0.6291132569313049,
+        "FPN": 0.651378333568573
+      },
+      "free_energy": 0.15953220427036285
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43176811933517456,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8846592307090759,
+        "aha_moment": 0.31047457456588745,
+        "equanimity": 0.394803524017334
+      },
+      "network_acts": {
+        "DMN": 0.40580302476882935,
+        "VAN": 0.4876587390899658,
+        "DAN": 0.5395712852478027,
+        "FPN": 0.5777003765106201
+      },
+      "free_energy": 0.14315347373485565
+    },
+    {
+      "from": "meta_awareness",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5984015464782715,
+        "pain_discomfort": 0.32974356412887573,
+        "pending_tasks": 0.24619223177433014,
+        "aha_moment": 0.8997834920883179,
+        "equanimity": 0.5164233446121216
+      },
+      "network_acts": {
+        "DMN": 0.39386099576950073,
+        "VAN": 0.5120429992675781,
+        "DAN": 0.617172360420227,
+        "FPN": 0.621089518070221
+      },
+      "free_energy": 0.07066623866558075
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.3771950900554657,
+        "pending_tasks": 0.4698192775249481,
+        "aha_moment": 0.46189403533935547,
+        "equanimity": 0.7558019757270813
+      },
+      "network_acts": {
+        "DMN": 0.38970711827278137,
+        "VAN": 0.46238571405410767,
+        "DAN": 0.6301392912864685,
+        "FPN": 0.6331599354743958
+      },
+      "free_energy": 0.1643960326910019
+    },
+    {
+      "from": "mind_wandering",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43871551752090454,
+        "pain_discomfort": 0.8999999165534973,
+        "pending_tasks": 0.8925138711929321,
+        "aha_moment": 0.31917357444763184,
+        "equanimity": 0.39835336804389954
+      },
+      "network_acts": {
+        "DMN": 0.414339154958725,
+        "VAN": 0.45546388626098633,
+        "DAN": 0.5415539741516113,
+        "FPN": 0.58620285987854
+      },
+      "free_energy": 0.15283767879009247
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.3951842486858368,
+        "pending_tasks": 0.47041451930999756,
+        "aha_moment": 0.4553299844264984,
+        "equanimity": 0.7598943710327148
+      },
+      "network_acts": {
+        "DMN": 0.400190532207489,
+        "VAN": 0.5099158883094788,
+        "DAN": 0.6163886189460754,
+        "FPN": 0.6431946158409119
+      },
+      "free_energy": 0.16823424398899078
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.425668329000473,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8964462280273438,
+        "aha_moment": 0.313762903213501,
+        "equanimity": 0.39205402135849
+      },
+      "network_acts": {
+        "DMN": 0.35779306292533875,
+        "VAN": 0.5242940187454224,
+        "DAN": 0.6263887882232666,
+        "FPN": 0.5823264122009277
+      },
+      "free_energy": 0.1421831250190735
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5825048685073853,
+        "pain_discomfort": 0.3432163596153259,
+        "pending_tasks": 0.2495812177658081,
+        "aha_moment": 0.8991761207580566,
+        "equanimity": 0.48908567428588867
+      },
+      "network_acts": {
+        "DMN": 0.3385274410247803,
+        "VAN": 0.4682450294494629,
+        "DAN": 0.5610480904579163,
+        "FPN": 0.5956635475158691
+      },
+      "free_energy": 0.06831370294094086
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8946995139122009,
+        "pain_discomfort": 0.4879763126373291,
+        "pending_tasks": 0.30122119188308716,
+        "aha_moment": 0.5632108449935913,
+        "equanimity": 0.8941500186920166
+      },
+      "network_acts": {
+        "DMN": 0.33407077193260193,
+        "VAN": 0.46281811594963074,
+        "DAN": 0.6308626532554626,
+        "FPN": 0.6622769832611084
+      },
+      "free_energy": 0.10629723966121674
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999165534973,
+        "pain_discomfort": 0.4190581738948822,
+        "pending_tasks": 0.4661104679107666,
+        "aha_moment": 0.44744202494621277,
+        "equanimity": 0.7536599636077881
+      },
+      "network_acts": {
+        "DMN": 0.4222918152809143,
+        "VAN": 0.46535545587539673,
+        "DAN": 0.6031244993209839,
+        "FPN": 0.6654406785964966
+      },
+      "free_energy": 0.16926971077919006
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.47970229387283325,
+        "pending_tasks": 0.3138091564178467,
+        "aha_moment": 0.5275387763977051,
+        "equanimity": 0.8998323082923889
+      },
+      "network_acts": {
+        "DMN": 0.372175395488739,
+        "VAN": 0.49196451902389526,
+        "DAN": 0.6028296947479248,
+        "FPN": 0.5941076278686523
+      },
+      "free_energy": 0.10394410789012909
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.40831395983695984,
+        "pending_tasks": 0.4809187650680542,
+        "aha_moment": 0.4589393138885498,
+        "equanimity": 0.7564442157745361
+      },
+      "network_acts": {
+        "DMN": 0.4171821177005768,
+        "VAN": 0.4326633810997009,
+        "DAN": 0.6013096570968628,
+        "FPN": 0.629860520362854
+      },
+      "free_energy": 0.17490147054195404
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4308289885520935,
+        "pain_discomfort": 0.8999998569488525,
+        "pending_tasks": 0.8767580986022949,
+        "aha_moment": 0.3221341371536255,
+        "equanimity": 0.39740872383117676
+      },
+      "network_acts": {
+        "DMN": 0.5107076168060303,
+        "VAN": 0.5255750417709351,
+        "DAN": 0.4480442404747009,
+        "FPN": 0.6154643893241882
+      },
+      "free_energy": 0.1475645899772644
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5712260007858276,
+        "pain_discomfort": 0.3580859899520874,
+        "pending_tasks": 0.26383960247039795,
+        "aha_moment": 0.8947672843933105,
+        "equanimity": 0.4737761914730072
+      },
+      "network_acts": {
+        "DMN": 0.3947668671607971,
+        "VAN": 0.5199670791625977,
+        "DAN": 0.5590980052947998,
+        "FPN": 0.6457535028457642
+      },
+      "free_energy": 0.06940405070781708
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8886575698852539,
+        "pain_discomfort": 0.4854225516319275,
+        "pending_tasks": 0.3014901280403137,
+        "aha_moment": 0.5612044334411621,
+        "equanimity": 0.8871710300445557
+      },
+      "network_acts": {
+        "DMN": 0.3707277178764343,
+        "VAN": 0.5044251084327698,
+        "DAN": 0.5957766175270081,
+        "FPN": 0.6546659469604492
+      },
+      "free_energy": 0.10300058871507645
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.40679189562797546,
+        "pending_tasks": 0.4847567081451416,
+        "aha_moment": 0.4502425193786621,
+        "equanimity": 0.7593105435371399
+      },
+      "network_acts": {
+        "DMN": 0.43770983815193176,
+        "VAN": 0.4284183382987976,
+        "DAN": 0.5447596311569214,
+        "FPN": 0.6171044111251831
+      },
+      "free_energy": 0.17429624497890472
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4255877733230591,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8883825540542603,
+        "aha_moment": 0.31958600878715515,
+        "equanimity": 0.39437592029571533
+      },
+      "network_acts": {
+        "DMN": 0.46968528628349304,
+        "VAN": 0.47665935754776,
+        "DAN": 0.5778610110282898,
+        "FPN": 0.5794346928596497
+      },
+      "free_energy": 0.14628592133522034
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5685908794403076,
+        "pain_discomfort": 0.39198094606399536,
+        "pending_tasks": 0.28193747997283936,
+        "aha_moment": 0.8902243375778198,
+        "equanimity": 0.47910428047180176
+      },
+      "network_acts": {
+        "DMN": 0.4151766002178192,
+        "VAN": 0.5095810890197754,
+        "DAN": 0.5949231386184692,
+        "FPN": 0.6007792949676514
+      },
+      "free_energy": 0.07928099483251572
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8964272737503052,
+        "pain_discomfort": 0.505992591381073,
+        "pending_tasks": 0.33374786376953125,
+        "aha_moment": 0.5471062660217285,
+        "equanimity": 0.8995827436447144
+      },
+      "network_acts": {
+        "DMN": 0.3847634196281433,
+        "VAN": 0.48323190212249756,
+        "DAN": 0.6251306533813477,
+        "FPN": 0.6685144901275635
+      },
+      "free_energy": 0.11701202392578125
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.40474194288253784,
+        "pending_tasks": 0.47817739844322205,
+        "aha_moment": 0.446164071559906,
+        "equanimity": 0.7652531862258911
+      },
+      "network_acts": {
+        "DMN": 0.3605688214302063,
+        "VAN": 0.4332214593887329,
+        "DAN": 0.5684231519699097,
+        "FPN": 0.6406331062316895
+      },
+      "free_energy": 0.17391809821128845
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42027604579925537,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8948287963867188,
+        "aha_moment": 0.319530725479126,
+        "equanimity": 0.38835766911506653
+      },
+      "network_acts": {
+        "DMN": 0.5049343109130859,
+        "VAN": 0.5407471060752869,
+        "DAN": 0.526684582233429,
+        "FPN": 0.5964901447296143
+      },
+      "free_energy": 0.14111879467964172
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5666106343269348,
+        "pain_discomfort": 0.3740692138671875,
+        "pending_tasks": 0.26536187529563904,
+        "aha_moment": 0.8958055377006531,
+        "equanimity": 0.47139066457748413
+      },
+      "network_acts": {
+        "DMN": 0.41036200523376465,
+        "VAN": 0.5214633941650391,
+        "DAN": 0.5547587275505066,
+        "FPN": 0.6124231219291687
+      },
+      "free_energy": 0.07200054079294205
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8857965469360352,
+        "pain_discomfort": 0.5169284343719482,
+        "pending_tasks": 0.32904350757598877,
+        "aha_moment": 0.5486416816711426,
+        "equanimity": 0.8933916091918945
+      },
+      "network_acts": {
+        "DMN": 0.4008161127567291,
+        "VAN": 0.5336683988571167,
+        "DAN": 0.5921062231063843,
+        "FPN": 0.6525126695632935
+      },
+      "free_energy": 0.11526340991258621
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4134408235549927,
+        "pending_tasks": 0.49995046854019165,
+        "aha_moment": 0.43744876980781555,
+        "equanimity": 0.7591405510902405
+      },
+      "network_acts": {
+        "DMN": 0.39408937096595764,
+        "VAN": 0.4676313102245331,
+        "DAN": 0.6423558592796326,
+        "FPN": 0.5593079924583435
+      },
+      "free_energy": 0.1789645552635193
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4274905025959015,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8853288888931274,
+        "aha_moment": 0.31822511553764343,
+        "equanimity": 0.3966928720474243
+      },
+      "network_acts": {
+        "DMN": 0.4355787932872772,
+        "VAN": 0.5078810453414917,
+        "DAN": 0.44987159967422485,
+        "FPN": 0.6075073480606079
+      },
+      "free_energy": 0.14625805616378784
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5380418300628662,
+        "pain_discomfort": 0.36999088525772095,
+        "pending_tasks": 0.2687518298625946,
+        "aha_moment": 0.893581748008728,
+        "equanimity": 0.45152032375335693
+      },
+      "network_acts": {
+        "DMN": 0.30652916431427,
+        "VAN": 0.5796865224838257,
+        "DAN": 0.5232216119766235,
+        "FPN": 0.6111488342285156
+      },
+      "free_energy": 0.06878742575645447
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8985246419906616,
+        "pain_discomfort": 0.5109286308288574,
+        "pending_tasks": 0.3259362578392029,
+        "aha_moment": 0.521760880947113,
+        "equanimity": 0.8998196125030518
+      },
+      "network_acts": {
+        "DMN": 0.39520263671875,
+        "VAN": 0.5163264274597168,
+        "DAN": 0.5858385562896729,
+        "FPN": 0.6679782867431641
+      },
+      "free_energy": 0.11347068846225739
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.41388338804244995,
+        "pending_tasks": 0.507134199142456,
+        "aha_moment": 0.42279762029647827,
+        "equanimity": 0.7456862926483154
+      },
+      "network_acts": {
+        "DMN": 0.29442834854125977,
+        "VAN": 0.4535480737686157,
+        "DAN": 0.7280970811843872,
+        "FPN": 0.5253642201423645
+      },
+      "free_energy": 0.1838303804397583
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5142700672149658,
+        "pain_discomfort": 0.31721991300582886,
+        "pending_tasks": 0.2346239984035492,
+        "aha_moment": 0.8999240398406982,
+        "equanimity": 0.4037506878376007
+      },
+      "network_acts": {
+        "DMN": 0.3740184009075165,
+        "VAN": 0.47387614846229553,
+        "DAN": 0.5968700647354126,
+        "FPN": 0.6100825071334839
+      },
+      "free_energy": 0.048672378063201904
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8994231224060059,
+        "pain_discomfort": 0.5032309293746948,
+        "pending_tasks": 0.3233707845211029,
+        "aha_moment": 0.5244483351707458,
+        "equanimity": 0.8996212482452393
+      },
+      "network_acts": {
+        "DMN": 0.34937676787376404,
+        "VAN": 0.48476192355155945,
+        "DAN": 0.5915109515190125,
+        "FPN": 0.6273555159568787
+      },
+      "free_energy": 0.11224724352359772
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5241498947143555,
+        "pain_discomfort": 0.3231824040412903,
+        "pending_tasks": 0.22936540842056274,
+        "aha_moment": 0.8987044095993042,
+        "equanimity": 0.420289546251297
+      },
+      "network_acts": {
+        "DMN": 0.36924540996551514,
+        "VAN": 0.4969651699066162,
+        "DAN": 0.5226912498474121,
+        "FPN": 0.6526188850402832
+      },
+      "free_energy": 0.050885073840618134
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8907078504562378,
+        "pain_discomfort": 0.4958181381225586,
+        "pending_tasks": 0.3249489665031433,
+        "aha_moment": 0.5363264679908752,
+        "equanimity": 0.8955905437469482
+      },
+      "network_acts": {
+        "DMN": 0.36366981267929077,
+        "VAN": 0.5013024210929871,
+        "DAN": 0.57027268409729,
+        "FPN": 0.647667646408081
+      },
+      "free_energy": 0.1096877008676529
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4297662377357483,
+        "pending_tasks": 0.5076887607574463,
+        "aha_moment": 0.43150225281715393,
+        "equanimity": 0.7478214502334595
+      },
+      "network_acts": {
+        "DMN": 0.40181976556777954,
+        "VAN": 0.5176655650138855,
+        "DAN": 0.581680417060852,
+        "FPN": 0.6419749855995178
+      },
+      "free_energy": 0.18191617727279663
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5079658031463623,
+        "pain_discomfort": 0.327251136302948,
+        "pending_tasks": 0.22938290238380432,
+        "aha_moment": 0.8999341726303101,
+        "equanimity": 0.38603508472442627
+      },
+      "network_acts": {
+        "DMN": 0.3567107319831848,
+        "VAN": 0.5240824818611145,
+        "DAN": 0.6454623341560364,
+        "FPN": 0.6458871364593506
+      },
+      "free_energy": 0.049973368644714355
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8840985298156738,
+        "pain_discomfort": 0.49894046783447266,
+        "pending_tasks": 0.3389238119125366,
+        "aha_moment": 0.5353742837905884,
+        "equanimity": 0.8864197731018066
+      },
+      "network_acts": {
+        "DMN": 0.380816251039505,
+        "VAN": 0.47218865156173706,
+        "DAN": 0.630607545375824,
+        "FPN": 0.6441348791122437
+      },
+      "free_energy": 0.11263313889503479
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.44850802421569824,
+        "pending_tasks": 0.5140042304992676,
+        "aha_moment": 0.42072755098342896,
+        "equanimity": 0.750519335269928
+      },
+      "network_acts": {
+        "DMN": 0.43923237919807434,
+        "VAN": 0.429389625787735,
+        "DAN": 0.5836428999900818,
+        "FPN": 0.5963091254234314
+      },
+      "free_energy": 0.18629489839076996
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4274040162563324,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8933601379394531,
+        "aha_moment": 0.31529608368873596,
+        "equanimity": 0.3863123059272766
+      },
+      "network_acts": {
+        "DMN": 0.5152778029441833,
+        "VAN": 0.48315751552581787,
+        "DAN": 0.5207948684692383,
+        "FPN": 0.5303114652633667
+      },
+      "free_energy": 0.14417141675949097
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.517895519733429,
+        "pain_discomfort": 0.346007764339447,
+        "pending_tasks": 0.26261913776397705,
+        "aha_moment": 0.8984231948852539,
+        "equanimity": 0.4194857180118561
+      },
+      "network_acts": {
+        "DMN": 0.39130064845085144,
+        "VAN": 0.5573680400848389,
+        "DAN": 0.545923113822937,
+        "FPN": 0.6357079744338989
+      },
+      "free_energy": 0.05962487310171127
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8937965631484985,
+        "pain_discomfort": 0.5314652919769287,
+        "pending_tasks": 0.347003698348999,
+        "aha_moment": 0.5065446496009827,
+        "equanimity": 0.8998175859451294
+      },
+      "network_acts": {
+        "DMN": 0.37079834938049316,
+        "VAN": 0.47414812445640564,
+        "DAN": 0.5998460650444031,
+        "FPN": 0.6634869575500488
+      },
+      "free_energy": 0.12151364982128143
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.45090317726135254,
+        "pending_tasks": 0.5103426575660706,
+        "aha_moment": 0.4170186519622803,
+        "equanimity": 0.7446619272232056
+      },
+      "network_acts": {
+        "DMN": 0.4144100546836853,
+        "VAN": 0.46920347213745117,
+        "DAN": 0.6004672050476074,
+        "FPN": 0.6204280853271484
+      },
+      "free_energy": 0.18394623696804047
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999437093734741,
+        "pain_discomfort": 0.5060101747512817,
+        "pending_tasks": 0.3382151126861572,
+        "aha_moment": 0.5147867798805237,
+        "equanimity": 0.8999999761581421
+      },
+      "network_acts": {
+        "DMN": 0.3477344810962677,
+        "VAN": 0.49900516867637634,
+        "DAN": 0.5876901149749756,
+        "FPN": 0.6471251249313354
+      },
+      "free_energy": 0.11474607139825821
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.46425893902778625,
+        "pending_tasks": 0.509912371635437,
+        "aha_moment": 0.41581279039382935,
+        "equanimity": 0.7421384453773499
+      },
+      "network_acts": {
+        "DMN": 0.531905472278595,
+        "VAN": 0.4169900417327881,
+        "DAN": 0.5554398894309998,
+        "FPN": 0.6607416868209839
+      },
+      "free_energy": 0.1936475932598114
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42436483502388,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8844462037086487,
+        "aha_moment": 0.3173883557319641,
+        "equanimity": 0.39072906970977783
+      },
+      "network_acts": {
+        "DMN": 0.4809942841529846,
+        "VAN": 0.45937788486480713,
+        "DAN": 0.49258092045783997,
+        "FPN": 0.6010726094245911
+      },
+      "free_energy": 0.14283926784992218
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5148506164550781,
+        "pain_discomfort": 0.385835200548172,
+        "pending_tasks": 0.27019190788269043,
+        "aha_moment": 0.8922927379608154,
+        "equanimity": 0.40456944704055786
+      },
+      "network_acts": {
+        "DMN": 0.35000067949295044,
+        "VAN": 0.4827542304992676,
+        "DAN": 0.5427280068397522,
+        "FPN": 0.6295247673988342
+      },
+      "free_energy": 0.0648583173751831
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8922879695892334,
+        "pain_discomfort": 0.5252944231033325,
+        "pending_tasks": 0.349948525428772,
+        "aha_moment": 0.53199303150177,
+        "equanimity": 0.8947033882141113
+      },
+      "network_acts": {
+        "DMN": 0.3801654577255249,
+        "VAN": 0.5215610265731812,
+        "DAN": 0.5971364974975586,
+        "FPN": 0.654636800289154
+      },
+      "free_energy": 0.1216157004237175
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.46051347255706787,
+        "pending_tasks": 0.5199718475341797,
+        "aha_moment": 0.4049379825592041,
+        "equanimity": 0.7428354024887085
+      },
+      "network_acts": {
+        "DMN": 0.35534560680389404,
+        "VAN": 0.3745836913585663,
+        "DAN": 0.6062352657318115,
+        "FPN": 0.5938899517059326
+      },
+      "free_energy": 0.18925045430660248
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4222835302352905,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8915657997131348,
+        "aha_moment": 0.31668776273727417,
+        "equanimity": 0.3946387469768524
+      },
+      "network_acts": {
+        "DMN": 0.4392552077770233,
+        "VAN": 0.3982202112674713,
+        "DAN": 0.45724353194236755,
+        "FPN": 0.517760157585144
+      },
+      "free_energy": 0.14270853996276855
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5238995552062988,
+        "pain_discomfort": 0.37986472249031067,
+        "pending_tasks": 0.2803339958190918,
+        "aha_moment": 0.8912931680679321,
+        "equanimity": 0.40362322330474854
+      },
+      "network_acts": {
+        "DMN": 0.3409379720687866,
+        "VAN": 0.43466702103614807,
+        "DAN": 0.5062597990036011,
+        "FPN": 0.5814523696899414
+      },
+      "free_energy": 0.06999680399894714
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8941082954406738,
+        "pain_discomfort": 0.5211300849914551,
+        "pending_tasks": 0.35090452432632446,
+        "aha_moment": 0.5236143469810486,
+        "equanimity": 0.8973985910415649
+      },
+      "network_acts": {
+        "DMN": 0.3267406225204468,
+        "VAN": 0.48075586557388306,
+        "DAN": 0.6079462170600891,
+        "FPN": 0.6590311527252197
+      },
+      "free_energy": 0.12250380218029022
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4658726751804352,
+        "pending_tasks": 0.5255584716796875,
+        "aha_moment": 0.395729660987854,
+        "equanimity": 0.7425582408905029
+      },
+      "network_acts": {
+        "DMN": 0.39953237771987915,
+        "VAN": 0.4781976342201233,
+        "DAN": 0.6366123557090759,
+        "FPN": 0.5946460366249084
+      },
+      "free_energy": 0.1901468187570572
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.5226476192474365,
+        "pain_discomfort": 0.33497560024261475,
+        "pending_tasks": 0.25587472319602966,
+        "aha_moment": 0.8956464529037476,
+        "equanimity": 0.40193474292755127
+      },
+      "network_acts": {
+        "DMN": 0.3691098392009735,
+        "VAN": 0.4366956353187561,
+        "DAN": 0.6230081915855408,
+        "FPN": 0.6009500026702881
+      },
+      "free_energy": 0.05613771080970764
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8986095190048218,
+        "pain_discomfort": 0.5291253328323364,
+        "pending_tasks": 0.35068953037261963,
+        "aha_moment": 0.5166589021682739,
+        "equanimity": 0.8988532423973083
+      },
+      "network_acts": {
+        "DMN": 0.3677632212638855,
+        "VAN": 0.4112643301486969,
+        "DAN": 0.5908726453781128,
+        "FPN": 0.6597127318382263
+      },
+      "free_energy": 0.12343516945838928
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4736967384815216,
+        "pending_tasks": 0.5071057081222534,
+        "aha_moment": 0.39072686433792114,
+        "equanimity": 0.7365922927856445
+      },
+      "network_acts": {
+        "DMN": 0.35654526948928833,
+        "VAN": 0.49296796321868896,
+        "DAN": 0.6390337944030762,
+        "FPN": 0.6209098100662231
+      },
+      "free_energy": 0.18666766583919525
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4247301518917084,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.894838809967041,
+        "aha_moment": 0.3140922784805298,
+        "equanimity": 0.3817859888076782
+      },
+      "network_acts": {
+        "DMN": 0.4044943153858185,
+        "VAN": 0.3535349667072296,
+        "DAN": 0.4620320796966553,
+        "FPN": 0.5835447907447815
+      },
+      "free_energy": 0.14041218161582947
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8705041408538818,
+        "pain_discomfort": 0.5745015144348145,
+        "pending_tasks": 0.4106043875217438,
+        "aha_moment": 0.4766479730606079,
+        "equanimity": 0.8864092230796814
+      },
+      "network_acts": {
+        "DMN": 0.3487652540206909,
+        "VAN": 0.38616329431533813,
+        "DAN": 0.5764915347099304,
+        "FPN": 0.6573302745819092
+      },
+      "free_energy": 0.14471565186977386
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.48589813709259033,
+        "pending_tasks": 0.5279939770698547,
+        "aha_moment": 0.38250160217285156,
+        "equanimity": 0.7304911017417908
+      },
+      "network_acts": {
+        "DMN": 0.42413532733917236,
+        "VAN": 0.3350869119167328,
+        "DAN": 0.5773516297340393,
+        "FPN": 0.6134769320487976
+      },
+      "free_energy": 0.19147039949893951
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42706823348999023,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8950484395027161,
+        "aha_moment": 0.31545770168304443,
+        "equanimity": 0.3896210491657257
+      },
+      "network_acts": {
+        "DMN": 0.4899516999721527,
+        "VAN": 0.4838644862174988,
+        "DAN": 0.5028493404388428,
+        "FPN": 0.5584244728088379
+      },
+      "free_energy": 0.14666444063186646
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4887489974498749,
+        "pain_discomfort": 0.3483867049217224,
+        "pending_tasks": 0.24725183844566345,
+        "aha_moment": 0.8996478319168091,
+        "equanimity": 0.3954163193702698
+      },
+      "network_acts": {
+        "DMN": 0.3634023070335388,
+        "VAN": 0.5066179037094116,
+        "DAN": 0.5603274703025818,
+        "FPN": 0.6320779323577881
+      },
+      "free_energy": 0.05255093798041344
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8967366218566895,
+        "pain_discomfort": 0.5268120765686035,
+        "pending_tasks": 0.36007341742515564,
+        "aha_moment": 0.5050925612449646,
+        "equanimity": 0.8993821144104004
+      },
+      "network_acts": {
+        "DMN": 0.3606245517730713,
+        "VAN": 0.49900877475738525,
+        "DAN": 0.6227774620056152,
+        "FPN": 0.6838003396987915
+      },
+      "free_energy": 0.12472061812877655
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4949185848236084,
+        "pending_tasks": 0.5288442969322205,
+        "aha_moment": 0.3773132860660553,
+        "equanimity": 0.7342192530632019
+      },
+      "network_acts": {
+        "DMN": 0.40389373898506165,
+        "VAN": 0.5038526058197021,
+        "DAN": 0.5670995712280273,
+        "FPN": 0.5906805992126465
+      },
+      "free_energy": 0.19466981291770935
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.49385014176368713,
+        "pain_discomfort": 0.3488938808441162,
+        "pending_tasks": 0.2256876826286316,
+        "aha_moment": 0.8962559103965759,
+        "equanimity": 0.395030677318573
+      },
+      "network_acts": {
+        "DMN": 0.3809965252876282,
+        "VAN": 0.48550933599472046,
+        "DAN": 0.5638064742088318,
+        "FPN": 0.6331632733345032
+      },
+      "free_energy": 0.050353433936834335
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8990367650985718,
+        "pain_discomfort": 0.5175321102142334,
+        "pending_tasks": 0.35866254568099976,
+        "aha_moment": 0.516067624092102,
+        "equanimity": 0.8990218639373779
+      },
+      "network_acts": {
+        "DMN": 0.3996477723121643,
+        "VAN": 0.5253347158432007,
+        "DAN": 0.5895112752914429,
+        "FPN": 0.6326721906661987
+      },
+      "free_energy": 0.12244697660207748
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4633145332336426,
+        "pain_discomfort": 0.32402676343917847,
+        "pending_tasks": 0.23097234964370728,
+        "aha_moment": 0.8999990224838257,
+        "equanimity": 0.3726539611816406
+      },
+      "network_acts": {
+        "DMN": 0.2529308795928955,
+        "VAN": 0.485883504152298,
+        "DAN": 0.5593873262405396,
+        "FPN": 0.6171477437019348
+      },
+      "free_energy": 0.046121854335069656
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8909015655517578,
+        "pain_discomfort": 0.536990225315094,
+        "pending_tasks": 0.35596656799316406,
+        "aha_moment": 0.5008663535118103,
+        "equanimity": 0.898838222026825
+      },
+      "network_acts": {
+        "DMN": 0.39651790261268616,
+        "VAN": 0.48783743381500244,
+        "DAN": 0.580053448677063,
+        "FPN": 0.659357488155365
+      },
+      "free_energy": 0.12454500049352646
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4961491525173187,
+        "pending_tasks": 0.5350297689437866,
+        "aha_moment": 0.3821249008178711,
+        "equanimity": 0.729188084602356
+      },
+      "network_acts": {
+        "DMN": 0.3801327049732208,
+        "VAN": 0.47707921266555786,
+        "DAN": 0.5959771871566772,
+        "FPN": 0.6213691234588623
+      },
+      "free_energy": 0.19612076878547668
+    },
+    {
+      "from": "redirect_attention",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8962594270706177,
+        "pain_discomfort": 0.5281740427017212,
+        "pending_tasks": 0.3676804304122925,
+        "aha_moment": 0.5091586112976074,
+        "equanimity": 0.8990765810012817
+      },
+      "network_acts": {
+        "DMN": 0.4095434844493866,
+        "VAN": 0.47795602679252625,
+        "DAN": 0.5729199051856995,
+        "FPN": 0.6649209260940552
+      },
+      "free_energy": 0.12743064761161804
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4321044087409973,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8734157085418701,
+        "aha_moment": 0.3206038475036621,
+        "equanimity": 0.392836332321167
+      },
+      "network_acts": {
+        "DMN": 0.45338574051856995,
+        "VAN": 0.49265241622924805,
+        "DAN": 0.5093379616737366,
+        "FPN": 0.6128588914871216
+      },
+      "free_energy": 0.14651593565940857
+    },
+    {
+      "from": "meta_awareness",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.494048535823822,
+        "pain_discomfort": 0.3853626251220703,
+        "pending_tasks": 0.2651900053024292,
+        "aha_moment": 0.8929966688156128,
+        "equanimity": 0.4094589650630951
+      },
+      "network_acts": {
+        "DMN": 0.414755254983902,
+        "VAN": 0.543134331703186,
+        "DAN": 0.5215586423873901,
+        "FPN": 0.6374717354774475
+      },
+      "free_energy": 0.06141873821616173
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5090394616127014,
+        "pending_tasks": 0.5070225596427917,
+        "aha_moment": 0.3834196627140045,
+        "equanimity": 0.7335203289985657
+      },
+      "network_acts": {
+        "DMN": 0.4337770938873291,
+        "VAN": 0.5294139385223389,
+        "DAN": 0.4824114441871643,
+        "FPN": 0.6802798509597778
+      },
+      "free_energy": 0.19343455135822296
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.46869924664497375,
+        "pain_discomfort": 0.3390735387802124,
+        "pending_tasks": 0.23514825105667114,
+        "aha_moment": 0.8978496789932251,
+        "equanimity": 0.3978368043899536
+      },
+      "network_acts": {
+        "DMN": 0.3382384181022644,
+        "VAN": 0.5367278456687927,
+        "DAN": 0.48142141103744507,
+        "FPN": 0.6742198467254639
+      },
+      "free_energy": 0.04666764661669731
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8704686760902405,
+        "pain_discomfort": 0.5203681588172913,
+        "pending_tasks": 0.3494783043861389,
+        "aha_moment": 0.5458338856697083,
+        "equanimity": 0.8913275599479675
+      },
+      "network_acts": {
+        "DMN": 0.32846325635910034,
+        "VAN": 0.47693443298339844,
+        "DAN": 0.5461625456809998,
+        "FPN": 0.6596120595932007
+      },
+      "free_energy": 0.12053406238555908
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4945504069328308,
+        "pending_tasks": 0.5192042589187622,
+        "aha_moment": 0.3812727928161621,
+        "equanimity": 0.7365726232528687
+      },
+      "network_acts": {
+        "DMN": 0.42309755086898804,
+        "VAN": 0.5353507399559021,
+        "DAN": 0.555486798286438,
+        "FPN": 0.6980093717575073
+      },
+      "free_energy": 0.1907036006450653
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4327089488506317,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8818222284317017,
+        "aha_moment": 0.32114556431770325,
+        "equanimity": 0.38226771354675293
+      },
+      "network_acts": {
+        "DMN": 0.5199435353279114,
+        "VAN": 0.4347211420536041,
+        "DAN": 0.536907434463501,
+        "FPN": 0.5856147408485413
+      },
+      "free_energy": 0.14521197974681854
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4687572717666626,
+        "pain_discomfort": 0.37038737535476685,
+        "pending_tasks": 0.26961129903793335,
+        "aha_moment": 0.8964129686355591,
+        "equanimity": 0.39633214473724365
+      },
+      "network_acts": {
+        "DMN": 0.43066346645355225,
+        "VAN": 0.4911961555480957,
+        "DAN": 0.6194043159484863,
+        "FPN": 0.6065196394920349
+      },
+      "free_energy": 0.06053624674677849
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8851858973503113,
+        "pain_discomfort": 0.525820791721344,
+        "pending_tasks": 0.3685449957847595,
+        "aha_moment": 0.5313502550125122,
+        "equanimity": 0.8935157060623169
+      },
+      "network_acts": {
+        "DMN": 0.3947344422340393,
+        "VAN": 0.5310357809066772,
+        "DAN": 0.6021932363510132,
+        "FPN": 0.6300093531608582
+      },
+      "free_energy": 0.13005107641220093
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4761333763599396,
+        "pain_discomfort": 0.35083693265914917,
+        "pending_tasks": 0.21980270743370056,
+        "aha_moment": 0.8982446789741516,
+        "equanimity": 0.429983526468277
+      },
+      "network_acts": {
+        "DMN": 0.3871663808822632,
+        "VAN": 0.5498713254928589,
+        "DAN": 0.5734807252883911,
+        "FPN": 0.6851975917816162
+      },
+      "free_energy": 0.05073395371437073
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8946038484573364,
+        "pain_discomfort": 0.5390009880065918,
+        "pending_tasks": 0.355403333902359,
+        "aha_moment": 0.5137166976928711,
+        "equanimity": 0.8980718851089478
+      },
+      "network_acts": {
+        "DMN": 0.39931315183639526,
+        "VAN": 0.48697012662887573,
+        "DAN": 0.6004818677902222,
+        "FPN": 0.6573991179466248
+      },
+      "free_energy": 0.12840482592582703
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999978303909302,
+        "pain_discomfort": 0.49051204323768616,
+        "pending_tasks": 0.5218599438667297,
+        "aha_moment": 0.3689156472682953,
+        "equanimity": 0.7374601364135742
+      },
+      "network_acts": {
+        "DMN": 0.42225149273872375,
+        "VAN": 0.46136826276779175,
+        "DAN": 0.5963821411132812,
+        "FPN": 0.6598756313323975
+      },
+      "free_energy": 0.18965178728103638
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5387623310089111,
+        "pending_tasks": 0.3650478720664978,
+        "aha_moment": 0.49732375144958496,
+        "equanimity": 0.8962748050689697
+      },
+      "network_acts": {
+        "DMN": 0.43332958221435547,
+        "VAN": 0.4884873926639557,
+        "DAN": 0.6170195937156677,
+        "FPN": 0.702510416507721
+      },
+      "free_energy": 0.1304766982793808
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4895102381706238,
+        "pending_tasks": 0.5400031805038452,
+        "aha_moment": 0.38060232996940613,
+        "equanimity": 0.7334203124046326
+      },
+      "network_acts": {
+        "DMN": 0.3623969554901123,
+        "VAN": 0.43574392795562744,
+        "DAN": 0.6181589365005493,
+        "FPN": 0.5846125483512878
+      },
+      "free_energy": 0.19810786843299866
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4580491781234741,
+        "pain_discomfort": 0.3268502950668335,
+        "pending_tasks": 0.24671721458435059,
+        "aha_moment": 0.8999398946762085,
+        "equanimity": 0.3771398067474365
+      },
+      "network_acts": {
+        "DMN": 0.343184232711792,
+        "VAN": 0.4166315197944641,
+        "DAN": 0.5765862464904785,
+        "FPN": 0.5933049917221069
+      },
+      "free_energy": 0.04765121266245842
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8947343826293945,
+        "pain_discomfort": 0.5293608903884888,
+        "pending_tasks": 0.3663119375705719,
+        "aha_moment": 0.5162378549575806,
+        "equanimity": 0.8956904411315918
+      },
+      "network_acts": {
+        "DMN": 0.3472542464733124,
+        "VAN": 0.4738640785217285,
+        "DAN": 0.6112363338470459,
+        "FPN": 0.6177606582641602
+      },
+      "free_energy": 0.12821537256240845
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.48392224311828613,
+        "pending_tasks": 0.5211073756217957,
+        "aha_moment": 0.38096946477890015,
+        "equanimity": 0.7539374828338623
+      },
+      "network_acts": {
+        "DMN": 0.3806629478931427,
+        "VAN": 0.5128873586654663,
+        "DAN": 0.6510971188545227,
+        "FPN": 0.6893795132637024
+      },
+      "free_energy": 0.1951078474521637
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42807674407958984,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8765761256217957,
+        "aha_moment": 0.3127824068069458,
+        "equanimity": 0.3920888900756836
+      },
+      "network_acts": {
+        "DMN": 0.4344301223754883,
+        "VAN": 0.4621843099594116,
+        "DAN": 0.49630987644195557,
+        "FPN": 0.6064639687538147
+      },
+      "free_energy": 0.1448955237865448
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.851359486579895,
+        "pain_discomfort": 0.5740146040916443,
+        "pending_tasks": 0.39691030979156494,
+        "aha_moment": 0.4743441343307495,
+        "equanimity": 0.8828900456428528
+      },
+      "network_acts": {
+        "DMN": 0.3793850243091583,
+        "VAN": 0.46938809752464294,
+        "DAN": 0.6048711538314819,
+        "FPN": 0.6596294045448303
+      },
+      "free_energy": 0.13717596232891083
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.49126553535461426,
+        "pending_tasks": 0.5178840756416321,
+        "aha_moment": 0.38523203134536743,
+        "equanimity": 0.7463982105255127
+      },
+      "network_acts": {
+        "DMN": 0.5255273580551147,
+        "VAN": 0.40343618392944336,
+        "DAN": 0.5397355556488037,
+        "FPN": 0.6208464503288269
+      },
+      "free_energy": 0.19529646635055542
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4270973205566406,
+        "pain_discomfort": 0.8999999165534973,
+        "pending_tasks": 0.8735301494598389,
+        "aha_moment": 0.31850749254226685,
+        "equanimity": 0.3927306532859802
+      },
+      "network_acts": {
+        "DMN": 0.46542131900787354,
+        "VAN": 0.46032246947288513,
+        "DAN": 0.491644948720932,
+        "FPN": 0.596095085144043
+      },
+      "free_energy": 0.1452271044254303
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.46442851424217224,
+        "pain_discomfort": 0.41353586316108704,
+        "pending_tasks": 0.25632643699645996,
+        "aha_moment": 0.8927221298217773,
+        "equanimity": 0.3991224765777588
+      },
+      "network_acts": {
+        "DMN": 0.4187588095664978,
+        "VAN": 0.5120185613632202,
+        "DAN": 0.5324028730392456,
+        "FPN": 0.5826987624168396
+      },
+      "free_energy": 0.06346584111452103
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8776940107345581,
+        "pain_discomfort": 0.5432312488555908,
+        "pending_tasks": 0.3797605633735657,
+        "aha_moment": 0.5094174146652222,
+        "equanimity": 0.8966922163963318
+      },
+      "network_acts": {
+        "DMN": 0.34922462701797485,
+        "VAN": 0.47175392508506775,
+        "DAN": 0.5940581560134888,
+        "FPN": 0.6374824643135071
+      },
+      "free_energy": 0.13063816726207733
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4965566098690033,
+        "pending_tasks": 0.5009960532188416,
+        "aha_moment": 0.3932300806045532,
+        "equanimity": 0.7543827891349792
+      },
+      "network_acts": {
+        "DMN": 0.3997839391231537,
+        "VAN": 0.48673003911972046,
+        "DAN": 0.6271034479141235,
+        "FPN": 0.6903889179229736
+      },
+      "free_energy": 0.19030682742595673
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4317329525947571,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8701626658439636,
+        "aha_moment": 0.31752949953079224,
+        "equanimity": 0.3864879012107849
+      },
+      "network_acts": {
+        "DMN": 0.5239086151123047,
+        "VAN": 0.511210560798645,
+        "DAN": 0.5325117111206055,
+        "FPN": 0.5984567403793335
+      },
+      "free_energy": 0.1439533680677414
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4603152275085449,
+        "pain_discomfort": 0.38986822962760925,
+        "pending_tasks": 0.2844409942626953,
+        "aha_moment": 0.8930197954177856,
+        "equanimity": 0.39552730321884155
+      },
+      "network_acts": {
+        "DMN": 0.44860517978668213,
+        "VAN": 0.5208085775375366,
+        "DAN": 0.5728763341903687,
+        "FPN": 0.6529628038406372
+      },
+      "free_energy": 0.06145375221967697
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8737926483154297,
+        "pain_discomfort": 0.5487548112869263,
+        "pending_tasks": 0.3976188600063324,
+        "aha_moment": 0.5006933212280273,
+        "equanimity": 0.8842030763626099
+      },
+      "network_acts": {
+        "DMN": 0.41466063261032104,
+        "VAN": 0.5001970529556274,
+        "DAN": 0.6105846762657166,
+        "FPN": 0.6456936597824097
+      },
+      "free_energy": 0.1354890912771225
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4815673828125,
+        "pending_tasks": 0.5022826790809631,
+        "aha_moment": 0.39633554220199585,
+        "equanimity": 0.7598686218261719
+      },
+      "network_acts": {
+        "DMN": 0.4845343232154846,
+        "VAN": 0.4924229085445404,
+        "DAN": 0.5508190393447876,
+        "FPN": 0.6395367383956909
+      },
+      "free_energy": 0.19009678065776825
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8891328573226929,
+        "pain_discomfort": 0.5570278167724609,
+        "pending_tasks": 0.3997792601585388,
+        "aha_moment": 0.4870573878288269,
+        "equanimity": 0.8993817567825317
+      },
+      "network_acts": {
+        "DMN": 0.4096032977104187,
+        "VAN": 0.4902878403663635,
+        "DAN": 0.6408568620681763,
+        "FPN": 0.6785131096839905
+      },
+      "free_energy": 0.14071761071681976
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.47251370549201965,
+        "pending_tasks": 0.4986262619495392,
+        "aha_moment": 0.38902682065963745,
+        "equanimity": 0.7608010172843933
+      },
+      "network_acts": {
+        "DMN": 0.4355658292770386,
+        "VAN": 0.5198885202407837,
+        "DAN": 0.5738961100578308,
+        "FPN": 0.6207507252693176
+      },
+      "free_energy": 0.18264296650886536
+    },
+    {
+      "from": "meta_awareness",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4596681296825409,
+        "pain_discomfort": 0.3479401469230652,
+        "pending_tasks": 0.25436028838157654,
+        "aha_moment": 0.8972246050834656,
+        "equanimity": 0.39543282985687256
+      },
+      "network_acts": {
+        "DMN": 0.44709131121635437,
+        "VAN": 0.5131219625473022,
+        "DAN": 0.527438223361969,
+        "FPN": 0.6312223076820374
+      },
+      "free_energy": 0.048333924263715744
+    },
+    {
+      "from": "mind_wandering",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4225628972053528,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.85935378074646,
+        "aha_moment": 0.31574901938438416,
+        "equanimity": 0.39796018600463867
+      },
+      "network_acts": {
+        "DMN": 0.4922689199447632,
+        "VAN": 0.5171586275100708,
+        "DAN": 0.472008615732193,
+        "FPN": 0.5973909497261047
+      },
+      "free_energy": 0.1432431936264038
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.48010072112083435,
+        "pending_tasks": 0.49417930841445923,
+        "aha_moment": 0.40477699041366577,
+        "equanimity": 0.7745406627655029
+      },
+      "network_acts": {
+        "DMN": 0.5051472187042236,
+        "VAN": 0.46213680505752563,
+        "DAN": 0.5471983551979065,
+        "FPN": 0.5981893539428711
+      },
+      "free_energy": 0.18866311013698578
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4677737355232239,
+        "pain_discomfort": 0.3405606150627136,
+        "pending_tasks": 0.2357063591480255,
+        "aha_moment": 0.8952469825744629,
+        "equanimity": 0.39679431915283203
+      },
+      "network_acts": {
+        "DMN": 0.4401839077472687,
+        "VAN": 0.4993099570274353,
+        "DAN": 0.5725856423377991,
+        "FPN": 0.637804388999939
+      },
+      "free_energy": 0.04585181549191475
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8658825159072876,
+        "pain_discomfort": 0.5397794842720032,
+        "pending_tasks": 0.3858903646469116,
+        "aha_moment": 0.5288276672363281,
+        "equanimity": 0.8816920518875122
+      },
+      "network_acts": {
+        "DMN": 0.42428094148635864,
+        "VAN": 0.47485440969467163,
+        "DAN": 0.5834102034568787,
+        "FPN": 0.6614970564842224
+      },
+      "free_energy": 0.13114264607429504
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4728200137615204,
+        "pending_tasks": 0.49856290221214294,
+        "aha_moment": 0.3932217061519623,
+        "equanimity": 0.7736296057701111
+      },
+      "network_acts": {
+        "DMN": 0.43212515115737915,
+        "VAN": 0.5170909762382507,
+        "DAN": 0.6420849561691284,
+        "FPN": 0.6035841703414917
+      },
+      "free_energy": 0.18800348043441772
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4287015199661255,
+        "pain_discomfort": 0.8999999165534973,
+        "pending_tasks": 0.8647619485855103,
+        "aha_moment": 0.31524768471717834,
+        "equanimity": 0.38995954394340515
+      },
+      "network_acts": {
+        "DMN": 0.45543795824050903,
+        "VAN": 0.5154238939285278,
+        "DAN": 0.5804212093353271,
+        "FPN": 0.5985680818557739
+      },
+      "free_energy": 0.14420869946479797
+    },
+    {
+      "from": "meta_awareness",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.45507246255874634,
+        "pain_discomfort": 0.34600120782852173,
+        "pending_tasks": 0.2491140365600586,
+        "aha_moment": 0.8989253044128418,
+        "equanimity": 0.4129558801651001
+      },
+      "network_acts": {
+        "DMN": 0.503054141998291,
+        "VAN": 0.5407436490058899,
+        "DAN": 0.5121616721153259,
+        "FPN": 0.685931384563446
+      },
+      "free_energy": 0.04926121234893799
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.47834980487823486,
+        "pending_tasks": 0.4905140995979309,
+        "aha_moment": 0.3946196734905243,
+        "equanimity": 0.767851710319519
+      },
+      "network_acts": {
+        "DMN": 0.5021901726722717,
+        "VAN": 0.5430750846862793,
+        "DAN": 0.5214332342147827,
+        "FPN": 0.6107629537582397
+      },
+      "free_energy": 0.18453557789325714
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4493405818939209,
+        "pain_discomfort": 0.3193208575248718,
+        "pending_tasks": 0.2291494905948639,
+        "aha_moment": 0.8996783494949341,
+        "equanimity": 0.3849802017211914
+      },
+      "network_acts": {
+        "DMN": 0.4324549436569214,
+        "VAN": 0.5610469579696655,
+        "DAN": 0.5569669604301453,
+        "FPN": 0.6753166913986206
+      },
+      "free_energy": 0.042261891067028046
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8695071935653687,
+        "pain_discomfort": 0.542715847492218,
+        "pending_tasks": 0.3807491064071655,
+        "aha_moment": 0.49540919065475464,
+        "equanimity": 0.8951013088226318
+      },
+      "network_acts": {
+        "DMN": 0.40183404088020325,
+        "VAN": 0.5246440172195435,
+        "DAN": 0.6190819144248962,
+        "FPN": 0.67190021276474
+      },
+      "free_energy": 0.13008640706539154
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999165534973,
+        "pain_discomfort": 0.4753786325454712,
+        "pending_tasks": 0.5027281641960144,
+        "aha_moment": 0.3974267840385437,
+        "equanimity": 0.7643449306488037
+      },
+      "network_acts": {
+        "DMN": 0.36099663376808167,
+        "VAN": 0.4271201491355896,
+        "DAN": 0.7359086275100708,
+        "FPN": 0.6251821517944336
+      },
+      "free_energy": 0.19835270941257477
+    },
+    {
+      "from": "mind_wandering",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4341578483581543,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8572624325752258,
+        "aha_moment": 0.31803497672080994,
+        "equanimity": 0.39511948823928833
+      },
+      "network_acts": {
+        "DMN": 0.44620662927627563,
+        "VAN": 0.482913076877594,
+        "DAN": 0.5391380786895752,
+        "FPN": 0.6481454372406006
+      },
+      "free_energy": 0.14769022166728973
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.47290006279945374,
+        "pending_tasks": 0.4982971251010895,
+        "aha_moment": 0.39106959104537964,
+        "equanimity": 0.761579155921936
+      },
+      "network_acts": {
+        "DMN": 0.431731253862381,
+        "VAN": 0.4852450489997864,
+        "DAN": 0.6070787906646729,
+        "FPN": 0.6401492357254028
+      },
+      "free_energy": 0.18361613154411316
+    },
+    {
+      "from": "meta_awareness",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4535940885543823,
+        "pain_discomfort": 0.31834205985069275,
+        "pending_tasks": 0.23119059205055237,
+        "aha_moment": 0.8998959064483643,
+        "equanimity": 0.36868876218795776
+      },
+      "network_acts": {
+        "DMN": 0.3716145157814026,
+        "VAN": 0.5495600700378418,
+        "DAN": 0.5620830059051514,
+        "FPN": 0.6217104196548462
+      },
+      "free_energy": 0.040513306856155396
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.468742311000824,
+        "pending_tasks": 0.5077386498451233,
+        "aha_moment": 0.3889123201370239,
+        "equanimity": 0.7606426477432251
+      },
+      "network_acts": {
+        "DMN": 0.296661913394928,
+        "VAN": 0.5118666291236877,
+        "DAN": 0.665726363658905,
+        "FPN": 0.6396768093109131
+      },
+      "free_energy": 0.19098307192325592
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4654898941516876,
+        "pain_discomfort": 0.3219045400619507,
+        "pending_tasks": 0.22610004246234894,
+        "aha_moment": 0.8999588489532471,
+        "equanimity": 0.3790132403373718
+      },
+      "network_acts": {
+        "DMN": 0.3211321532726288,
+        "VAN": 0.5393221974372864,
+        "DAN": 0.5592044591903687,
+        "FPN": 0.6172488927841187
+      },
+      "free_energy": 0.04363388940691948
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8679511547088623,
+        "pain_discomfort": 0.5416876077651978,
+        "pending_tasks": 0.3952121138572693,
+        "aha_moment": 0.48977306485176086,
+        "equanimity": 0.8921977281570435
+      },
+      "network_acts": {
+        "DMN": 0.3890771269798279,
+        "VAN": 0.4701499342918396,
+        "DAN": 0.6499679684638977,
+        "FPN": 0.643915057182312
+      },
+      "free_energy": 0.13138942420482635
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4784119129180908,
+        "pending_tasks": 0.5074766278266907,
+        "aha_moment": 0.38451462984085083,
+        "equanimity": 0.7572107911109924
+      },
+      "network_acts": {
+        "DMN": 0.41273075342178345,
+        "VAN": 0.5235021710395813,
+        "DAN": 0.60223388671875,
+        "FPN": 0.6311312317848206
+      },
+      "free_energy": 0.1865532249212265
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4364657700061798,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8775679469108582,
+        "aha_moment": 0.32398760318756104,
+        "equanimity": 0.3858162760734558
+      },
+      "network_acts": {
+        "DMN": 0.4118649959564209,
+        "VAN": 0.4888444244861603,
+        "DAN": 0.6685642004013062,
+        "FPN": 0.6376681327819824
+      },
+      "free_energy": 0.14698293805122375
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8269509673118591,
+        "pain_discomfort": 0.6015865802764893,
+        "pending_tasks": 0.44362908601760864,
+        "aha_moment": 0.4669482111930847,
+        "equanimity": 0.8519966006278992
+      },
+      "network_acts": {
+        "DMN": 0.39358630776405334,
+        "VAN": 0.5092265009880066,
+        "DAN": 0.6275678873062134,
+        "FPN": 0.677524209022522
+      },
+      "free_energy": 0.15405364334583282
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4934822916984558,
+        "pending_tasks": 0.5042425990104675,
+        "aha_moment": 0.37571218609809875,
+        "equanimity": 0.7618219256401062
+      },
+      "network_acts": {
+        "DMN": 0.5319344997406006,
+        "VAN": 0.4798329472541809,
+        "DAN": 0.5242786407470703,
+        "FPN": 0.6647889614105225
+      },
+      "free_energy": 0.193739116191864
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4298296570777893,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8583186864852905,
+        "aha_moment": 0.3158438205718994,
+        "equanimity": 0.38836124539375305
+      },
+      "network_acts": {
+        "DMN": 0.46041038632392883,
+        "VAN": 0.5353232622146606,
+        "DAN": 0.538722574710846,
+        "FPN": 0.5763982534408569
+      },
+      "free_energy": 0.14395621418952942
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.48867589235305786,
+        "pain_discomfort": 0.3618974983692169,
+        "pending_tasks": 0.2592275142669678,
+        "aha_moment": 0.897645115852356,
+        "equanimity": 0.402127206325531
+      },
+      "network_acts": {
+        "DMN": 0.3817051351070404,
+        "VAN": 0.5487558841705322,
+        "DAN": 0.46992623805999756,
+        "FPN": 0.5731474757194519
+      },
+      "free_energy": 0.06113271415233612
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8488210439682007,
+        "pain_discomfort": 0.5613347291946411,
+        "pending_tasks": 0.37783166766166687,
+        "aha_moment": 0.5249361991882324,
+        "equanimity": 0.8762897253036499
+      },
+      "network_acts": {
+        "DMN": 0.3617277145385742,
+        "VAN": 0.4752260446548462,
+        "DAN": 0.5813496112823486,
+        "FPN": 0.6594892740249634
+      },
+      "free_energy": 0.1320827305316925
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4908875823020935,
+        "pending_tasks": 0.510285496711731,
+        "aha_moment": 0.37754085659980774,
+        "equanimity": 0.7616125345230103
+      },
+      "network_acts": {
+        "DMN": 0.4363880753517151,
+        "VAN": 0.4843168258666992,
+        "DAN": 0.5752571821212769,
+        "FPN": 0.545330822467804
+      },
+      "free_energy": 0.18924154341220856
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4831048250198364,
+        "pain_discomfort": 0.32809022068977356,
+        "pending_tasks": 0.2583068907260895,
+        "aha_moment": 0.8979364633560181,
+        "equanimity": 0.388641893863678
+      },
+      "network_acts": {
+        "DMN": 0.37726926803588867,
+        "VAN": 0.5184534192085266,
+        "DAN": 0.5541899800300598,
+        "FPN": 0.5860018134117126
+      },
+      "free_energy": 0.048336211591959
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8801770210266113,
+        "pain_discomfort": 0.5401458740234375,
+        "pending_tasks": 0.40993720293045044,
+        "aha_moment": 0.47023117542266846,
+        "equanimity": 0.8985596299171448
+      },
+      "network_acts": {
+        "DMN": 0.36486703157424927,
+        "VAN": 0.44912177324295044,
+        "DAN": 0.612051248550415,
+        "FPN": 0.6524468660354614
+      },
+      "free_energy": 0.13650448620319366
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4971739649772644,
+        "pending_tasks": 0.5066723227500916,
+        "aha_moment": 0.3889026939868927,
+        "equanimity": 0.7598789930343628
+      },
+      "network_acts": {
+        "DMN": 0.38373929262161255,
+        "VAN": 0.41553616523742676,
+        "DAN": 0.6526076793670654,
+        "FPN": 0.6309590935707092
+      },
+      "free_energy": 0.19389840960502625
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4324367046356201,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8751734495162964,
+        "aha_moment": 0.3177233338356018,
+        "equanimity": 0.38873517513275146
+      },
+      "network_acts": {
+        "DMN": 0.48068249225616455,
+        "VAN": 0.4943181872367859,
+        "DAN": 0.5439245104789734,
+        "FPN": 0.5188155770301819
+      },
+      "free_energy": 0.143452987074852
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.49551546573638916,
+        "pain_discomfort": 0.35756582021713257,
+        "pending_tasks": 0.26254943013191223,
+        "aha_moment": 0.8980544805526733,
+        "equanimity": 0.4002324938774109
+      },
+      "network_acts": {
+        "DMN": 0.4669792056083679,
+        "VAN": 0.48337239027023315,
+        "DAN": 0.591237485408783,
+        "FPN": 0.5439340472221375
+      },
+      "free_energy": 0.057352274656295776
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8579641580581665,
+        "pain_discomfort": 0.5319534540176392,
+        "pending_tasks": 0.3993086814880371,
+        "aha_moment": 0.4971241056919098,
+        "equanimity": 0.8707913160324097
+      },
+      "network_acts": {
+        "DMN": 0.44062966108322144,
+        "VAN": 0.5585708618164062,
+        "DAN": 0.6326770186424255,
+        "FPN": 0.6063734292984009
+      },
+      "free_energy": 0.12991179525852203
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.493019163608551,
+        "pain_discomfort": 0.32105553150177,
+        "pending_tasks": 0.2387257218360901,
+        "aha_moment": 0.8994536399841309,
+        "equanimity": 0.4127764105796814
+      },
+      "network_acts": {
+        "DMN": 0.4424929916858673,
+        "VAN": 0.5802777409553528,
+        "DAN": 0.6266884207725525,
+        "FPN": 0.5998371839523315
+      },
+      "free_energy": 0.050660308450460434
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8680398464202881,
+        "pain_discomfort": 0.5570015907287598,
+        "pending_tasks": 0.41322848200798035,
+        "aha_moment": 0.46736058592796326,
+        "equanimity": 0.8993158340454102
+      },
+      "network_acts": {
+        "DMN": 0.3959560692310333,
+        "VAN": 0.5517090559005737,
+        "DAN": 0.6537390947341919,
+        "FPN": 0.649044930934906
+      },
+      "free_energy": 0.14246417582035065
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4861129820346832,
+        "pending_tasks": 0.5099685192108154,
+        "aha_moment": 0.38173380494117737,
+        "equanimity": 0.7589125037193298
+      },
+      "network_acts": {
+        "DMN": 0.38737308979034424,
+        "VAN": 0.4997842311859131,
+        "DAN": 0.6228243112564087,
+        "FPN": 0.6596493721008301
+      },
+      "free_energy": 0.19096222519874573
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4252503514289856,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.859653115272522,
+        "aha_moment": 0.31153199076652527,
+        "equanimity": 0.3886476755142212
+      },
+      "network_acts": {
+        "DMN": 0.5627965331077576,
+        "VAN": 0.5688607692718506,
+        "DAN": 0.5354106426239014,
+        "FPN": 0.5376678705215454
+      },
+      "free_energy": 0.14470034837722778
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.48228728771209717,
+        "pain_discomfort": 0.3792570233345032,
+        "pending_tasks": 0.281027615070343,
+        "aha_moment": 0.8947254419326782,
+        "equanimity": 0.39743316173553467
+      },
+      "network_acts": {
+        "DMN": 0.465091347694397,
+        "VAN": 0.5090161561965942,
+        "DAN": 0.6033337712287903,
+        "FPN": 0.5699372887611389
+      },
+      "free_energy": 0.06245366856455803
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.870215892791748,
+        "pain_discomfort": 0.5551005005836487,
+        "pending_tasks": 0.421291708946228,
+        "aha_moment": 0.46261146664619446,
+        "equanimity": 0.8969228267669678
+      },
+      "network_acts": {
+        "DMN": 0.36793166399002075,
+        "VAN": 0.5002354979515076,
+        "DAN": 0.6392769813537598,
+        "FPN": 0.6759527325630188
+      },
+      "free_energy": 0.14249755442142487
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.48949557542800903,
+        "pending_tasks": 0.5205072164535522,
+        "aha_moment": 0.37015584111213684,
+        "equanimity": 0.746873676776886
+      },
+      "network_acts": {
+        "DMN": 0.38106459379196167,
+        "VAN": 0.47974956035614014,
+        "DAN": 0.6196738481521606,
+        "FPN": 0.5639782547950745
+      },
+      "free_energy": 0.19103024899959564
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43258631229400635,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8377590775489807,
+        "aha_moment": 0.32433807849884033,
+        "equanimity": 0.38989895582199097
+      },
+      "network_acts": {
+        "DMN": 0.5065916776657104,
+        "VAN": 0.45524436235427856,
+        "DAN": 0.5079058408737183,
+        "FPN": 0.6168513298034668
+      },
+      "free_energy": 0.15020760893821716
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7939364910125732,
+        "pain_discomfort": 0.5964112281799316,
+        "pending_tasks": 0.45634394884109497,
+        "aha_moment": 0.46106910705566406,
+        "equanimity": 0.8541115522384644
+      },
+      "network_acts": {
+        "DMN": 0.45019418001174927,
+        "VAN": 0.42572441697120667,
+        "DAN": 0.5862336754798889,
+        "FPN": 0.6577041149139404
+      },
+      "free_energy": 0.15545427799224854
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4975578188896179,
+        "pending_tasks": 0.5147367715835571,
+        "aha_moment": 0.3680214285850525,
+        "equanimity": 0.7467804551124573
+      },
+      "network_acts": {
+        "DMN": 0.4835950434207916,
+        "VAN": 0.4812976121902466,
+        "DAN": 0.5177404880523682,
+        "FPN": 0.663193941116333
+      },
+      "free_energy": 0.19068440794944763
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4302996098995209,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8481805920600891,
+        "aha_moment": 0.31852972507476807,
+        "equanimity": 0.3991200029850006
+      },
+      "network_acts": {
+        "DMN": 0.5275594592094421,
+        "VAN": 0.5776422619819641,
+        "DAN": 0.511273980140686,
+        "FPN": 0.5002017021179199
+      },
+      "free_energy": 0.15024887025356293
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.48686307668685913,
+        "pain_discomfort": 0.3559585213661194,
+        "pending_tasks": 0.2762983441352844,
+        "aha_moment": 0.8957856893539429,
+        "equanimity": 0.4121464490890503
+      },
+      "network_acts": {
+        "DMN": 0.3896729052066803,
+        "VAN": 0.5497814416885376,
+        "DAN": 0.5311468243598938,
+        "FPN": 0.6299976706504822
+      },
+      "free_energy": 0.057480160146951675
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8496670722961426,
+        "pain_discomfort": 0.5754653215408325,
+        "pending_tasks": 0.4150863289833069,
+        "aha_moment": 0.4797612726688385,
+        "equanimity": 0.8600133657455444
+      },
+      "network_acts": {
+        "DMN": 0.36497947573661804,
+        "VAN": 0.5114152431488037,
+        "DAN": 0.6366028189659119,
+        "FPN": 0.7063905000686646
+      },
+      "free_energy": 0.14308753609657288
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.49130022525787354,
+        "pending_tasks": 0.5203492045402527,
+        "aha_moment": 0.3687857389450073,
+        "equanimity": 0.7459210753440857
+      },
+      "network_acts": {
+        "DMN": 0.3487188220024109,
+        "VAN": 0.48329880833625793,
+        "DAN": 0.6298918724060059,
+        "FPN": 0.6819806098937988
+      },
+      "free_energy": 0.19280198216438293
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8537936210632324,
+        "pain_discomfort": 0.5540258288383484,
+        "pending_tasks": 0.4493311643600464,
+        "aha_moment": 0.4395301342010498,
+        "equanimity": 0.8940984606742859
+      },
+      "network_acts": {
+        "DMN": 0.40454530715942383,
+        "VAN": 0.45667266845703125,
+        "DAN": 0.6214955449104309,
+        "FPN": 0.6390125155448914
+      },
+      "free_energy": 0.14721478521823883
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.4946877956390381,
+        "pending_tasks": 0.5307862758636475,
+        "aha_moment": 0.36913639307022095,
+        "equanimity": 0.7351514101028442
+      },
+      "network_acts": {
+        "DMN": 0.3815429210662842,
+        "VAN": 0.4627847373485565,
+        "DAN": 0.6503201127052307,
+        "FPN": 0.5359063744544983
+      },
+      "free_energy": 0.19590209424495697
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43090516328811646,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8394353985786438,
+        "aha_moment": 0.3168754279613495,
+        "equanimity": 0.3909347951412201
+      },
+      "network_acts": {
+        "DMN": 0.48883768916130066,
+        "VAN": 0.5314352512359619,
+        "DAN": 0.5669138431549072,
+        "FPN": 0.6005172729492188
+      },
+      "free_energy": 0.14561034739017487
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4626942276954651,
+        "pain_discomfort": 0.34124720096588135,
+        "pending_tasks": 0.23980805277824402,
+        "aha_moment": 0.8998051881790161,
+        "equanimity": 0.3973367214202881
+      },
+      "network_acts": {
+        "DMN": 0.38774722814559937,
+        "VAN": 0.5834088325500488,
+        "DAN": 0.6295894980430603,
+        "FPN": 0.655908465385437
+      },
+      "free_energy": 0.04852684587240219
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8190014362335205,
+        "pain_discomfort": 0.5569791197776794,
+        "pending_tasks": 0.42676037549972534,
+        "aha_moment": 0.4944705367088318,
+        "equanimity": 0.8752877712249756
+      },
+      "network_acts": {
+        "DMN": 0.4320901036262512,
+        "VAN": 0.5701457262039185,
+        "DAN": 0.6406850814819336,
+        "FPN": 0.6174978613853455
+      },
+      "free_energy": 0.13998903334140778
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4635533392429352,
+        "pain_discomfort": 0.3422124683856964,
+        "pending_tasks": 0.2369234263896942,
+        "aha_moment": 0.8988213539123535,
+        "equanimity": 0.3951526880264282
+      },
+      "network_acts": {
+        "DMN": 0.44125330448150635,
+        "VAN": 0.5870480537414551,
+        "DAN": 0.6495550274848938,
+        "FPN": 0.7047708034515381
+      },
+      "free_energy": 0.050543200224637985
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8155129551887512,
+        "pain_discomfort": 0.5750818848609924,
+        "pending_tasks": 0.43196141719818115,
+        "aha_moment": 0.45749783515930176,
+        "equanimity": 0.8695923089981079
+      },
+      "network_acts": {
+        "DMN": 0.416888028383255,
+        "VAN": 0.5513861179351807,
+        "DAN": 0.6226274967193604,
+        "FPN": 0.6773868799209595
+      },
+      "free_energy": 0.14344355463981628
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999165534973,
+        "pain_discomfort": 0.5071089863777161,
+        "pending_tasks": 0.5297014713287354,
+        "aha_moment": 0.35337400436401367,
+        "equanimity": 0.7307929992675781
+      },
+      "network_acts": {
+        "DMN": 0.4412698745727539,
+        "VAN": 0.4952349066734314,
+        "DAN": 0.6178083419799805,
+        "FPN": 0.5435276031494141
+      },
+      "free_energy": 0.19511355459690094
+    },
+    {
+      "from": "mind_wandering",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.41969120502471924,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8583866357803345,
+        "aha_moment": 0.31631332635879517,
+        "equanimity": 0.3907068371772766
+      },
+      "network_acts": {
+        "DMN": 0.42004191875457764,
+        "VAN": 0.45442530512809753,
+        "DAN": 0.5860694646835327,
+        "FPN": 0.49193787574768066
+      },
+      "free_energy": 0.14387796819210052
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5113706588745117,
+        "pending_tasks": 0.5351929068565369,
+        "aha_moment": 0.36128801107406616,
+        "equanimity": 0.7287868857383728
+      },
+      "network_acts": {
+        "DMN": 0.3389723300933838,
+        "VAN": 0.5122266411781311,
+        "DAN": 0.6474175453186035,
+        "FPN": 0.5574525594711304
+      },
+      "free_energy": 0.19785813987255096
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42978227138519287,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8301868438720703,
+        "aha_moment": 0.31479108333587646,
+        "equanimity": 0.3891323506832123
+      },
+      "network_acts": {
+        "DMN": 0.40356653928756714,
+        "VAN": 0.45596909523010254,
+        "DAN": 0.5258152484893799,
+        "FPN": 0.5467756986618042
+      },
+      "free_energy": 0.1455150544643402
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8134830594062805,
+        "pain_discomfort": 0.5922457575798035,
+        "pending_tasks": 0.46855247020721436,
+        "aha_moment": 0.4224832057952881,
+        "equanimity": 0.8573192358016968
+      },
+      "network_acts": {
+        "DMN": 0.36915671825408936,
+        "VAN": 0.47974440455436707,
+        "DAN": 0.587890625,
+        "FPN": 0.6457931995391846
+      },
+      "free_energy": 0.15706828236579895
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5209362506866455,
+        "pending_tasks": 0.5266451239585876,
+        "aha_moment": 0.36476844549179077,
+        "equanimity": 0.7337905764579773
+      },
+      "network_acts": {
+        "DMN": 0.42066559195518494,
+        "VAN": 0.47290804982185364,
+        "DAN": 0.6151032447814941,
+        "FPN": 0.6014668345451355
+      },
+      "free_energy": 0.19679807126522064
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4284552335739136,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8256416320800781,
+        "aha_moment": 0.3184517025947571,
+        "equanimity": 0.3967550992965698
+      },
+      "network_acts": {
+        "DMN": 0.5094850063323975,
+        "VAN": 0.5922411680221558,
+        "DAN": 0.5257028341293335,
+        "FPN": 0.5643359422683716
+      },
+      "free_energy": 0.15511931478977203
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4428612291812897,
+        "pain_discomfort": 0.3682348430156708,
+        "pending_tasks": 0.289504736661911,
+        "aha_moment": 0.8959798216819763,
+        "equanimity": 0.4174882173538208
+      },
+      "network_acts": {
+        "DMN": 0.4015263319015503,
+        "VAN": 0.5712463855743408,
+        "DAN": 0.5593336820602417,
+        "FPN": 0.6776539087295532
+      },
+      "free_energy": 0.06001574546098709
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8127094507217407,
+        "pain_discomfort": 0.570300817489624,
+        "pending_tasks": 0.45687854290008545,
+        "aha_moment": 0.4585130214691162,
+        "equanimity": 0.8518636226654053
+      },
+      "network_acts": {
+        "DMN": 0.36026665568351746,
+        "VAN": 0.5381855964660645,
+        "DAN": 0.6172653436660767,
+        "FPN": 0.6585161685943604
+      },
+      "free_energy": 0.14981701970100403
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999165534973,
+        "pain_discomfort": 0.5161772966384888,
+        "pending_tasks": 0.5329402685165405,
+        "aha_moment": 0.36558622121810913,
+        "equanimity": 0.7288426756858826
+      },
+      "network_acts": {
+        "DMN": 0.39807456731796265,
+        "VAN": 0.43631166219711304,
+        "DAN": 0.5670764446258545,
+        "FPN": 0.610654354095459
+      },
+      "free_energy": 0.19690662622451782
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4308583736419678,
+        "pain_discomfort": 0.8999999165534973,
+        "pending_tasks": 0.8235421776771545,
+        "aha_moment": 0.31713366508483887,
+        "equanimity": 0.38784387707710266
+      },
+      "network_acts": {
+        "DMN": 0.48182883858680725,
+        "VAN": 0.4836292266845703,
+        "DAN": 0.5631206035614014,
+        "FPN": 0.5539343953132629
+      },
+      "free_energy": 0.14710621535778046
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4552777409553528,
+        "pain_discomfort": 0.3895147442817688,
+        "pending_tasks": 0.28765296936035156,
+        "aha_moment": 0.8950797319412231,
+        "equanimity": 0.4063148498535156
+      },
+      "network_acts": {
+        "DMN": 0.46242988109588623,
+        "VAN": 0.5095112323760986,
+        "DAN": 0.6142306327819824,
+        "FPN": 0.59327232837677
+      },
+      "free_energy": 0.062995545566082
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8072088956832886,
+        "pain_discomfort": 0.5415657162666321,
+        "pending_tasks": 0.44399893283843994,
+        "aha_moment": 0.44920188188552856,
+        "equanimity": 0.8251830339431763
+      },
+      "network_acts": {
+        "DMN": 0.428087055683136,
+        "VAN": 0.48945707082748413,
+        "DAN": 0.6401553750038147,
+        "FPN": 0.6300698518753052
+      },
+      "free_energy": 0.13924318552017212
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5248668193817139,
+        "pending_tasks": 0.516151487827301,
+        "aha_moment": 0.36710071563720703,
+        "equanimity": 0.7385470867156982
+      },
+      "network_acts": {
+        "DMN": 0.48378151655197144,
+        "VAN": 0.4764461815357208,
+        "DAN": 0.5619840025901794,
+        "FPN": 0.7084999084472656
+      },
+      "free_energy": 0.1981857866048813
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42630624771118164,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8398720622062683,
+        "aha_moment": 0.31254664063453674,
+        "equanimity": 0.3972821831703186
+      },
+      "network_acts": {
+        "DMN": 0.5614805817604065,
+        "VAN": 0.5479869246482849,
+        "DAN": 0.5272653698921204,
+        "FPN": 0.5337446928024292
+      },
+      "free_energy": 0.15082065761089325
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.44458213448524475,
+        "pain_discomfort": 0.36582934856414795,
+        "pending_tasks": 0.24946588277816772,
+        "aha_moment": 0.89778733253479,
+        "equanimity": 0.3962706923484802
+      },
+      "network_acts": {
+        "DMN": 0.418612003326416,
+        "VAN": 0.5059860944747925,
+        "DAN": 0.5406220555305481,
+        "FPN": 0.60352623462677
+      },
+      "free_energy": 0.05015869438648224
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8134504556655884,
+        "pain_discomfort": 0.5759283900260925,
+        "pending_tasks": 0.44812828302383423,
+        "aha_moment": 0.45411038398742676,
+        "equanimity": 0.850260853767395
+      },
+      "network_acts": {
+        "DMN": 0.3656335175037384,
+        "VAN": 0.5268625020980835,
+        "DAN": 0.6256254315376282,
+        "FPN": 0.5883001089096069
+      },
+      "free_energy": 0.14798091351985931
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4355785846710205,
+        "pain_discomfort": 0.3284752368927002,
+        "pending_tasks": 0.23216187953948975,
+        "aha_moment": 0.8988248109817505,
+        "equanimity": 0.3991469740867615
+      },
+      "network_acts": {
+        "DMN": 0.3326312005519867,
+        "VAN": 0.4967826008796692,
+        "DAN": 0.5803314447402954,
+        "FPN": 0.651212751865387
+      },
+      "free_energy": 0.041691623628139496
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.834140419960022,
+        "pain_discomfort": 0.5732319355010986,
+        "pending_tasks": 0.4591180682182312,
+        "aha_moment": 0.4251473546028137,
+        "equanimity": 0.8775915503501892
+      },
+      "network_acts": {
+        "DMN": 0.3880036175251007,
+        "VAN": 0.4552556276321411,
+        "DAN": 0.5999243855476379,
+        "FPN": 0.6760348081588745
+      },
+      "free_energy": 0.15147654712200165
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.526283860206604,
+        "pending_tasks": 0.5181804895401001,
+        "aha_moment": 0.37036216259002686,
+        "equanimity": 0.7363442182540894
+      },
+      "network_acts": {
+        "DMN": 0.4015142619609833,
+        "VAN": 0.5134111046791077,
+        "DAN": 0.5847020745277405,
+        "FPN": 0.6983219981193542
+      },
+      "free_energy": 0.19642040133476257
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4227307438850403,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8303468227386475,
+        "aha_moment": 0.32150280475616455,
+        "equanimity": 0.39284276962280273
+      },
+      "network_acts": {
+        "DMN": 0.5317493677139282,
+        "VAN": 0.5633252263069153,
+        "DAN": 0.5265447497367859,
+        "FPN": 0.5961861610412598
+      },
+      "free_energy": 0.1493118554353714
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.795702338218689,
+        "pain_discomfort": 0.5994209051132202,
+        "pending_tasks": 0.4780508279800415,
+        "aha_moment": 0.4164701998233795,
+        "equanimity": 0.8282277584075928
+      },
+      "network_acts": {
+        "DMN": 0.43512099981307983,
+        "VAN": 0.555740475654602,
+        "DAN": 0.5776097774505615,
+        "FPN": 0.6690575480461121
+      },
+      "free_energy": 0.16090843081474304
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4428756833076477,
+        "pain_discomfort": 0.3401608467102051,
+        "pending_tasks": 0.231362447142601,
+        "aha_moment": 0.8997299671173096,
+        "equanimity": 0.4031044542789459
+      },
+      "network_acts": {
+        "DMN": 0.44441843032836914,
+        "VAN": 0.6334148049354553,
+        "DAN": 0.5411653518676758,
+        "FPN": 0.704616904258728
+      },
+      "free_energy": 0.04812922701239586
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7923500537872314,
+        "pain_discomfort": 0.5660310983657837,
+        "pending_tasks": 0.45002123713493347,
+        "aha_moment": 0.4782537817955017,
+        "equanimity": 0.8544421792030334
+      },
+      "network_acts": {
+        "DMN": 0.38635697960853577,
+        "VAN": 0.5649555921554565,
+        "DAN": 0.6081668734550476,
+        "FPN": 0.6773253679275513
+      },
+      "free_energy": 0.1466679573059082
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999710083007812,
+        "pain_discomfort": 0.5251808166503906,
+        "pending_tasks": 0.5172252058982849,
+        "aha_moment": 0.3671268820762634,
+        "equanimity": 0.7485353946685791
+      },
+      "network_acts": {
+        "DMN": 0.4539485573768616,
+        "VAN": 0.5004650354385376,
+        "DAN": 0.5026852488517761,
+        "FPN": 0.6735007762908936
+      },
+      "free_energy": 0.19761742651462555
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4341830015182495,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8224389553070068,
+        "aha_moment": 0.3214845359325409,
+        "equanimity": 0.3923240303993225
+      },
+      "network_acts": {
+        "DMN": 0.4991076588630676,
+        "VAN": 0.5110945105552673,
+        "DAN": 0.5141869187355042,
+        "FPN": 0.5823572278022766
+      },
+      "free_energy": 0.14837951958179474
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4550550580024719,
+        "pain_discomfort": 0.3814883828163147,
+        "pending_tasks": 0.25401440262794495,
+        "aha_moment": 0.8935966491699219,
+        "equanimity": 0.4109766483306885
+      },
+      "network_acts": {
+        "DMN": 0.4301465153694153,
+        "VAN": 0.506676435470581,
+        "DAN": 0.5893043875694275,
+        "FPN": 0.6407126188278198
+      },
+      "free_energy": 0.05498861148953438
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8277992010116577,
+        "pain_discomfort": 0.578416109085083,
+        "pending_tasks": 0.45838499069213867,
+        "aha_moment": 0.42102211713790894,
+        "equanimity": 0.8743124008178711
+      },
+      "network_acts": {
+        "DMN": 0.37456998229026794,
+        "VAN": 0.49043262004852295,
+        "DAN": 0.647942304611206,
+        "FPN": 0.6542356014251709
+      },
+      "free_energy": 0.15295426547527313
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5308263301849365,
+        "pending_tasks": 0.528366208076477,
+        "aha_moment": 0.3699657917022705,
+        "equanimity": 0.7345010042190552
+      },
+      "network_acts": {
+        "DMN": 0.4508892893791199,
+        "VAN": 0.5224545001983643,
+        "DAN": 0.6103560924530029,
+        "FPN": 0.600242555141449
+      },
+      "free_energy": 0.20107097923755646
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.441021203994751,
+        "pain_discomfort": 0.338503897190094,
+        "pending_tasks": 0.2538301646709442,
+        "aha_moment": 0.8957511186599731,
+        "equanimity": 0.4133709669113159
+      },
+      "network_acts": {
+        "DMN": 0.43281257152557373,
+        "VAN": 0.5422813296318054,
+        "DAN": 0.569698691368103,
+        "FPN": 0.682974100112915
+      },
+      "free_energy": 0.04522266238927841
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8340137004852295,
+        "pain_discomfort": 0.5623153448104858,
+        "pending_tasks": 0.4616076648235321,
+        "aha_moment": 0.4233849048614502,
+        "equanimity": 0.8592631816864014
+      },
+      "network_acts": {
+        "DMN": 0.3919246792793274,
+        "VAN": 0.4683639705181122,
+        "DAN": 0.6152393817901611,
+        "FPN": 0.7069344520568848
+      },
+      "free_energy": 0.14950555562973022
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5354580879211426,
+        "pending_tasks": 0.5363494157791138,
+        "aha_moment": 0.3748705983161926,
+        "equanimity": 0.749356746673584
+      },
+      "network_acts": {
+        "DMN": 0.38938236236572266,
+        "VAN": 0.5203691720962524,
+        "DAN": 0.5884725451469421,
+        "FPN": 0.6660350561141968
+      },
+      "free_energy": 0.2080325037240982
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42770084738731384,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8287565112113953,
+        "aha_moment": 0.31572040915489197,
+        "equanimity": 0.38749897480010986
+      },
+      "network_acts": {
+        "DMN": 0.4433205723762512,
+        "VAN": 0.5271182060241699,
+        "DAN": 0.5463618636131287,
+        "FPN": 0.5725377798080444
+      },
+      "free_energy": 0.14426741003990173
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4408673644065857,
+        "pain_discomfort": 0.3689250946044922,
+        "pending_tasks": 0.2534596621990204,
+        "aha_moment": 0.8975166082382202,
+        "equanimity": 0.3934478163719177
+      },
+      "network_acts": {
+        "DMN": 0.38430076837539673,
+        "VAN": 0.5352559685707092,
+        "DAN": 0.5839328169822693,
+        "FPN": 0.5880724191665649
+      },
+      "free_energy": 0.051428668200969696
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8036181926727295,
+        "pain_discomfort": 0.5551013946533203,
+        "pending_tasks": 0.4644626975059509,
+        "aha_moment": 0.45615822076797485,
+        "equanimity": 0.8218703269958496
+      },
+      "network_acts": {
+        "DMN": 0.3830718696117401,
+        "VAN": 0.4743133783340454,
+        "DAN": 0.6278320550918579,
+        "FPN": 0.6388704180717468
+      },
+      "free_energy": 0.148628368973732
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5397124290466309,
+        "pending_tasks": 0.5332492589950562,
+        "aha_moment": 0.3744543492794037,
+        "equanimity": 0.7298190593719482
+      },
+      "network_acts": {
+        "DMN": 0.5005254745483398,
+        "VAN": 0.49535924196243286,
+        "DAN": 0.5542682409286499,
+        "FPN": 0.6316953301429749
+      },
+      "free_energy": 0.20580612123012543
+    },
+    {
+      "from": "mind_wandering",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4275408685207367,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8082022666931152,
+        "aha_moment": 0.32041996717453003,
+        "equanimity": 0.39860212802886963
+      },
+      "network_acts": {
+        "DMN": 0.4430989623069763,
+        "VAN": 0.5274953842163086,
+        "DAN": 0.5314280986785889,
+        "FPN": 0.6402125358581543
+      },
+      "free_energy": 0.14980550110340118
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8177120685577393,
+        "pain_discomfort": 0.5873419642448425,
+        "pending_tasks": 0.48275163769721985,
+        "aha_moment": 0.41511082649230957,
+        "equanimity": 0.8427796363830566
+      },
+      "network_acts": {
+        "DMN": 0.3977593779563904,
+        "VAN": 0.46189573407173157,
+        "DAN": 0.6310341954231262,
+        "FPN": 0.6370323896408081
+      },
+      "free_energy": 0.16073353588581085
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5460609197616577,
+        "pending_tasks": 0.5320874452590942,
+        "aha_moment": 0.3628125786781311,
+        "equanimity": 0.7254489660263062
+      },
+      "network_acts": {
+        "DMN": 0.4151293635368347,
+        "VAN": 0.46183592081069946,
+        "DAN": 0.6510394811630249,
+        "FPN": 0.6740717887878418
+      },
+      "free_energy": 0.2035638689994812
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8302311897277832,
+        "pain_discomfort": 0.5917872786521912,
+        "pending_tasks": 0.4823458790779114,
+        "aha_moment": 0.3931378722190857,
+        "equanimity": 0.8602306842803955
+      },
+      "network_acts": {
+        "DMN": 0.4077405333518982,
+        "VAN": 0.5272309184074402,
+        "DAN": 0.6362553238868713,
+        "FPN": 0.6146821975708008
+      },
+      "free_energy": 0.1612623780965805
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4471152424812317,
+        "pain_discomfort": 0.32774123549461365,
+        "pending_tasks": 0.2354355752468109,
+        "aha_moment": 0.8961808681488037,
+        "equanimity": 0.4107204079627991
+      },
+      "network_acts": {
+        "DMN": 0.41687512397766113,
+        "VAN": 0.5430127382278442,
+        "DAN": 0.6120799779891968,
+        "FPN": 0.6700436472892761
+      },
+      "free_energy": 0.04316313564777374
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8288827538490295,
+        "pain_discomfort": 0.5784856677055359,
+        "pending_tasks": 0.47453975677490234,
+        "aha_moment": 0.3979986011981964,
+        "equanimity": 0.8740368485450745
+      },
+      "network_acts": {
+        "DMN": 0.39484789967536926,
+        "VAN": 0.5376911759376526,
+        "DAN": 0.6313100457191467,
+        "FPN": 0.6534886360168457
+      },
+      "free_energy": 0.15559005737304688
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5334246754646301,
+        "pending_tasks": 0.5328388214111328,
+        "aha_moment": 0.3556175231933594,
+        "equanimity": 0.7323448657989502
+      },
+      "network_acts": {
+        "DMN": 0.40163177251815796,
+        "VAN": 0.5876712799072266,
+        "DAN": 0.6066798567771912,
+        "FPN": 0.6406767964363098
+      },
+      "free_energy": 0.20253869891166687
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42165642976760864,
+        "pain_discomfort": 0.3308253884315491,
+        "pending_tasks": 0.22719481587409973,
+        "aha_moment": 0.899962306022644,
+        "equanimity": 0.38034874200820923
+      },
+      "network_acts": {
+        "DMN": 0.4002980589866638,
+        "VAN": 0.6124534606933594,
+        "DAN": 0.6228177547454834,
+        "FPN": 0.7003012895584106
+      },
+      "free_energy": 0.04337858036160469
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8119414448738098,
+        "pain_discomfort": 0.5867968797683716,
+        "pending_tasks": 0.47441810369491577,
+        "aha_moment": 0.4042194187641144,
+        "equanimity": 0.8695298433303833
+      },
+      "network_acts": {
+        "DMN": 0.40641534328460693,
+        "VAN": 0.5761640071868896,
+        "DAN": 0.6124238967895508,
+        "FPN": 0.6524226069450378
+      },
+      "free_energy": 0.15733598172664642
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42390555143356323,
+        "pain_discomfort": 0.3290177881717682,
+        "pending_tasks": 0.22125841677188873,
+        "aha_moment": 0.899787187576294,
+        "equanimity": 0.38694196939468384
+      },
+      "network_acts": {
+        "DMN": 0.38450467586517334,
+        "VAN": 0.5323700308799744,
+        "DAN": 0.5636422634124756,
+        "FPN": 0.6488593220710754
+      },
+      "free_energy": 0.038417618721723557
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8228670358657837,
+        "pain_discomfort": 0.5798109769821167,
+        "pending_tasks": 0.4828331470489502,
+        "aha_moment": 0.3996816873550415,
+        "equanimity": 0.8656092882156372
+      },
+      "network_acts": {
+        "DMN": 0.37785544991493225,
+        "VAN": 0.5711526274681091,
+        "DAN": 0.6106486320495605,
+        "FPN": 0.6337648630142212
+      },
+      "free_energy": 0.1583818793296814
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4322574734687805,
+        "pain_discomfort": 0.31097152829170227,
+        "pending_tasks": 0.22616375982761383,
+        "aha_moment": 0.8991291522979736,
+        "equanimity": 0.40336889028549194
+      },
+      "network_acts": {
+        "DMN": 0.3698505163192749,
+        "VAN": 0.5322774648666382,
+        "DAN": 0.6115741729736328,
+        "FPN": 0.6584208607673645
+      },
+      "free_energy": 0.03813234716653824
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8052215576171875,
+        "pain_discomfort": 0.5827396512031555,
+        "pending_tasks": 0.4866984486579895,
+        "aha_moment": 0.39085519313812256,
+        "equanimity": 0.8523205518722534
+      },
+      "network_acts": {
+        "DMN": 0.374942421913147,
+        "VAN": 0.5065938830375671,
+        "DAN": 0.6381996870040894,
+        "FPN": 0.613602876663208
+      },
+      "free_energy": 0.15833288431167603
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.44712749123573303,
+        "pain_discomfort": 0.36196085810661316,
+        "pending_tasks": 0.25812363624572754,
+        "aha_moment": 0.8938179612159729,
+        "equanimity": 0.38593441247940063
+      },
+      "network_acts": {
+        "DMN": 0.43425285816192627,
+        "VAN": 0.48046305775642395,
+        "DAN": 0.6125503778457642,
+        "FPN": 0.6465388536453247
+      },
+      "free_energy": 0.051169611513614655
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.790212869644165,
+        "pain_discomfort": 0.5860471725463867,
+        "pending_tasks": 0.49276071786880493,
+        "aha_moment": 0.3993832468986511,
+        "equanimity": 0.8453102111816406
+      },
+      "network_acts": {
+        "DMN": 0.40626221895217896,
+        "VAN": 0.5212148427963257,
+        "DAN": 0.6389142274856567,
+        "FPN": 0.6568360328674316
+      },
+      "free_energy": 0.16036969423294067
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5557762980461121,
+        "pending_tasks": 0.5293724536895752,
+        "aha_moment": 0.3639432191848755,
+        "equanimity": 0.7261238098144531
+      },
+      "network_acts": {
+        "DMN": 0.45884251594543457,
+        "VAN": 0.4385809898376465,
+        "DAN": 0.5779748558998108,
+        "FPN": 0.6724880933761597
+      },
+      "free_energy": 0.20751819014549255
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4262933135032654,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8170075416564941,
+        "aha_moment": 0.3231850564479828,
+        "equanimity": 0.39026808738708496
+      },
+      "network_acts": {
+        "DMN": 0.46037763357162476,
+        "VAN": 0.5384933948516846,
+        "DAN": 0.5862584114074707,
+        "FPN": 0.5671030282974243
+      },
+      "free_energy": 0.14679588377475739
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.454421728849411,
+        "pain_discomfort": 0.37573379278182983,
+        "pending_tasks": 0.27082234621047974,
+        "aha_moment": 0.8958003520965576,
+        "equanimity": 0.3950531482696533
+      },
+      "network_acts": {
+        "DMN": 0.410660982131958,
+        "VAN": 0.5138697624206543,
+        "DAN": 0.6677256226539612,
+        "FPN": 0.6348342299461365
+      },
+      "free_energy": 0.0567881315946579
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7839041948318481,
+        "pain_discomfort": 0.5549529790878296,
+        "pending_tasks": 0.480438768863678,
+        "aha_moment": 0.42219987511634827,
+        "equanimity": 0.8081355094909668
+      },
+      "network_acts": {
+        "DMN": 0.39482975006103516,
+        "VAN": 0.49613118171691895,
+        "DAN": 0.6333622932434082,
+        "FPN": 0.6328589916229248
+      },
+      "free_energy": 0.14965669810771942
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.548928439617157,
+        "pending_tasks": 0.5334576368331909,
+        "aha_moment": 0.3589588701725006,
+        "equanimity": 0.7249071002006531
+      },
+      "network_acts": {
+        "DMN": 0.3766911029815674,
+        "VAN": 0.46640002727508545,
+        "DAN": 0.5501378178596497,
+        "FPN": 0.6391949653625488
+      },
+      "free_energy": 0.2053350806236267
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43218016624450684,
+        "pain_discomfort": 0.3162998557090759,
+        "pending_tasks": 0.23335151374340057,
+        "aha_moment": 0.8987252712249756,
+        "equanimity": 0.4021555185317993
+      },
+      "network_acts": {
+        "DMN": 0.3811850845813751,
+        "VAN": 0.5394992828369141,
+        "DAN": 0.5828946828842163,
+        "FPN": 0.612228512763977
+      },
+      "free_energy": 0.03832533210515976
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8125543594360352,
+        "pain_discomfort": 0.5822073221206665,
+        "pending_tasks": 0.49059996008872986,
+        "aha_moment": 0.3993019163608551,
+        "equanimity": 0.8500590324401855
+      },
+      "network_acts": {
+        "DMN": 0.3961308002471924,
+        "VAN": 0.4871821701526642,
+        "DAN": 0.6131141185760498,
+        "FPN": 0.6820214986801147
+      },
+      "free_energy": 0.16037918627262115
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999999761581421,
+        "pain_discomfort": 0.5621378421783447,
+        "pending_tasks": 0.5260090231895447,
+        "aha_moment": 0.3640774190425873,
+        "equanimity": 0.7248562574386597
+      },
+      "network_acts": {
+        "DMN": 0.510340690612793,
+        "VAN": 0.446647584438324,
+        "DAN": 0.5378969311714172,
+        "FPN": 0.6736897230148315
+      },
+      "free_energy": 0.20867544412612915
+    },
+    {
+      "from": "mind_wandering",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43079182505607605,
+        "pain_discomfort": 0.8999999165534973,
+        "pending_tasks": 0.8105090856552124,
+        "aha_moment": 0.32088494300842285,
+        "equanimity": 0.39306172728538513
+      },
+      "network_acts": {
+        "DMN": 0.4630911946296692,
+        "VAN": 0.5512224435806274,
+        "DAN": 0.5220844745635986,
+        "FPN": 0.615552544593811
+      },
+      "free_energy": 0.1492863893508911
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8996065855026245,
+        "pain_discomfort": 0.556275486946106,
+        "pending_tasks": 0.5482181310653687,
+        "aha_moment": 0.35502511262893677,
+        "equanimity": 0.716858983039856
+      },
+      "network_acts": {
+        "DMN": 0.41965359449386597,
+        "VAN": 0.4458809196949005,
+        "DAN": 0.5959748029708862,
+        "FPN": 0.5911281108856201
+      },
+      "free_energy": 0.21084733307361603
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.46173742413520813,
+        "pain_discomfort": 0.3379620313644409,
+        "pending_tasks": 0.25537657737731934,
+        "aha_moment": 0.8947436809539795,
+        "equanimity": 0.409568190574646
+      },
+      "network_acts": {
+        "DMN": 0.3974428176879883,
+        "VAN": 0.5099970698356628,
+        "DAN": 0.5928296446800232,
+        "FPN": 0.6406233310699463
+      },
+      "free_energy": 0.04783044382929802
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7941948771476746,
+        "pain_discomfort": 0.5679787397384644,
+        "pending_tasks": 0.4899028539657593,
+        "aha_moment": 0.3667810559272766,
+        "equanimity": 0.8561089038848877
+      },
+      "network_acts": {
+        "DMN": 0.3989218473434448,
+        "VAN": 0.47835201025009155,
+        "DAN": 0.6366909742355347,
+        "FPN": 0.6542578935623169
+      },
+      "free_energy": 0.1554539054632187
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999836444854736,
+        "pain_discomfort": 0.5608973503112793,
+        "pending_tasks": 0.5433794856071472,
+        "aha_moment": 0.3561437427997589,
+        "equanimity": 0.7182755470275879
+      },
+      "network_acts": {
+        "DMN": 0.35371968150138855,
+        "VAN": 0.4701223373413086,
+        "DAN": 0.6954365968704224,
+        "FPN": 0.6714627742767334
+      },
+      "free_energy": 0.21378830075263977
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4342731237411499,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8097484111785889,
+        "aha_moment": 0.3206877112388611,
+        "equanimity": 0.39039409160614014
+      },
+      "network_acts": {
+        "DMN": 0.32220011949539185,
+        "VAN": 0.4595220983028412,
+        "DAN": 0.5555130243301392,
+        "FPN": 0.5794253945350647
+      },
+      "free_energy": 0.156326562166214
+    },
+    {
+      "from": "meta_awareness",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.42855945229530334,
+        "pain_discomfort": 0.35718607902526855,
+        "pending_tasks": 0.2545776665210724,
+        "aha_moment": 0.8994119167327881,
+        "equanimity": 0.40356987714767456
+      },
+      "network_acts": {
+        "DMN": 0.37454953789711,
+        "VAN": 0.4938890337944031,
+        "DAN": 0.5943691730499268,
+        "FPN": 0.601127028465271
+      },
+      "free_energy": 0.04970515891909599
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8968223333358765,
+        "pain_discomfort": 0.5774778127670288,
+        "pending_tasks": 0.5270583629608154,
+        "aha_moment": 0.3624085783958435,
+        "equanimity": 0.7274820804595947
+      },
+      "network_acts": {
+        "DMN": 0.37799617648124695,
+        "VAN": 0.5053892731666565,
+        "DAN": 0.586908221244812,
+        "FPN": 0.6715893745422363
+      },
+      "free_energy": 0.211130291223526
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.43498867750167847,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8166871666908264,
+        "aha_moment": 0.318573921918869,
+        "equanimity": 0.39021986722946167
+      },
+      "network_acts": {
+        "DMN": 0.418419748544693,
+        "VAN": 0.47310173511505127,
+        "DAN": 0.5499460697174072,
+        "FPN": 0.6594789624214172
+      },
+      "free_energy": 0.14921420812606812
+    },
+    {
+      "from": "meta_awareness",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4476144313812256,
+        "pain_discomfort": 0.378765344619751,
+        "pending_tasks": 0.27582424879074097,
+        "aha_moment": 0.8960297107696533,
+        "equanimity": 0.4166860580444336
+      },
+      "network_acts": {
+        "DMN": 0.3784843683242798,
+        "VAN": 0.5425819158554077,
+        "DAN": 0.5768619775772095,
+        "FPN": 0.5927680730819702
+      },
+      "free_energy": 0.05781514570116997
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8998178839683533,
+        "pain_discomfort": 0.5705235004425049,
+        "pending_tasks": 0.5370472073554993,
+        "aha_moment": 0.36512160301208496,
+        "equanimity": 0.7117474675178528
+      },
+      "network_acts": {
+        "DMN": 0.4193776547908783,
+        "VAN": 0.4229346513748169,
+        "DAN": 0.5992647409439087,
+        "FPN": 0.6667231917381287
+      },
+      "free_energy": 0.2117076963186264
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4286673069000244,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8136405944824219,
+        "aha_moment": 0.3185202479362488,
+        "equanimity": 0.3812416195869446
+      },
+      "network_acts": {
+        "DMN": 0.4297959804534912,
+        "VAN": 0.49133017659187317,
+        "DAN": 0.5180233716964722,
+        "FPN": 0.6211532354354858
+      },
+      "free_energy": 0.14669033885002136
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.44164013862609863,
+        "pain_discomfort": 0.3590505123138428,
+        "pending_tasks": 0.24824140965938568,
+        "aha_moment": 0.899311900138855,
+        "equanimity": 0.3947405219078064
+      },
+      "network_acts": {
+        "DMN": 0.3723500967025757,
+        "VAN": 0.503443717956543,
+        "DAN": 0.5180412530899048,
+        "FPN": 0.6012361645698547
+      },
+      "free_energy": 0.0521225742995739
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7921298742294312,
+        "pain_discomfort": 0.593521237373352,
+        "pending_tasks": 0.5098716616630554,
+        "aha_moment": 0.38672754168510437,
+        "equanimity": 0.83006751537323
+      },
+      "network_acts": {
+        "DMN": 0.38390210270881653,
+        "VAN": 0.48026710748672485,
+        "DAN": 0.631260871887207,
+        "FPN": 0.6583147048950195
+      },
+      "free_energy": 0.16840814054012299
+    },
+    {
+      "from": "breath_focus",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.899978756904602,
+        "pain_discomfort": 0.5807539820671082,
+        "pending_tasks": 0.5307989120483398,
+        "aha_moment": 0.36111849546432495,
+        "equanimity": 0.7194145321846008
+      },
+      "network_acts": {
+        "DMN": 0.4370120167732239,
+        "VAN": 0.49727219343185425,
+        "DAN": 0.5511987209320068,
+        "FPN": 0.6183379888534546
+      },
+      "free_energy": 0.21498000621795654
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4379933476448059,
+        "pain_discomfort": 0.354101300239563,
+        "pending_tasks": 0.22999846935272217,
+        "aha_moment": 0.8981105089187622,
+        "equanimity": 0.39414939284324646
+      },
+      "network_acts": {
+        "DMN": 0.3580334782600403,
+        "VAN": 0.46062904596328735,
+        "DAN": 0.6074252128601074,
+        "FPN": 0.6598515510559082
+      },
+      "free_energy": 0.045468058437108994
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7872305512428284,
+        "pain_discomfort": 0.5857640504837036,
+        "pending_tasks": 0.5073573589324951,
+        "aha_moment": 0.3745858073234558,
+        "equanimity": 0.8426121473312378
+      },
+      "network_acts": {
+        "DMN": 0.35471147298812866,
+        "VAN": 0.46251019835472107,
+        "DAN": 0.6069326996803284,
+        "FPN": 0.6560925841331482
+      },
+      "free_energy": 0.16443832218647003
+    },
+    {
+      "from": "breath_focus",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999950885772705,
+        "pain_discomfort": 0.5834617614746094,
+        "pending_tasks": 0.5369443893432617,
+        "aha_moment": 0.35877543687820435,
+        "equanimity": 0.727649450302124
+      },
+      "network_acts": {
+        "DMN": 0.3751998543739319,
+        "VAN": 0.3947652578353882,
+        "DAN": 0.554746150970459,
+        "FPN": 0.6563423871994019
+      },
+      "free_energy": 0.21590925753116608
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4354606866836548,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8163337111473083,
+        "aha_moment": 0.32171177864074707,
+        "equanimity": 0.3896797299385071
+      },
+      "network_acts": {
+        "DMN": 0.4901423454284668,
+        "VAN": 0.5188643932342529,
+        "DAN": 0.5440561175346375,
+        "FPN": 0.5722557902336121
+      },
+      "free_energy": 0.15239669382572174
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.45383214950561523,
+        "pain_discomfort": 0.3620520234107971,
+        "pending_tasks": 0.2656760811805725,
+        "aha_moment": 0.8975963592529297,
+        "equanimity": 0.41398003697395325
+      },
+      "network_acts": {
+        "DMN": 0.40977758169174194,
+        "VAN": 0.5130249261856079,
+        "DAN": 0.5713332891464233,
+        "FPN": 0.5849145650863647
+      },
+      "free_energy": 0.054047729820013046
+    },
+    {
+      "from": "redirect_attention",
+      "to": "mind_wandering",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7784721851348877,
+        "pain_discomfort": 0.5824052095413208,
+        "pending_tasks": 0.5077527761459351,
+        "aha_moment": 0.4071645736694336,
+        "equanimity": 0.8174299001693726
+      },
+      "network_acts": {
+        "DMN": 0.37643149495124817,
+        "VAN": 0.5244680643081665,
+        "DAN": 0.6362142562866211,
+        "FPN": 0.6388446688652039
+      },
+      "free_energy": 0.16492962837219238
+    },
+    {
+      "from": "mind_wandering",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.428743451833725,
+        "pain_discomfort": 0.8999999761581421,
+        "pending_tasks": 0.8192059993743896,
+        "aha_moment": 0.32818669080734253,
+        "equanimity": 0.3910554051399231
+      },
+      "network_acts": {
+        "DMN": 0.46589088439941406,
+        "VAN": 0.44952720403671265,
+        "DAN": 0.5296373963356018,
+        "FPN": 0.5552672147750854
+      },
+      "free_energy": 0.15019437670707703
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4378213882446289,
+        "pain_discomfort": 0.36507222056388855,
+        "pending_tasks": 0.27077674865722656,
+        "aha_moment": 0.8963813781738281,
+        "equanimity": 0.3947031795978546
+      },
+      "network_acts": {
+        "DMN": 0.4012521803379059,
+        "VAN": 0.49321210384368896,
+        "DAN": 0.5841581225395203,
+        "FPN": 0.6029199361801147
+      },
+      "free_energy": 0.05215134844183922
+    },
+    {
+      "from": "redirect_attention",
+      "to": "meta_awareness",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7892794609069824,
+        "pain_discomfort": 0.5822247266769409,
+        "pending_tasks": 0.5191822052001953,
+        "aha_moment": 0.39982330799102783,
+        "equanimity": 0.8261222243309021
+      },
+      "network_acts": {
+        "DMN": 0.39842355251312256,
+        "VAN": 0.5250125527381897,
+        "DAN": 0.5851091146469116,
+        "FPN": 0.5862242579460144
+      },
+      "free_energy": 0.16866378486156464
+    },
+    {
+      "from": "meta_awareness",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.4453834295272827,
+        "pain_discomfort": 0.3492811322212219,
+        "pending_tasks": 0.2391413450241089,
+        "aha_moment": 0.8970345258712769,
+        "equanimity": 0.3959367573261261
+      },
+      "network_acts": {
+        "DMN": 0.30807793140411377,
+        "VAN": 0.5414103269577026,
+        "DAN": 0.5904392004013062,
+        "FPN": 0.6565274000167847
+      },
+      "free_energy": 0.04746570810675621
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.784149169921875,
+        "pain_discomfort": 0.595987856388092,
+        "pending_tasks": 0.5268133282661438,
+        "aha_moment": 0.3612857460975647,
+        "equanimity": 0.8412480354309082
+      },
+      "network_acts": {
+        "DMN": 0.37627315521240234,
+        "VAN": 0.47419464588165283,
+        "DAN": 0.5851015448570251,
+        "FPN": 0.6575270891189575
+      },
+      "free_energy": 0.17386776208877563
+    },
+    {
+      "from": "breath_focus",
+      "to": "redirect_attention",
+      "thoughtseed_activations": {
+        "attend_breath": 0.8999848365783691,
+        "pain_discomfort": 0.5794200897216797,
+        "pending_tasks": 0.5343641042709351,
+        "aha_moment": 0.3622269034385681,
+        "equanimity": 0.7219979763031006
+      },
+      "network_acts": {
+        "DMN": 0.40127134323120117,
+        "VAN": 0.46551522612571716,
+        "DAN": 0.6019434928894043,
+        "FPN": 0.6562262773513794
+      },
+      "free_energy": 0.2142167091369629
+    },
+    {
+      "from": "redirect_attention",
+      "to": "breath_focus",
+      "thoughtseed_activations": {
+        "attend_breath": 0.7703402042388916,
+        "pain_discomfort": 0.605082094669342,
+        "pending_tasks": 0.5305027961730957,
+        "aha_moment": 0.34593284130096436,
+        "equanimity": 0.8439238667488098
+      },
+      "network_acts": {
+        "DMN": 0.42577749490737915,
+        "VAN": 0.49804219603538513,
+        "DAN": 0.6376407146453857,
+        "FPN": 0.6631811857223511
+      },
+      "free_energy": 0.1787807196378708
+    }
+  ],
+  "average_network_activations_by_state": {
+    "breath_focus": {
+      "DMN": 0.4054125763898522,
+      "VAN": 0.47154442190535134,
+      "DAN": 0.6000332851900729,
+      "FPN": 0.6411755755543709
+    },
+    "mind_wandering": {
+      "DMN": 0.46298246680872435,
+      "VAN": 0.47384264511437757,
+      "DAN": 0.5353422858513182,
+      "FPN": 0.5862879774491958
+    },
+    "meta_awareness": {
+      "DMN": 0.4146581346415124,
+      "VAN": 0.5202538876600985,
+      "DAN": 0.5621292813206619,
+      "FPN": 0.6037094315267959
+    },
+    "redirect_attention": {
+      "DMN": 0.38787348135077565,
+      "VAN": 0.5009128731758005,
+      "DAN": 0.6017432110398591,
+      "FPN": 0.6449100110986926
+    }
+  },
+  "average_free_energy_by_state": {
+    "breath_focus": 0.18256020653990518,
+    "mind_wandering": 0.14582022868304195,
+    "meta_awareness": 0.07835955146770432,
+    "redirect_attention": 0.12979890649463305
+  },
+  "ra_reorienting_success_rate": 0.8095238095238095
+}

@@ -7,9 +7,6 @@ Mediates between Layer 1 (generative process) and Layer 2 (attentional agents).
 
 import numpy as np
 from typing import Dict
-from utils.meditation_config import NETWORKS
-
-
 
 class MarkovBlanketL1L2:
     """Markov Blanket for the Layer 1 <-> Layer 2 interface."""
