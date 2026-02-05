@@ -157,14 +157,14 @@ Backpropagation Through Time optimizes:
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
-- Lower MW→MA detection threshold (catches mind-wandering faster)
-- Stronger FPN activation (better cognitive control)
-- Longer BF dwell times (stable attention)
+- **Unfrozen Encoder:** Learns "Amortized Inference" (fast, intuitive state recognition).
+- **Universal Priors:** Accesses the "Universal/Goal" priors effectively.
+- **Physiology:** Stronger FPN activation, longer BF dwell times.
 
 **Novice:**
-- Higher MW→MA detection threshold (slower awareness)
-- DMN-dominant profile (more self-referential thought)
-- Shorter BF dwell times (attention lapses)
+- **Frozen Encoder:** Lacks "Amortized Inference" (relies on slow, effortful VFE minimization).
+- **Universal Priors:** Holds the same goal (Focus) but lacks the intuition to recognize it.
+- **Physiology:** DMN-dominant profile, shorter BF dwell times.
 
 ---
 
@@ -192,14 +192,16 @@ Backpropagation Through Time optimizes:
 ```
 .
 ├── run_meditation.py          # Main entry point
-├── config.py                  # Constants and parameters
-├── train.py                   # MeditationTrainer class
-├── process.py                 # Layer1Process (MVOU dynamics)
-├── agent.py                   # Layer2Agent (VAE + forward model)
-├── monitor.py                 # Layer3Monitor (EFE policy)
-├── blankets.py                # Markov blanket interfaces
-├── utils.py                   # Helper functions
-├── analysis.py                # Metrics computation
+├── model/                     # Core Logic
+│   ├── train.py               # MeditationTrainer class
+│   ├── process.py             # Layer1Process (MVOU dynamics)
+│   ├── agent.py               # Layer2Agent (VAE + forward model)
+│   ├── monitor.py             # Layer3Monitor (EFE policy)
+│   └── blankets.py            # Markov blanket interfaces
+├── utils/                     # Utilities & Config
+│   ├── config.py              # Constants and universal priors
+│   ├── math_utils.py          # Tensor/math operations
+│   └── analysis_utils.py      # Metrics computation
 ├── data/                      # Training results (JSON)
 ├── plots/                     # Generated figures (PNG)
 └── viz/                       # Plotting modules
@@ -251,10 +253,10 @@ EFE(π) = E_q[log q(o|π) - log p(o|C)] + E_q[KL[q(s|π)||q(s)]]
 
 Edit `config.py` to modify:
 - Network/state parameters (Θ matrices, μ attractors)
-- Thoughtseed priors
-- Learning rates (default: 3e-4)
-- Loss weights (forward model, KL divergence)
-- Expertise levels (detection thresholds, FPN strength)
+- Thoughtseed Priors (THOUGHTSEED_STATE_PRIORS)
+- Learning rates (0.01 - 0.02)
+- Loss weights (forward model, KL divergence, recognition loss)
+- Expertise levels (Phenotypes defined by Encoder Plasticity)
 
 ---
 
@@ -277,15 +279,3 @@ If you use this model in your research:
   year={2026}
 }
 ```
-
----
-
-## License
-
-[]
-
----
-
-## Contact
-
-[Contact information]

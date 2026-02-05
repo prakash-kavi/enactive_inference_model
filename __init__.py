@@ -13,13 +13,13 @@ Key Features:
 - Markov blanket message passing interfaces
 """
 
-from config import STATES, NETWORKS, THOUGHTSEEDS, get_params
-from process import Layer1Process
-from agent import Layer2Agent
-from monitor import Layer3Monitor
-from blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from train import MeditationTrainer, train_meditation
-from analysis import (
+from utils.config import STATES, NETWORKS, THOUGHTSEEDS, get_params
+from model.process import Layer1Process
+from model.agent import Layer2Agent
+from model.monitor import Layer3Monitor
+from model.blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
+from model.train import MeditationTrainer, train_meditation
+from viz.analysis import (
     compute_metrics,
     plot_belief_about_belief,
     print_summary

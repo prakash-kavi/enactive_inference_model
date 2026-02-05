@@ -84,3 +84,9 @@ class MarkovBlanketL2L3(MarkovBlanket):
         # Initialize with defaults
         self.active_states['precision_modulation'] = 0.5
         self.active_states['transition_drive'] = 0.0
+
+    def reset(self) -> None:
+        """Reset state and restore defaults."""
+        super().reset()
+        self.active_states['precision_modulation'] = 0.5
+        self.active_states['transition_drive'] = 0.0

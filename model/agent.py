@@ -102,12 +102,20 @@ class Layer2Agent(nn.Module):
             hidden_dim=32
         )
         
-        # Thoughtseed priors (state-dependent)
+        # Thoughtseed priors (state-dependent, FROZEN for both phenotypes)
         self.mu_params = nn.ParameterDict()
         for state in STATES:
-            priors = get_thoughtseed_priors(state, experience_level)
+            priors = get_thoughtseed_priors(state)
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
-            self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32))
+            # Prior beliefs are fixed structural knowledge (Goal State)
+            self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
+        
+        # Differential Learning:
+        # Expert: Unfrozen VAE (Learns amortized inference)
+        # Novice: Frozen VAE (Stuck with random initialization)
+        if self.level == 'novice':
+            for param in self.vae.parameters():
+                param.requires_grad = False
         
         # EMA for thoughtseed activations
         self.register_buffer('z_ema', torch.zeros(len(THOUGHTSEEDS)))
@@ -172,33 +180,35 @@ class Layer2Agent(nn.Module):
         sensory_w = self.params['l2_vi_sensory_weight'] * (1.0 - precision)
         temporal_w = self.params['l2_vi_temporal_weight']
         
-        for _ in range(self.params['l2_vi_steps']):
-            # Decode to networks
-            recon_x = self.decode_with_state(z_var)
-            
-            # VFE terms
-            recon_loss = torch.nn.functional.mse_loss(recon_x, observed_vec)
-            
-            # KL with prior (Bernoulli)
-            kl_div = bernoulli_kl(z_var, prior_target, EPS)
-            
-            # Sensory + temporal consistency
-            sensory_loss = torch.nn.functional.mse_loss(z_var, sensory_target)
-            temporal_loss = torch.nn.functional.mse_loss(z_var, z_prev)
-            
-            # Total objective
-            loss = (obs_w * recon_loss + 
-                    prior_w * precision * kl_div + 
-                    sensory_w * sensory_loss + 
-                    temporal_w * temporal_loss)
-            
-            # Gradient descent
-            grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
-            grad = torch.clamp(grad, -5.0, 5.0)  # Clip gradients
-            
-            # Update (create new tensor, not in-place)
-            z_var = clamp_activation(z_var - vi_lr * grad, clip_min, clip_max)
-            z_var = z_var.detach().requires_grad_(True)
+        # Ensure we can calculate gradients for z even if global autograd is off (e.g. inference)
+        with torch.enable_grad():
+            for _ in range(self.params['l2_vi_steps']):
+                # Decode to networks
+                recon_x = self.decode_with_state(z_var)
+                
+                # VFE terms
+                recon_loss = torch.nn.functional.mse_loss(recon_x, observed_vec)
+                
+                # KL with prior (Bernoulli)
+                kl_div = bernoulli_kl(z_var, prior_target, EPS)
+                
+                # Sensory + temporal consistency
+                sensory_loss = torch.nn.functional.mse_loss(z_var, sensory_target)
+                temporal_loss = torch.nn.functional.mse_loss(z_var, z_prev)
+                
+                # Total objective
+                loss = (obs_w * recon_loss + 
+                        prior_w * precision * kl_div + 
+                        sensory_w * sensory_loss + 
+                        temporal_w * temporal_loss)
+                
+                # Gradient descent
+                grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
+                grad = torch.clamp(grad, -5.0, 5.0)  # Clip gradients
+                
+                # Update (create new tensor, not in-place)
+                z_var = clamp_activation(z_var - vi_lr * grad, clip_min, clip_max)
+                z_var = z_var.detach().requires_grad_(True)
         
         # Finalize (detach from graph - VI is not part of BPTT)
         updated = z_var.detach()

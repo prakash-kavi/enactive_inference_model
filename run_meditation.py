@@ -1,7 +1,7 @@
 """Main entry point for lean meditation model training and simulation.
 
 Usage:
-    python run_meditation.py run      # Train + simulate both expert and novice
+    python run_meditation.py run      # Train expert + novice and generate plots
     python run_meditation.py plot     # Generate plots from saved results
     python run_meditation.py run --timesteps 5000  # Custom timesteps
 """
@@ -144,8 +144,8 @@ def generate_plots(expert_results, novice_results):
     plot_hierarchy(expert_tail, str(PLOT_DIR / "Fig4B_Hierarchy_Expert.png"), "Expert")
     
     # Fig5: Attractor plots (2D projection + 3D landscape from tail)
-    print("  • Fig5A_Attractor2D.png")
-    plot_attractor_2d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5A_Attractor2D.png"))
+    # print("  • Fig5A_Attractor2D.png")
+    # plot_attractor_2d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5A_Attractor2D.png"))
     
     print("  • Fig5B_Attractor3D.png")
     plot_attractor_3d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5B_Attractor3D.png"))
@@ -158,8 +158,8 @@ def generate_plots(expert_results, novice_results):
     print("  • Fig3C_Transitions.png")
     plot_transitions(novice_tail, expert_tail, str(PLOT_DIR / "Fig3C_Transitions.png"))
     
-    print("  • Fig3D_Belief_about_Belief.png")
-    plot_belief_about_belief(novice_results, expert_results, str(PLOT_DIR / "Fig3D_Belief_about_Belief.png"))
+    print("  • Fig3D.png")
+    plot_belief_about_belief(novice_results, expert_results, str(PLOT_DIR / "Fig3D.png"))
     
     print("\n" + "="*70)
     print("PLOTTING COMPLETE")
@@ -170,10 +170,10 @@ def generate_plots(expert_results, novice_results):
     print(f"  - Fig3A_Network_Radar.png")
     print(f"  - Fig3B_FE_and_Dwell.png")
     print(f"  - Fig3C_Transitions.png")
-    print(f"  - Fig3D_Belief_about_Belief.png")
+    print(f"  - Fig3D.png")
     print(f"  - Fig4A_Hierarchy_Novice.png")
     print(f"  - Fig4B_Hierarchy_Expert.png")
-    print(f"  - Fig5A_Attractor2D.png")
+    # print(f"  - Fig5A_Attractor2D.png")
     print(f"  - Fig5B_Attractor3D.png")
     print()
 
@@ -188,14 +188,14 @@ Commands:
   plot  - Generate plots from previously saved results
 
 Examples:
-  # Run full pipeline (training + simulation + plots) with seed 42
-  python -m lean_model.run_meditation run
+  # Run full pipeline (training + plots) with seed 42
+  python run_meditation.py run
   
   # Custom timesteps (seed 42, outputs to data/ and plots/)
-  python -m lean_model.run_meditation run --timesteps 5000
+  python run_meditation.py run --timesteps 5000
   
   # Regenerate plots from saved results
-  python -m lean_model.run_meditation plot
+  python run_meditation.py plot
 
 Configuration (fixed for reproducibility):
   Seed: 42
@@ -231,7 +231,7 @@ Configuration (fixed for reproducibility):
             print(f"ERROR: Could not find saved results:")
             print(f"  Looking for: {expert_path}")
             print(f"  Looking for: {novice_path}")
-            print(f"\nRun 'python -m lean_model.run_meditation run' first to generate results.")
+            print(f"\nRun 'python run_meditation.py run' first to generate results.")
             return
         
         print(f"\nLoading results from {OUTPUT_DIR}/...")

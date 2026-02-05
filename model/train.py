@@ -9,7 +9,7 @@ Implements the "awareness as hyperparameter optimization" framework:
 import numpy as np
 import torch
 import torch.optim as optim
-from typing import Dict
+from typing import Dict, Optional
 import json
 from pathlib import Path
 
@@ -60,18 +60,8 @@ class MeditationTrainer:
         # Optimizer
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.params['learning_rate'])
         
-        # History tracking
-        self.history = {
-            'states': [],
-            'free_energy': [],
-            'meta_awareness': [],
-            'transitions': [],
-            'action_errors': [],
-            'network_activations': [],
-            'thoughtseed_activations': [],
-            'dominant_thoughtseed': []
-        }
-        
+        # History tracking (Initialized in reset)
+        self.history = {}
         self._last_x_actual = None
     
     def step(self, t: int, current_state: str, activations: torch.Tensor, enable_learning: bool = True) -> tuple[torch.Tensor, str, torch.Tensor, Dict]:
@@ -152,6 +142,20 @@ class MeditationTrainer:
             # Combined loss
             step_loss = free_energy + action_loss_weight * action_pred_error
             
+            # Recognition Loss (Amortized Inference)
+            # Train encoder to predict the optimized thoughtseeds (z) from observations (x)
+            # This enables "Expert Intuition" mechanism
+            if enable_learning and self.level == 'expert':
+                # Re-run encoder on current observation
+                z_recognition = self.agent.vae.encode(x_current.detach())
+                
+                # Target is the optimized z from VFE loop (which is detached)
+                # Recognition loss = MSE(Encoder(x), VI_Optimized_z)
+                rec_loss = torch.nn.functional.mse_loss(z_recognition, activations.detach())
+                
+                # Add to total loss (weighted)
+                step_loss = step_loss + rec_loss
+            
         # Store for next iteration
         self._last_x_actual = {
             'x': x_current.detach(),
@@ -182,23 +186,40 @@ class MeditationTrainer:
         
         return step_loss, new_state, activations, metrics
 
-    def train(self, timesteps: int = 10000, enable_learning: bool = True) -> Dict:
+    def train(
+        self,
+        timesteps: int = 10000,
+        enable_learning: bool = True,
+        reseed_rng: bool = False,
+        run_seed: Optional[int] = None,
+    ) -> Dict:
         """Run BPTT training.
         
         Args:
             timesteps: Total simulation steps
             enable_learning: Whether to update weights
+            reseed_rng: Reinitialize random generators for an isolated/reproducible run
+            run_seed: Optional per-run seed override (used only when reseed_rng=True)
         
         Returns:
             Training results dict
         """
         # Initialize
+        # Initialize run state
+        self._reset_run_state(reseed_rng=reseed_rng, run_seed=run_seed)
+        
+        # Log Phenotype status
+        if self.level == 'novice':
+            print(f"PHENOTYPE: NOVICE (Encoder Frozen - No Amortized Inference Learning)")
+        else:
+            print(f"PHENOTYPE: EXPERT (Encoder Unfrozen - Learning Active)")
+
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
         
         # Initial thoughtseed activations
         device = next(self.agent.parameters()).device
-        priors = get_thoughtseed_priors(current_state, self.level)
+        priors = get_thoughtseed_priors(current_state)
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
         activations_np += np.random.normal(0, self.params['init_noise_sigma'], size=len(activations_np))
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
@@ -231,39 +252,41 @@ class MeditationTrainer:
             
             steps_to_run = min(bptt_steps, timesteps - t_start)
             
-            for t_sub in range(steps_to_run):
-                t = t_start + t_sub
-                
-                # Execute step
-                step_loss, new_state, activations, metrics = self.step(
-                    t=t,
-                    current_state=current_state,
-                    activations=activations,
-                    enable_learning=enable_learning
-                )
-                
-                # Record state transitions
-                if new_state != current_state:
-                    self.history['transitions'].append({
-                        'timestamp': t,
-                        'from': current_state,
-                        'to': new_state,
-                        'free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0
-                    })
-                    current_state = new_state
-                
-                # Accumulate loss
-                if enable_learning and step_loss.requires_grad:
-                    window_loss = step_loss if window_loss is None else (window_loss + step_loss)
-                
-                # Record history
-                self.history['states'].append(current_state)
-                self.history['free_energy'].append(metrics['free_energy'])
-                self.history['meta_awareness'].append(metrics['meta_awareness'])
-                self.history['action_errors'].append(metrics['action_error'])
-                self.history['network_activations'].append(metrics['network_activations'])
-                self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
-                self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
+            # Control autograd context (disable for inference-only runs to save memory/compute)
+            with torch.set_grad_enabled(enable_learning):
+                for t_sub in range(steps_to_run):
+                    t = t_start + t_sub
+                    
+                    # Execute step
+                    step_loss, new_state, activations, metrics = self.step(
+                        t=t,
+                        current_state=current_state,
+                        activations=activations,
+                        enable_learning=enable_learning
+                    )
+                    
+                    # Record state transitions
+                    if new_state != current_state:
+                        self.history['transitions'].append({
+                            'timestamp': t,
+                            'from': current_state,
+                            'to': new_state,
+                            'free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0
+                        })
+                        current_state = new_state
+                    
+                    # Accumulate loss
+                    if enable_learning and step_loss.requires_grad:
+                        window_loss = step_loss if window_loss is None else (window_loss + step_loss)
+                    
+                    # Record history
+                    self.history['states'].append(current_state)
+                    self.history['free_energy'].append(metrics['free_energy'])
+                    self.history['meta_awareness'].append(metrics['meta_awareness'])
+                    self.history['action_errors'].append(metrics['action_error'])
+                    self.history['network_activations'].append(metrics['network_activations'])
+                    self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+                    self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
             
             # Gradient step (after accumulating gradients from all steps in window)
             if enable_learning:
@@ -368,6 +391,31 @@ class MeditationTrainer:
             'dominant_ts_history': self.history['dominant_thoughtseed']
         }
     
+    def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
+        """Reset internal state for a new run."""
+        self.history = {
+            'states': [],
+            'free_energy': [],
+            'meta_awareness': [],
+            'transitions': [],
+            'action_errors': [],
+            'network_activations': [],
+            'thoughtseed_activations': [],
+            'dominant_thoughtseed': []
+        }
+        self._last_x_actual = None
+        self.blanket_l1l2.reset()
+        self.blanket_l2l3.reset()
+        self.monitor.reset()
+        self.agent.z_ema.zero_()
+        self.agent.z_ema_initialized = False
+
+        if reseed_rng:
+            seed = self.seed if run_seed is None else int(run_seed)
+            torch.manual_seed(seed)
+            np.random.seed(seed)
+            self.process.rng = np.random.RandomState(seed)
+
     def save_results(self, output_dir: str = 'data/lean_results') -> None:
         """Save training results to JSON."""
         output_path = Path(output_dir)
@@ -382,34 +430,30 @@ class MeditationTrainer:
         
         print(f"Results saved to {filepath}")
 
-
-def train_meditation(experience_level: str = 'expert', 
-                     timesteps: int = 10000, 
-                     seed: int = 42,
-                     debug_anomaly: bool = False,
-                     save_results: bool = True,
-                     output_dir: str = 'data/lean_results') -> Dict:
-    """Convenience function for training meditation model.
-    
-    Args:
-        experience_level: 'expert' or 'novice'
-        timesteps: Number of simulation steps
-        seed: Random seed
-        debug_anomaly: Enable PyTorch anomaly detection for debugging
-        save_results: Whether to save to disk
-        output_dir: Output directory for results
-    
-    Returns:
-        Training results dict
-    """
+def train_meditation(
+    experience_level: str = 'expert',
+    timesteps: int = 10000,
+    seed: int = 42,
+    debug_anomaly: bool = False,
+    reseed_rng: bool = False,
+    run_seed: Optional[int] = None,
+    save_results: bool = True,
+    output_dir: str = 'data/lean_results',
+) -> Dict:
+    """Convenience wrapper for MeditationTrainer."""
     trainer = MeditationTrainer(
         experience_level=experience_level,
         seed=seed,
-        debug_anomaly=debug_anomaly
+        debug_anomaly=debug_anomaly,
     )
-    results = trainer.train(timesteps=timesteps, enable_learning=True)
-    
+    results = trainer.train(
+        timesteps=timesteps,
+        enable_learning=True,
+        reseed_rng=reseed_rng,
+        run_seed=run_seed,
+    )
+
     if save_results:
         trainer.save_results(output_dir=output_dir)
-    
+
     return results

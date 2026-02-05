@@ -34,7 +34,6 @@ class Layer3Monitor(nn.Module):
         
         self.efe_ambiguity_weight = params['efe_ambiguity_weight']
         self.efe_cycle_strength = params['efe_cycle_strength']
-        self.policy_temp_by_state = params['policy_temperature_by_state']
         self.precision_range = params['l3tol2_precision_range']
         
         # EMA tracking
@@ -42,6 +41,14 @@ class Layer3Monitor(nn.Module):
         self.efe_ema = 0.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
+
+    def reset(self) -> None:
+        """Reset monitor state for an isolated training run."""
+        self.vfe_ema = 0.0
+        self.efe_ema = 0.0
+        self.meta_awareness_ema = None
+        self.prev_transition_drive = 0.0
+        self.blanket_l2l3.reset()
     
     def update_meta_awareness(self, current_state: str, z: torch.Tensor) -> float:
         """Compute meta-awareness from L2 thoughtseed activations."""
@@ -104,10 +111,9 @@ class Layer3Monitor(nn.Module):
         base_drive = 0.5 * (transparency + self.vfe_ema)
         efe_drive = 0.35 * self.efe_ema if self.efe_ema > 0.0 else 0.0
         
-        # Apply state-specific temperature to transition pressure
+        # Apply state-specific temperature to transition pressure (DEPRECATED: Using temp=1.0)
         raw_pressure = base_drive + efe_drive
-        temp = self.policy_temp_by_state.get(current_state, 1.0)
-        transition_pressure = clip_probability(raw_pressure / temp)
+        transition_pressure = clip_probability(raw_pressure)
         
         # Store for next iteration
         self.prev_transition_drive = transition_pressure

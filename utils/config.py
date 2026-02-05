@@ -59,7 +59,7 @@ NETWORK_PROFILES = {
     },
     "meta_awareness": {
         "novice": {"DMN": 0.45, "VAN": 0.85, "DAN": 0.42, "FPN": 0.56},
-        "expert": {"DMN": 0.40, "VAN": 0.78, "DAN": 0.42, "FPN": 0.55}
+        "expert": {"DMN": 0.40, "VAN": 0.80, "DAN": 0.42, "FPN": 0.55}
     },
     "redirect_attention": {
         "novice": {"DMN": 0.40, "VAN": 0.50, "DAN": 0.78, "FPN": 0.74},
@@ -72,30 +72,30 @@ DWELL_TIMES = {
     'expert': {
         'breath_focus': (15, 30),
         'mind_wandering': (10, 20),
-        'meta_awareness': (1, 4),
-        'redirect_attention': (1, 4)
+        'meta_awareness': (3, 6),
+        'redirect_attention': (3, 6)
     },
     'novice': {
-        'breath_focus': (5, 15),
-        'mind_wandering': (20, 40),
-        'meta_awareness': (2, 6),
-        'redirect_attention': (3, 8)
+        'breath_focus': (8, 15),
+        'mind_wandering': (20, 35),
+        'meta_awareness': (5, 10),
+        'redirect_attention': (5, 10)
     }
 }
 
-# Exit transition probabilities (exclude self-transitions)
+# Exit transition probabilities priors (exclude self-transitions)
 STATE_TRANSITION_PROBS = {
     'expert': {
-        'breath_focus': {'mind_wandering': 0.35, 'meta_awareness': 0.45, 'redirect_attention': 0.20},
-        'mind_wandering': {'breath_focus': 0.18, 'meta_awareness': 0.56, 'redirect_attention': 0.26},
-        'meta_awareness': {'redirect_attention': 0.85, 'breath_focus': 0.14, 'mind_wandering': 0.01},
-        'redirect_attention': {'breath_focus': 0.59, 'meta_awareness': 0.34, 'mind_wandering': 0.07},
+        'breath_focus': {'mind_wandering': 0.60, 'meta_awareness': 0.25, 'redirect_attention': 0.20},
+        'mind_wandering': {'meta_awareness': 0.75, 'redirect_attention': 0.15, 'breath_focus': 0.10},
+        'meta_awareness': {'redirect_attention': 0.85, 'breath_focus': 0.10, 'mind_wandering': 0.05},
+        'redirect_attention': {'breath_focus': 0.80, 'meta_awareness': 0.15, 'mind_wandering': 0.05}
     },
     'novice': {
-        'breath_focus': {'mind_wandering': 0.90, 'meta_awareness': 0.08, 'redirect_attention': 0.02},
-        'mind_wandering': {'meta_awareness': 0.68, 'redirect_attention': 0.17, 'breath_focus': 0.15},
-        'meta_awareness': {'redirect_attention': 0.79, 'breath_focus': 0.15, 'mind_wandering': 0.06},
-        'redirect_attention': {'breath_focus': 0.88, 'mind_wandering': 0.07, 'meta_awareness': 0.05},
+        'breath_focus': {'mind_wandering': 0.80, 'meta_awareness': 0.10, 'redirect_attention': 0.10},
+        'mind_wandering': {'meta_awareness': 0.60, 'redirect_attention': 0.20, 'breath_focus': 0.20},
+        'meta_awareness': {'redirect_attention': 0.60, 'breath_focus': 0.15, 'mind_wandering': 0.25},
+        'redirect_attention': {'breath_focus': 0.60, 'mind_wandering': 0.35, 'meta_awareness': 0.05}
     }
 }
 
@@ -104,67 +104,36 @@ STATE_TRANSITION_PROBS = {
 # =============================================================================
 
 # Thoughtseed priors (state-dependent activation baselines)
-THOUGHTSEED_BASE_ACTIVATIONS = {
-    "novice": {
-        "breath_focus": {
-            "attend_breath": 0.75,
-            "equanimity": 0.35,
-            "pain_discomfort": 0.1,
-            "pending_tasks": 0.05,
-            "aha_moment": 0.15
-        },
-        "mind_wandering": {
-            "attend_breath": 0.05,
-            "equanimity": 0.05,
-            "pain_discomfort": 0.75,
-            "pending_tasks": 0.8,
-            "aha_moment": 0.05
-        },
-        "meta_awareness": {
-            "attend_breath": 0.25,
-            "equanimity": 0.3,
-            "pain_discomfort": 0.1,
-            "pending_tasks": 0.1,
-            "aha_moment": 0.9
-        },
-        "redirect_attention": {
-            "attend_breath": 0.7,
-            "equanimity": 0.85,
-            "pain_discomfort": 0.12,
-            "pending_tasks": 0.05,
-            "aha_moment": 0.35
-        }
+THOUGHTSEED_STATE_PRIORS = {
+    "breath_focus": {
+        "attend_breath": 0.85,
+        "equanimity": 0.45,
+        "pain_discomfort": 0.2,
+        "pending_tasks": 0.05,
+        "aha_moment": 0.15
     },
-    "expert": {
-        "breath_focus": {
-            "attend_breath": 0.85,
-            "equanimity": 0.45,
-            "pain_discomfort": 0.1,
-            "pending_tasks": 0.05,
-            "aha_moment": 0.15
-        },
-        "mind_wandering": {
-            "attend_breath": 0.05,
-            "equanimity": 0.1,
-            "pain_discomfort": 0.95,  # High attractor (was 1.05, clipped to preserve distinction)
-            "pending_tasks": 1.0,      # Strongest attractor (was 1.1, clipped)
-            "aha_moment": 0.05
-        },
-        "meta_awareness": {
-            "attend_breath": 0.25,
-            "equanimity": 0.35,
-            "pain_discomfort": 0.1,
-            "pending_tasks": 0.1,
-            "aha_moment": 0.95
-        },
-        "redirect_attention": {
-            "attend_breath": 0.7,
-            "equanimity": 0.85,
-            "pain_discomfort": 0.12,
-            "pending_tasks": 0.05,
-            "aha_moment": 0.35
-        }
+    "mind_wandering": {
+        "attend_breath": 0.15,
+        "equanimity": 0.1,
+        "pain_discomfort": 0.8,  
+        "pending_tasks": 0.75,      
+        "aha_moment": 0.15
+    },
+    "meta_awareness": {
+        "attend_breath": 0.25,
+        "equanimity": 0.35,
+        "pain_discomfort": 0.2,
+        "pending_tasks": 0.2,
+        "aha_moment": 0.95
+    },
+    "redirect_attention": {
+        "attend_breath": 0.7,
+        "equanimity": 0.85,
+        "pain_discomfort": 0.15,
+        "pending_tasks": 0.15,
+        "aha_moment": 0.35
     }
+
 }
 
 # Meta-awareness computation: state-aware thoughtseed weighting
@@ -213,12 +182,6 @@ ACTINF_PARAMS = {
         # L3 policy
         "efe_ambiguity_weight": 0.4,
         "efe_cycle_strength": 0.35,
-        "policy_temperature_by_state": {
-            "breath_focus": 1.8,
-            "mind_wandering": 1.15,
-            "meta_awareness": 0.95,
-            "redirect_attention": 1.0,
-        },
         "l3tol2_precision_range": (0.4, 0.6),
     },
     "expert": {
@@ -238,17 +201,10 @@ ACTINF_PARAMS = {
         # L3 policy
         "efe_ambiguity_weight": 0.35,
         "efe_cycle_strength": 0.35,
-        "policy_temperature_by_state": {
-            "breath_focus": 1.05,
-            "mind_wandering": 0.95,
-            "meta_awareness": 0.85,
-            "redirect_attention": 0.9,
-        },
         "l3tol2_precision_range": (0.4, 0.6),
     }
 }
 
-# Phase 4: Forward model action loss weighting
 FORWARD_LOSS_BASE_WEIGHT = 0.05
 FORWARD_LOSS_PRECISION_SCALE = 0.1  # Modulated by L3 precision
 
@@ -260,9 +216,9 @@ def get_params(experience_level):
     """Get all parameters for experience level."""
     return ACTINF_PARAMS[experience_level].copy()
 
-def get_thoughtseed_priors(state, experience_level):
-    """Get thoughtseed prior activations for state."""
-    return THOUGHTSEED_BASE_ACTIVATIONS[experience_level][state].copy()
+def get_thoughtseed_priors(state): 
+    """Get thoughtseed prior activations for state (Universal)."""
+    return THOUGHTSEED_STATE_PRIORS[state].copy()
 
 def compute_meta_awareness(state, thoughtseed_activations):
     """Compute meta-awareness from weighted thoughtseeds."""
