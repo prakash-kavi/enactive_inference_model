@@ -12,11 +12,11 @@ import torch
 import torch.nn as nn
 from typing import Dict, Tuple, Optional
 
-from config import (
+from utils.config import (
     NETWORKS, DEFAULTS, EPS,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS
 )
-from utils import clip_probability, to_float
+from utils.utils import clip_probability, to_float
 
 class Layer1Process(nn.Module):
     """MVOU generative process for brain network dynamics."""

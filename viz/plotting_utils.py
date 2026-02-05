@@ -36,7 +36,7 @@ STATE_COLORS = {
     "redirect_attention": "#ff7f0e",
 }
 
-from config import NETWORKS, THOUGHTSEEDS, STATES, DEFAULTS
+from utils.config import NETWORKS, THOUGHTSEEDS, STATES, DEFAULTS
 
 NETWORK_COLORS = {
     'DMN': '#CA3542',

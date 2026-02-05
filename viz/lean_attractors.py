@@ -15,7 +15,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import patheffects
 from mpl_toolkits.mplot3d import Axes3D
 
-from config import STATES, THOUGHTSEEDS
+from utils.config import STATES, THOUGHTSEEDS
 from viz.plotting_utils import (
     STATE_COLORS,
     STATE_SHORT_NAMES,

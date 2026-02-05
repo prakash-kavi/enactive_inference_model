@@ -10,21 +10,21 @@ import argparse
 import os
 from pathlib import Path
 
-from train import train_meditation
-from analysis import (
+from model.train import train_meditation
+from viz.analysis import (
     plot_belief_about_belief,
     print_summary
 )
 
 # Import data processing utilities
-from utils import (
+from utils.utils import (
     get_tail_window,
     compute_network_profiles,
     compute_thoughtseed_means,
     compute_tail_statistics,
     TAIL_STEPS
 )
-from config import STATES, NETWORKS, THOUGHTSEEDS
+from utils.config import STATES, NETWORKS, THOUGHTSEEDS
 
 # Import publication plotting functions
 from viz.lean_convergence import plot_convergence

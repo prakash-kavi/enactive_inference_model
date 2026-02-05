@@ -12,9 +12,9 @@ import torch
 import torch.nn as nn
 from typing import Dict, Optional
 
-from config import THOUGHTSEEDS, compute_meta_awareness, get_exit_transition_probs
-from blankets import MarkovBlanketL2L3
-from utils import clip_probability, to_float
+from utils.config import THOUGHTSEEDS, compute_meta_awareness, get_exit_transition_probs
+from .blankets import MarkovBlanketL2L3
+from utils.utils import clip_probability, to_float
 
 class Layer3Monitor(nn.Module):
     """Metacognitive monitor: EFE-based policy selection."""
@@ -29,7 +29,7 @@ class Layer3Monitor(nn.Module):
         
         # Parameters (from config)
         if params is None:
-            from .config import get_params
+            from utils.config import get_params
             params = get_params(experience_level)
         
         self.efe_ambiguity_weight = params['efe_ambiguity_weight']

@@ -13,16 +13,16 @@ from typing import Dict
 import json
 from pathlib import Path
 
-from config import (
+from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
     FORWARD_LOSS_BASE_WEIGHT, FORWARD_LOSS_PRECISION_SCALE,
     get_params, get_thoughtseed_priors
 )
-from process import Layer1Process
-from agent import Layer2Agent
-from monitor import Layer3Monitor
-from blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils import bernoulli_kl, networks_to_tensor
+from .process import Layer1Process
+from .agent import Layer2Agent
+from .monitor import Layer3Monitor
+from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
+from utils.utils import bernoulli_kl, networks_to_tensor
 
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
@@ -72,7 +72,6 @@ class MeditationTrainer:
             'dominant_thoughtseed': []
         }
         
-        # Phase 4: Track previous observation for forward loss
         self._last_x_actual = None
     
     def train(self, timesteps: int = 10000, enable_learning: bool = True) -> Dict:

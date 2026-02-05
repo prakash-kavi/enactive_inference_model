@@ -19,7 +19,7 @@ from viz.plotting_utils import (
     save_figure,
     set_plot_style,
 )
-from config import NETWORKS, THOUGHTSEEDS, STATES, DEFAULTS
+from utils.config import NETWORKS, THOUGHTSEEDS, STATES, DEFAULTS
 
 
 def plot_hierarchy(data, save_path: str, level_name: str):

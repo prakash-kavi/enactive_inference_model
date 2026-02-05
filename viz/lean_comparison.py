@@ -15,7 +15,7 @@ from viz.plotting_utils import (
     save_figure,
     set_plot_style,
 )
-from config import STATES, NETWORKS
+from utils.config import STATES, NETWORKS
 
 
 def plot_comparison(novice_data: dict, expert_data: dict, save_path: str):

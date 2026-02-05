@@ -12,12 +12,12 @@ import torch
 import torch.nn as nn
 from typing import Dict, Optional
 
-from config import (
+from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
     get_params, get_thoughtseed_priors
 )
-from blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils import (
+from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
+from utils.utils import (
     bernoulli_kl,
     clamp_activation,
     clip_probability,

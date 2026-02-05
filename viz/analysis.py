@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict
 
-from config import STATES
+from utils.config import STATES
 
 # Color palette for states
 STATE_COLORS = {

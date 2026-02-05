@@ -16,7 +16,7 @@ from viz.plotting_utils import (
     save_figure,
     set_plot_style,
 )
-from config import STATES, DEFAULTS
+from utils.config import STATES, DEFAULTS
 
 
 def get_dwell_times(stats):
