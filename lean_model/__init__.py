@@ -21,9 +21,7 @@ from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .train import MeditationTrainer, train_meditation
 from .analysis import (
     compute_metrics,
-    plot_training_summary,
-    plot_state_trajectory,
-    compare_expertise,
+    plot_belief_about_belief,
     print_summary
 )
 
@@ -43,9 +41,7 @@ __all__ = [
     
     # Analysis
     'compute_metrics',
-    'plot_training_summary',
-    'plot_state_trajectory',
-    'compare_expertise',
+    'plot_belief_about_belief',
     'print_summary',
     
     # Configuration

@@ -66,7 +66,10 @@ class MeditationTrainer:
             'free_energy': [],
             'meta_awareness': [],
             'transitions': [],
-            'action_errors': []
+            'action_errors': [],
+            'network_activations': [],
+            'thoughtseed_activations': [],
+            'dominant_thoughtseed': []
         }
         
         # Phase 4: Track previous observation for forward loss
@@ -211,6 +214,19 @@ class MeditationTrainer:
                 self.history['free_energy'].append(free_energy.detach().item())
                 self.history['meta_awareness'].append(meta_awareness)
                 self.history['action_errors'].append(action_pred_error_val)
+                
+                # Convert network activations tensors to floats for JSON serialization
+                network_acts_serializable = {
+                    net: float(val.detach().item()) if isinstance(val, torch.Tensor) else float(val)
+                    for net, val in network_acts.items()
+                }
+                self.history['network_activations'].append(network_acts_serializable)
+                
+                # Record thoughtseed activations and dominant thoughtseed
+                ts_acts = activations.detach().cpu().numpy().tolist()
+                self.history['thoughtseed_activations'].append(ts_acts)
+                dominant_idx = np.argmax(ts_acts)
+                self.history['dominant_thoughtseed'].append(THOUGHTSEEDS[dominant_idx])
             
             # Gradient step (after accumulating gradients from all steps in window)
             if enable_learning:
@@ -303,12 +319,16 @@ class MeditationTrainer:
             'timesteps': len(self.history['states']),
             'free_energy_history': self.history['free_energy'],
             'meta_awareness_history': self.history['meta_awareness'],
-            'state_sequence': self.history['states'],
+            'state_history': self.history['states'],  # Renamed for viz compatibility
+            'state_sequence': self.history['states'],  # Keep for backward compat
             'transitions': self.history['transitions'],
             'avg_dwell_times': avg_dwell,
             'transition_matrix': trans_matrix,
             'avg_action_errors': avg_action_errors,
             'final_free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0,
+            'network_activations_history': self.history['network_activations'],
+            'thoughtseed_activations_history': self.history['thoughtseed_activations'],
+            'dominant_ts_history': self.history['dominant_thoughtseed']
         }
     
     def save_results(self, output_dir: str = 'data/lean_results') -> None:

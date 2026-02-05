@@ -1,55 +1,52 @@
 """
-plot_attractors.py
+lean_attractors.py
 
-Generates attractor landscape visualizations from tail of training rollouts:
-- Figure 5A: 2D Attractor Landscape (Breath Focus vs Pending Tasks)
-- Figure 5B: 3D Attractor Landscape with Free Energy surface
+Attractor landscape visualizations - EXACT copy from viz/viz/plot_attractors.py
+Adapted imports for lean_model structure.
 """
 
 from __future__ import annotations
-
+from pathlib import Path
+from typing import Dict, List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import patheffects
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-from pathlib import Path
-from typing import Dict, List
+from mpl_toolkits.mplot3d import Axes3D
 
-from utils.meditation_config import STATES, THOUGHTSEEDS
-from . import plotting_utils as pu
+from ..config import STATES, THOUGHTSEEDS
+from .plotting_utils import (
+    STATE_COLORS,
+    STATE_SHORT_NAMES,
+    save_figure,
+    set_plot_style,
+)
 
-# Use constants from plotting_utils
-STATE_COLORS = pu.STATE_COLORS
-STATE_SHORT = pu.STATE_SHORT_NAMES
+# Use constants
+STATE_SHORT = STATE_SHORT_NAMES
 
 TS_BF = THOUGHTSEEDS.index("attend_breath")
 TS_PT = THOUGHTSEEDS.index("pending_tasks")
-TS_PD = THOUGHTSEEDS.index("pain_discomfort")
 
-def load_cohort_series(
-    cohort: str,
-    tail: int | None = 200,
-    data_dir: Path | None = None,
-) -> Dict[str, np.ndarray]:
-    ts_data, _, stats_data = pu.load_json_data_from(data_dir or pu.DATA_DIR, cohort)
-    tail_stats = pu.get_tail_stats(stats_data, tail=tail)
 
-    activations = np.asarray(tail_stats.get("activations_history", []), dtype=float)
-    free_energy = np.asarray(tail_stats.get("free_energy_history", []), dtype=float)
-    states = tail_stats.get("state_history", [])
-
-    if activations.ndim != 2 or activations.shape[0] == 0:
-        raise ValueError(f"Activation history missing or malformed for {cohort}")
-
+def _prepare_data(tail_data: dict) -> Dict:
+    """Prepare data dict in format expected by plot functions."""
+    ts_history = tail_data.get('thoughtseed_activations_history', [])
+    activations = np.array(ts_history) if ts_history else np.zeros((0, len(THOUGHTSEEDS)))
+    
+    activation_means = tail_data.get('thoughtseed_means_per_state', {})
+    activation_means_dict = {}
+    for state, ts_array in activation_means.items():
+        activation_means_dict[state] = {ts: float(ts_array[i]) for i, ts in enumerate(THOUGHTSEEDS)}
+    
     return {
-        "cohort": cohort,
         "activations": activations,
-        "free_energy": free_energy,
-        "states": states,
-        "activation_means": ts_data.get("activation_means_by_state", {}),
+        "free_energy": np.array(tail_data.get('free_energy_history', [])),
+        "states": tail_data.get('state_history', []),
+        "activation_means": activation_means_dict,
     }
+
 
 def _state_centroids(
     activations: np.ndarray,
@@ -74,6 +71,7 @@ def _state_centroids(
             ])
     return centroids
 
+
 def _smooth_path(series: np.ndarray, kernel: np.ndarray | None = None) -> np.ndarray:
     if series.size < 3:
         return series.copy()
@@ -85,22 +83,49 @@ def _smooth_path(series: np.ndarray, kernel: np.ndarray | None = None) -> np.nda
     smoothed = np.convolve(padded, kernel, mode="valid")
     return smoothed.astype(float)
 
-def plot_attractor_2d(
-    novice: Dict[str, np.ndarray],
-    expert: Dict[str, np.ndarray],
-    save_path: Path | None = None,
-    axis_indices: Tuple[int, int] = (TS_BF, TS_PT),
-    axis_labels: Tuple[str, str] = ("attend_breath", "pending_tasks"),
-    axis_titles: Tuple[str, str] = ("Attend Breath activation", "Pending Tasks activation"),
-    suptitle: str | None = None,
-) -> None:
-    """
-    Figure 5A: 2D Attractor Landscape showing trajectory through thoughtseed phase space
-    (Breath Focus vs Pending Tasks activations, colored by Free Energy)
-    """
-    pu.set_plot_style()
 
-    # Calculate global min/max for consistent normalization
+def _kernel_surface(
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+    bandwidth: float = 0.12,
+    max_samples: int = 1200,
+) -> np.ndarray:
+    if z.size == 0:
+        return np.full_like(grid_x, np.nan, dtype=float)
+
+    step = max(1, z.size // max_samples)
+    xs = x[::step][:, None]
+    ys = y[::step][:, None]
+    zs = z[::step][:, None]
+
+    coords = np.stack((grid_x.ravel(), grid_y.ravel()), axis=1)
+    dx2 = (coords[:, 0:1] - xs.T) ** 2
+    dy2 = (coords[:, 1:2] - ys.T) ** 2
+    dist2 = dx2 + dy2
+
+    denom = 2.0 * max(1e-6, bandwidth**2)
+    weights = np.exp(-dist2 / denom)
+    weighted = weights @ zs
+    normaliser = weights.sum(axis=1, keepdims=True) + 1e-12
+    surface = (weighted / normaliser).reshape(grid_x.shape)
+    z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
+    return np.clip(surface, z_min, z_max)
+
+
+def plot_attractor_2d(novice_data: dict, expert_data: dict, save_path: str):
+    """Figure 5A: 2D Attractor Landscape - EXACT COPY from viz/viz/plot_attractors.py"""
+    novice = _prepare_data(novice_data)
+    expert = _prepare_data(expert_data)
+    
+    axis_indices = (TS_BF, TS_PT)
+    axis_labels = ("attend_breath", "pending_tasks")
+    axis_titles = ("Attend Breath activation", "Pending Tasks activation")
+    
+    set_plot_style()
+
     nov_fe = novice["free_energy"]
     exp_fe = expert["free_energy"]
     
@@ -125,7 +150,6 @@ def plot_attractor_2d(
         x_smooth = _smooth_path(x)
         y_smooth = _smooth_path(y)
 
-        # Normalize using global bounds
         if fe.size:
             fe_norm = (fe - fe_min) / fe_range
         else:
@@ -169,69 +193,34 @@ def plot_attractor_2d(
     sm.set_array([])
     cbar = fig.colorbar(sm, cax=cbar_ax, orientation="horizontal")
     cbar.set_label("Normalized Free Energy", fontweight="bold")
-    # Set ticks to 0 (Low) and 1 (High) to indicate relative scale
     cbar.set_ticks([0, 0.5, 1])
     cbar.set_ticklabels(["Low", "Medium", "High"])
     for tick in cbar.ax.get_xticklabels():
         tick.set_fontweight("bold")
 
-    fig.suptitle(suptitle or "Thoughtseed Attractor Trajectories", fontsize=16, fontweight="bold")
+    fig.suptitle("Thoughtseed Attractor Trajectories", fontsize=16, fontweight="bold")
 
-    out_path = save_path or (Path(pu.PLOT_DIR) / "attractor_landscape_2d.png")
-    pu.save_figure(fig, out_path, "Attractor 2D")
+    save_figure(fig, Path(save_path), "Attractor 2D")
     plt.close(fig)
 
-def _kernel_surface(
-    x: np.ndarray,
-    y: np.ndarray,
-    z: np.ndarray,
-    grid_x: np.ndarray,
-    grid_y: np.ndarray,
-    bandwidth: float = 0.12,
-    max_samples: int = 1200,
-) -> np.ndarray:
-    if z.size == 0:
-        return np.full_like(grid_x, np.nan, dtype=float)
 
-    step = max(1, z.size // max_samples)
-    xs = x[::step][:, None]
-    ys = y[::step][:, None]
-    zs = z[::step][:, None]
-
-    coords = np.stack((grid_x.ravel(), grid_y.ravel()), axis=1)
-    dx2 = (coords[:, 0:1] - xs.T) ** 2
-    dy2 = (coords[:, 1:2] - ys.T) ** 2
-    dist2 = dx2 + dy2
-
-    denom = 2.0 * max(1e-6, bandwidth**2)
-    weights = np.exp(-dist2 / denom)
-    weighted = weights @ zs
-    normaliser = weights.sum(axis=1, keepdims=True) + 1e-12
-    surface = (weighted / normaliser).reshape(grid_x.shape)
-    z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
-    return np.clip(surface, z_min, z_max)
-
-def plot_attractor_landscape_3d(
-    novice: Dict[str, np.ndarray],
-    expert: Dict[str, np.ndarray],
-    save_path: Path | None = None,
-    bandwidth: float = 0.12,
-    axis_indices: Tuple[int, int] = (TS_BF, TS_PT),
-    axis_labels: Tuple[str, str] = ("attend_breath", "pending_tasks"),
-    axis_titles: Tuple[str, str] = ("Attend Breath activation", "Pending Tasks activation"),
-    suptitle: str | None = None,
-) -> None:
-    """
-    Figure 5B: 3D Attractor Landscape showing Free Energy surface over thoughtseed phase space
-    (Pending Tasks vs Breath Focus, with kernel-smoothed Free Energy as Z-axis)
-    """
-    pu.set_plot_style()
+def plot_attractor_3d(novice_data: dict, expert_data: dict, save_path: str):
+    """Figure 5B: 3D Free Energy Landscape - EXACT COPY from viz/viz/plot_attractors.py"""
+    novice = _prepare_data(novice_data)
+    expert = _prepare_data(expert_data)
+    
+    axis_indices = (TS_BF, TS_PT)
+    axis_labels = ("attend_breath", "pending_tasks")
+    axis_titles = ("Attend Breath activation", "Pending Tasks activation")
+    bandwidth = 0.12
+    
+    set_plot_style()
 
     xg = np.linspace(0.0, 1.0, 120)
     yg = np.linspace(0.0, 1.0, 120)
     grid_x, grid_y = np.meshgrid(xg, yg)
 
-    def _prepare_surface(data: Dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _prepare_surface(data: Dict[str, np.ndarray]) -> tuple:
         acts = data["activations"]
         fe = data["free_energy"]
         x = acts[:, axis_indices[0]]
@@ -241,7 +230,6 @@ def plot_attractor_landscape_3d(
     nov_x, nov_y, nov_fe = _prepare_surface(novice)
     exp_x, exp_y, exp_fe = _prepare_surface(expert)
 
-    # Global Normalization
     all_fe = np.concatenate([nov_fe, exp_fe])
     fe_min, fe_max = all_fe.min(), all_fe.max()
     fe_range = fe_max - fe_min + 1e-10
@@ -266,7 +254,6 @@ def plot_attractor_landscape_3d(
         ax.set_zlim(z_min, z_max)
         ax.view_init(elev=22, azim=140)
         ax.set_box_aspect((1, 1, 0.6))
-        # Labels: Breath Focus (x) and Pending Tasks (y) to match Fig5A
         ax.set_xlabel(axis_titles[0], labelpad=8, fontweight="bold")
         ax.set_ylabel(axis_titles[1], labelpad=8, fontweight="bold")
         ax.set_zlabel("Normalized Free Energy", labelpad=8, fontweight="bold")
@@ -274,7 +261,6 @@ def plot_attractor_landscape_3d(
         ax.set_zticks([])
 
     cmap = plt.get_cmap("viridis")
-    # Normalization for mapping z-values to colors (used for adaptive label contrast)
     norm = mpl.colors.Normalize(vmin=z_min, vmax=z_max)
     ax_left.plot_surface(grid_x, grid_y, nov_surface, cmap=cmap, vmin=z_min, vmax=z_max, linewidth=0, antialiased=True, alpha=0.65)
     ax_right.plot_surface(grid_x, grid_y, exp_surface, cmap=cmap, vmin=z_min, vmax=z_max, linewidth=0, antialiased=True, alpha=0.65)
@@ -294,10 +280,8 @@ def plot_attractor_landscape_3d(
             axis_indices=axis_indices,
             axis_labels=axis_labels,
         )
-        # Choose the corresponding surface for z-height lookup
         surface = nov_surface if title == "Novice" else exp_surface
         for state, centre in centroids.items():
-            # Find nearest grid index for centroid coordinates
             xi = int(np.abs(xg - centre[0]).argmin())
             yi = int(np.abs(yg - centre[1]).argmin())
             try:
@@ -307,19 +291,14 @@ def plot_attractor_landscape_3d(
 
             z_plot = min(0.98, z_val + 0.02)
 
-            # Render text with a white stroke for contrast over the surface
-            # Choose text color adaptively for contrast against the surface
-            # Map z value to cmap color and compute perceived luminance
-            cmap_rgba = cmap(norm(z_val)) if 'cmap' in locals() else (0.0, 0.0, 0.0, 1.0)
-            # Perceived luminance approximation from sRGB
+            cmap_rgba = cmap(norm(z_val))
             r, g, b = cmap_rgba[0], cmap_rgba[1], cmap_rgba[2]
             luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
 
-            # If surface under label is dark, use white text; otherwise use dark blue
             if luminance < 0.5:
                 text_color = "#FFFFFF"
             else:
-                text_color = "#003366"  # dark blue for good contrast
+                text_color = "#003366"
 
             txt = ax.text(
                 centre[0],
@@ -338,16 +317,6 @@ def plot_attractor_landscape_3d(
             ])
         ax.set_title(title, fontsize=13, fontweight="bold")
 
-    norm = mpl.colors.Normalize(vmin=z_min, vmax=z_max)
-    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, cax=cax, shrink=0.45, aspect=16)
-    cbar.ax.tick_params(labelsize=9)
-
-    fig.suptitle(suptitle or "Free-energy Landscape over Thoughtseed Phase Space", fontsize=16, fontweight="bold")
-
-    # Update colorbar
-    norm = mpl.colors.Normalize(vmin=z_min, vmax=z_max)
     sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
     cbar = fig.colorbar(sm, cax=cax, shrink=0.45, aspect=16)
@@ -356,32 +325,7 @@ def plot_attractor_landscape_3d(
     cbar.set_ticklabels(["Low", "Medium", "High"])
     cbar.ax.tick_params(labelsize=9)
 
-    out_path = save_path or (Path(pu.PLOT_DIR) / "attractor_landscape_3d.png")
-    pu.save_figure(fig, out_path, "Attractor 3D")
+    fig.suptitle("Free-energy Landscape over Thoughtseed Phase Space", fontsize=16, fontweight="bold")
+
+    save_figure(fig, Path(save_path), "Attractor 3D")
     plt.close(fig)
-
-def generate_plots(
-    tail: int | None = pu.TAIL_STEPS,
-    data_dir: Path | None = None,
-    output_dir: Path | None = None,
-) -> None:
-    novice = load_cohort_series("novice", tail=tail, data_dir=data_dir)
-    expert = load_cohort_series("expert", tail=tail, data_dir=data_dir)
-    
-    # Figure 5A: 2D Attractor
-    out_dir = output_dir or Path(pu.PLOT_DIR)
-    plot_attractor_2d(
-        novice, expert, 
-        save_path=out_dir / "Fig5A_Attractor2D.png"
-    )
-    
-    # Figure 5B: 3D Landscape
-    plot_attractor_landscape_3d(
-        novice, expert, 
-        save_path=out_dir / "Fig5B_Attractor3D.png"
-    )
-
-    # save_figure already logs file paths
-
-if __name__ == "__main__":
-    generate_plots()

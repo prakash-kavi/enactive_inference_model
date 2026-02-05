@@ -36,7 +36,7 @@ STATE_COLORS = {
     "redirect_attention": "#ff7f0e",
 }
 
-from utils.meditation_config import NETWORKS
+from lean_model.config import NETWORKS, THOUGHTSEEDS, STATES, DEFAULTS
 
 NETWORK_COLORS = {
     'DMN': '#CA3542',
@@ -53,9 +53,14 @@ THOUGHTSEED_COLORS = {
     'pending_tasks': '#911eb4'
 }
 
+# Point to lean_model's data and plots directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 PLOT_DIR = os.path.join(BASE_DIR, "plots")
+
+# Ensure directories exist
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(PLOT_DIR, exist_ok=True)
 
 def set_plot_style():
     """Set a consistent publication-ready style for matplotlib."""
