@@ -78,8 +78,8 @@ def run_training_and_simulation(timesteps: int):
     print("TRAINING COMPLETE")
     print("="*70)
     print(f"Results saved to: {OUTPUT_DIR}/")
-    print(f"  - learned_weights_expert_seed{SEED}.json")
-    print(f"  - learned_weights_novice_seed{SEED}.json")
+    print(f"  - training_results_expert_seed{SEED}.json")
+    print(f"  - training_results_novice_seed{SEED}.json")
     print()
     
     return expert_results, novice_results
@@ -92,7 +92,7 @@ def generate_plots(expert_results, novice_results):
     
     print("\n" + "="*70)
     print("GENERATING PLOTS")
-    print("n" + "="*70)
+    print("="*70)
     
     # ===== Prepare data for plotting =====
     print("  • Processing tail window data...")
