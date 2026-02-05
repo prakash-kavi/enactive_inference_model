@@ -21,7 +21,7 @@ from viz.plotting_utils import (
     STATE_SHORT_NAMES
 )
 from utils.config import STATES
-from utils.utils import TAIL_STEPS
+from utils.analysis_utils import TAIL_STEPS
 
 
 def rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:

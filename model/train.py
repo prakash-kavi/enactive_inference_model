@@ -22,7 +22,7 @@ from .process import Layer1Process
 from .agent import Layer2Agent
 from .monitor import Layer3Monitor
 from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils.utils import bernoulli_kl, networks_to_tensor
+from utils.math_utils import bernoulli_kl, networks_to_tensor
 
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
@@ -74,6 +74,114 @@ class MeditationTrainer:
         
         self._last_x_actual = None
     
+    def step(self, t: int, current_state: str, activations: torch.Tensor, enable_learning: bool = True) -> tuple[torch.Tensor, str, torch.Tensor, Dict]:
+        """Execute a single simulation step.
+        
+        Args:
+            t: Current timestep
+            current_state: State at start of step
+            activations: Current thoughtseed activations (L2 hidden state)
+            enable_learning: Whether to track gradients
+            
+        Returns:
+            step_loss: Loss for this step
+            new_state: Updated state
+            activations: Updated thoughtseed activations
+            metrics: Dict of step metrics for history
+        """
+        # ===== Layer 1: Generative Process =====
+        # Update L1 state based on previous active states (action)
+        network_acts, new_state = self.process.update(self.blanket_l1l2.active_states)
+        
+        # Update L1→L2 sensory states
+        self.blanket_l1l2.update_sensory_states(network_acts)
+        
+        # ===== Layer 2: Attentional Agent =====
+        # Perception: Encode networks → thoughtseeds
+        sensory_inference = self.agent.perceptual_inference()
+        
+        # Variational inference: Update thoughtseed dynamics
+        # Note: current_state here is the *new* state from L1 (consistent with original logic)
+        activations = self.agent.update_thoughtseeds(
+            current_state=new_state,
+            activations=activations,
+            observed_networks=network_acts,
+            sensory_inference=sensory_inference
+        ).detach()  # VI not part of BPTT gradient flow
+        
+        # Compute VFE (L2's free energy)
+        device = next(self.agent.parameters()).device
+        free_energy = self._compute_vfe(
+            new_state, activations, network_acts, device
+        )
+        
+        # ===== Layer 3: Metacognitive Monitor =====
+        # Update meta-awareness using new state
+        meta_awareness = self.monitor.update_meta_awareness(new_state, activations)
+        
+        # Policy evaluation (EFE-based)
+        policy_result = self.monitor.evaluate_policies(new_state, free_energy.item())
+        
+        # ===== Phase 4: Forward-Informed Action Selection =====
+        prescription = self.agent.prescriptive_action(activations, new_state)
+        
+        # Update L2→L1 active states (action)
+        self.blanket_l1l2.update_active_states(prescription)
+        
+        # Forward model loss calculation
+        step_loss = free_energy
+        action_pred_error_val = 0.0
+        
+        # Current observation (for forward model)
+        x_current = networks_to_tensor(network_acts, NETWORKS)
+        selected_action_mu = prescription['selected_action_mu']
+        
+        if self._last_x_actual is not None:
+            # Predict current observation from previous (x, action)
+            x_pred = self.agent.vae.predict_next(
+                self._last_x_actual['x'],
+                self._last_x_actual['action']
+            )
+            action_pred_error = torch.mean((x_current.detach() - x_pred)**2)
+            action_pred_error_val = action_pred_error.item()
+            
+            # L3 precision weighting
+            precision = policy_result['precision_modulation']
+            action_loss_weight = FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision
+            
+            # Combined loss
+            step_loss = free_energy + action_loss_weight * action_pred_error
+            
+        # Store for next iteration
+        self._last_x_actual = {
+            'x': x_current.detach(),
+            'action': selected_action_mu.detach()
+        }
+        
+        # Collect metrics
+        # Convert network activations tensors to floats for JSON serialization
+        network_acts_serializable = {
+            net: float(val.detach().item()) if isinstance(val, torch.Tensor) else float(val)
+            for net, val in network_acts.items()
+        }
+        
+        ts_acts = activations.detach().cpu().numpy().tolist()
+        dominant_idx = np.argmax(ts_acts)
+        
+        metrics = {
+            'timestamp': t,
+            'current_state': current_state,
+            'new_state': new_state,
+            'free_energy': free_energy.detach().item(),
+            'meta_awareness': meta_awareness,
+            'action_error': action_pred_error_val,
+            'network_activations': network_acts_serializable,
+            'thoughtseed_activations': ts_acts,
+            'dominant_thoughtseed': THOUGHTSEEDS[dominant_idx]
+        }
+        
+        return step_loss, new_state, activations, metrics
+
     def train(self, timesteps: int = 10000, enable_learning: bool = True) -> Dict:
         """Run BPTT training.
         
@@ -126,8 +234,13 @@ class MeditationTrainer:
             for t_sub in range(steps_to_run):
                 t = t_start + t_sub
                 
-                # ===== Layer 1: Generative Process =====
-                network_acts, new_state = self.process.update(self.blanket_l1l2.active_states)
+                # Execute step
+                step_loss, new_state, activations, metrics = self.step(
+                    t=t,
+                    current_state=current_state,
+                    activations=activations,
+                    enable_learning=enable_learning
+                )
                 
                 # Record state transitions
                 if new_state != current_state:
@@ -139,93 +252,18 @@ class MeditationTrainer:
                     })
                     current_state = new_state
                 
-                # Update L1→L2 sensory states
-                self.blanket_l1l2.update_sensory_states(network_acts)
-                
-                # ===== Layer 2: Attentional Agent =====
-                # Perception: Encode networks → thoughtseeds
-                sensory_inference = self.agent.perceptual_inference()
-                
-                # Variational inference: Update thoughtseed dynamics
-                activations = self.agent.update_thoughtseeds(
-                    current_state=current_state,
-                    activations=activations,
-                    observed_networks=network_acts,
-                    sensory_inference=sensory_inference
-                ).detach()  # VI not part of BPTT gradient flow
-                
-                # Compute VFE (L2's free energy)
-                free_energy = self._compute_vfe(
-                    current_state, activations, network_acts, device
-                )
-                
-                # ===== Layer 3: Metacognitive Monitor =====
-                # Update meta-awareness from thoughtseeds
-                meta_awareness = self.monitor.update_meta_awareness(current_state, activations)
-                
-                # Policy evaluation (EFE-based)
-                policy_result = self.monitor.evaluate_policies(current_state, free_energy.item())
-                
-                # ===== Phase 4: Forward-Informed Action Selection =====
-                prescription = self.agent.prescriptive_action(activations, current_state)
-                
-                # Update L2→L1 active states (action)
-                self.blanket_l1l2.update_active_states(prescription)
-                
-                # Current observation (for forward model)
-                x_current = networks_to_tensor(network_acts, NETWORKS)
-                selected_action_mu = prescription['selected_action_mu']
-                
-                # Forward model loss: Predict current from previous state+action
-                action_pred_error_val = 0.0
-                if self._last_x_actual is not None:
-                    # Predict current observation from previous (x, action)
-                    x_pred = self.agent.vae.predict_next(
-                        self._last_x_actual['x'],
-                        self._last_x_actual['action']
-                    )
-                    action_pred_error = torch.mean((x_current.detach() - x_pred)**2)
-                    action_pred_error_val = action_pred_error.item()
-                    
-                    # L3 precision weighting
-                    precision = policy_result['precision_modulation']
-                    action_loss_weight = FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision
-                    
-                    # Combined loss
-                    step_loss = free_energy + action_loss_weight * action_pred_error
-                else:
-                    # First step: only VFE
-                    step_loss = free_energy
-                
-                # Accumulate loss across BPTT window, then run one backward pass.
-                # This avoids retaining old graphs across repeated backward() calls.
+                # Accumulate loss
                 if enable_learning and step_loss.requires_grad:
                     window_loss = step_loss if window_loss is None else (window_loss + step_loss)
                 
-                # Store for next iteration
-                self._last_x_actual = {
-                    'x': x_current.detach(),
-                    'action': selected_action_mu.detach()
-                }
-                
                 # Record history
                 self.history['states'].append(current_state)
-                self.history['free_energy'].append(free_energy.detach().item())
-                self.history['meta_awareness'].append(meta_awareness)
-                self.history['action_errors'].append(action_pred_error_val)
-                
-                # Convert network activations tensors to floats for JSON serialization
-                network_acts_serializable = {
-                    net: float(val.detach().item()) if isinstance(val, torch.Tensor) else float(val)
-                    for net, val in network_acts.items()
-                }
-                self.history['network_activations'].append(network_acts_serializable)
-                
-                # Record thoughtseed activations and dominant thoughtseed
-                ts_acts = activations.detach().cpu().numpy().tolist()
-                self.history['thoughtseed_activations'].append(ts_acts)
-                dominant_idx = np.argmax(ts_acts)
-                self.history['dominant_thoughtseed'].append(THOUGHTSEEDS[dominant_idx])
+                self.history['free_energy'].append(metrics['free_energy'])
+                self.history['meta_awareness'].append(metrics['meta_awareness'])
+                self.history['action_errors'].append(metrics['action_error'])
+                self.history['network_activations'].append(metrics['network_activations'])
+                self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+                self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
             
             # Gradient step (after accumulating gradients from all steps in window)
             if enable_learning:

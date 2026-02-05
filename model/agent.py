@@ -17,7 +17,7 @@ from utils.config import (
     get_params, get_thoughtseed_priors
 )
 from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils.utils import (
+from utils.math_utils import (
     bernoulli_kl,
     clamp_activation,
     clip_probability,

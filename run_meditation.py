@@ -17,7 +17,7 @@ from viz.analysis import (
 )
 
 # Import data processing utilities
-from utils.utils import (
+from utils.analysis_utils import (
     get_tail_window,
     compute_network_profiles,
     compute_thoughtseed_means,

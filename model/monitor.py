@@ -14,7 +14,7 @@ from typing import Dict, Optional
 
 from utils.config import THOUGHTSEEDS, compute_meta_awareness, get_exit_transition_probs
 from .blankets import MarkovBlanketL2L3
-from utils.utils import clip_probability, to_float
+from utils.math_utils import clip_probability, to_float
 
 class Layer3Monitor(nn.Module):
     """Metacognitive monitor: EFE-based policy selection."""

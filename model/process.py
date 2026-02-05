@@ -16,7 +16,7 @@ from utils.config import (
     NETWORKS, DEFAULTS, EPS,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS
 )
-from utils.utils import clip_probability, to_float
+from utils.math_utils import clip_probability, to_float
 
 class Layer1Process(nn.Module):
     """MVOU generative process for brain network dynamics."""
