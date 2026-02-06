@@ -63,7 +63,11 @@ def policy_confidence(pi: np.ndarray, eps: float = EPS) -> float:
     """Policy confidence = 1 - normalized entropy."""
     if pi.size == 0:
         return 0.0
+    if pi.size == 1:
+        return 1.0
     denom = np.log(len(pi) + eps)
+    if denom <= eps:
+        return 0.0
     return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
 
 def clamp_for_log(x: torch.Tensor, eps: float) -> torch.Tensor:
@@ -83,6 +87,14 @@ def bernoulli_kl(q: torch.Tensor, p: torch.Tensor, eps: float) -> torch.Tensor:
     return torch.mean(
         q_safe * torch.log(q_safe / p_safe)
         + (1.0 - q_safe) * torch.log((1.0 - q_safe) / (1.0 - p_safe))
+    )
+
+
+def bernoulli_entropy(p: torch.Tensor, eps: float) -> torch.Tensor:
+    """Elementwise Bernoulli entropy averaged over dimensions."""
+    p_safe = clamp_for_log(p, eps)
+    return torch.mean(
+        -p_safe * torch.log(p_safe) - (1.0 - p_safe) * torch.log(1.0 - p_safe)
     )
 
 

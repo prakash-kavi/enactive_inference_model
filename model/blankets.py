@@ -58,7 +58,8 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     Active (L2 -> L1):
         - mu_x: Target network activations (policy)
-        - policy_confidence: L2 policy confidence / drive
+        - policy_drive: L2 transition urge
+        - policy_confidence: L2 policy confidence (posterior)
     """
     
     def __init__(self, smoothing: float = 0.7):
@@ -76,17 +77,17 @@ class MarkovBlanketL2L3(MarkovBlanket):
     
     Active (L3 -> L2):
         - precision_sensory: float (0-1, precision surrogate)
-        - policy_confidence: float (0-1, policy-driven state change pressure)
+        - policy_precision: float (>0, softmax inverse temperature)
     """
     
     def __init__(self, smoothing: float = 0.7):
         super().__init__(smoothing=smoothing)
         # Initialize with defaults
         self.active_states['precision_sensory'] = 0.5
-        self.active_states['policy_confidence'] = 0.0
+        self.active_states['policy_precision'] = 1.0
 
     def reset(self) -> None:
         """Reset state and restore defaults."""
         super().reset()
         self.active_states['precision_sensory'] = 0.5
-        self.active_states['policy_confidence'] = 0.0
+        self.active_states['policy_precision'] = 1.0

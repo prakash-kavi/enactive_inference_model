@@ -14,15 +14,16 @@ from typing import Dict, Optional
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    get_params, get_thoughtseed_priors
+    get_params, get_thoughtseed_priors, get_exit_transition_probs
 )
 from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from utils.math_utils import (
     bernoulli_kl,
+    bernoulli_entropy,
     clamp_activation,
     clip_probability,
-    precision_to_weight,
-    precision_from_error,
+    policy_posterior,
+    policy_confidence,
     to_float,
     networks_to_tensor,
 )
@@ -183,9 +184,9 @@ class Layer2Agent(nn.Module):
         sensory_target = clamp_activation(z_recognition.detach(), clip_min, clip_max)
         prior_target = clamp_activation(self.mu_params[current_state].detach().clone(), clip_min, clip_max)
         
-        # Sensory precision from L3 (raw, >0)
-        precision = max(EPS, to_float(self.blanket_l2l3.active_states.get('sensory_precision', 1.0)))
-        precision_weight = precision_to_weight(precision)
+        # Sensory precision from L3 (bounded weight)
+        precision = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
+        precision_weight = clip_probability(precision)
         
         # Initialization: blend previous and sensory target, then bias toward prior by precision.
         z_init = 0.5 * z_prev + 0.5 * sensory_target
@@ -237,20 +238,20 @@ class Layer2Agent(nn.Module):
         
         return clamp_activation(updated, clip_min, clip_max)
     
-    def policy_selection(self, z: torch.Tensor, current_state: str) -> Dict:
-        """Policy selection via forward prediction (EFE proxy).
+    def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
+        """Policy inference via softmax posterior over candidate policies.
         
         Returns dict with:
-            - selected_action_mu: Thoughtseed target for selected action
-            - action_mu: Network target for L1
-            - l2_precision_gain: Precision modulation (weight)
-            - transition_drive: Pressure to change state
+            - selected_action_mu: posterior-weighted thoughtseed target
+            - mu_x: posterior-weighted network target for L1
+            - precision_gain: Precision modulation (weight)
+            - policy_confidence: 1 - normalized entropy of q(pi)
         """
         # Get current networks for forward prediction
         x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS, device=z.device)
         
-        # Candidate actions (policy set)
-        candidates = [current_state]  # Always include "stay"
+        # Candidate policies (stay + next)
+        candidates = [current_state]
         if current_state == 'mind_wandering':
             candidates.append('meta_awareness')
         elif current_state == 'meta_awareness':
@@ -258,43 +259,50 @@ class Layer2Agent(nn.Module):
         elif current_state == 'redirect_attention':
             candidates.append('breath_focus')
         
-        # Evaluate each candidate via forward model
-        best_mu = None
-        min_error = float('inf')
+        exit_probs = get_exit_transition_probs(self.level, current_state)
+        avg_exit = (sum(exit_probs.values()) / len(exit_probs)) if exit_probs else (1.0 / max(len(candidates), 1))
         
-        for candidate_state in candidates:
-            mu_candidate = self.mu_params[candidate_state]
-            
-            # Forward prediction: what networks will result from this action?
-            with torch.no_grad():
-                x_next_pred = self.vae.predict_next(x_current, mu_candidate)
-            
-            # Expected networks from this action
-            action_networks = self.decode_with_state(mu_candidate)
-            
-            # Prediction error
-            error = torch.mean((x_next_pred - action_networks)**2).item()
-            
-            if error < min_error:
-                min_error = error
-                best_mu = mu_candidate
+        priors = []
+        g_vals = []
+        mu_candidates = []
         
-        # Selected action
-        selected_mu = best_mu if best_mu is not None else self.mu_params[current_state]
-        action_mu = self.decode_with_state(selected_mu)
+        with torch.no_grad():
+            for candidate_state in candidates:
+                mu_candidate = self.mu_params[candidate_state]
+                x_pred = self.vae.predict_next(x_current, mu_candidate)
+                x_pref = self.decode_with_state(mu_candidate)
+                
+                # Risk for G(pi) (ambiguity disabled for stability)
+                risk = 1.5 * bernoulli_kl(x_pred, x_pref, EPS)
+                g_vals.append(float(risk.item()))
+                
+                mu_candidates.append(mu_candidate)
+                
+                if candidate_state == current_state:
+                    prior = avg_exit
+                else:
+                    prior = exit_probs.get(candidate_state, avg_exit)
+                priors.append(max(EPS, float(prior)))
         
-        # Sensory precision from L3 (raw, >0)
-        precision = max(EPS, to_float(self.blanket_l2l3.active_states.get('sensory_precision', 1.0)))
-        precision_weight = precision_to_weight(precision)
+        log_prior = np.log(np.array(priors, dtype=float))
+        gamma = max(EPS, to_float(self.blanket_l2l3.active_states.get('policy_precision', 1.0)))
+        q_pi = policy_posterior(log_prior, np.array(g_vals, dtype=float), gamma)
+        pi_conf = policy_confidence(q_pi)
+        policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
         
-        # Transition drive from L3
-        transition_drive = clip_probability(self.blanket_l2l3.active_states.get('transition_drive', 0.0))
+        weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype, device=mu_candidates[0].device)
+        mu_stack = torch.stack(mu_candidates, dim=0)
+        selected_mu = torch.sum(weights.unsqueeze(-1) * mu_stack, dim=0)
+        mu_x = self.decode_with_state(selected_mu)
         
-        # Package for L1 via Markov blanket
+        precision = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
+        precision_gain = clip_probability(precision)
+        
         return {
             'selected_action_mu': selected_mu,
-            'action_mu': action_mu,
-            'l2_precision_gain': precision_weight,
-            'noise_reduction': float(np.clip(1.0 - 0.6 * precision_weight, 0.4, 1.0)),
-            'transition_drive': transition_drive,
+            'mu_x': mu_x,
+            'precision_gain': precision_gain,
+            'noise_reduction': float(np.clip(1.0 - 0.6 * precision_gain, 0.4, 1.0)),
+            'policy_confidence': pi_conf,
+            'policy_drive': policy_drive,
         }

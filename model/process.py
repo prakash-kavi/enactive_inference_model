@@ -56,7 +56,7 @@ class Layer1Process(nn.Module):
         self.current_max_dwell = int(dwell_seconds / self.dt)
         self.current_dwell = 0
         
-    def _check_transition(self, policy_confidence: float) -> str:
+    def _check_transition(self, policy_drive: float) -> str:
         """Check if state should transition based on dwell + drive."""
         self.current_dwell += 1
         
@@ -65,7 +65,7 @@ class Layer1Process(nn.Module):
             return self.current_state
         
         # Dwell elapsed: compute transition hazard
-        drive = clip_probability(policy_confidence)
+        drive = clip_probability(policy_drive)
         base_hazard = 0.3
         drive_boost = 0.5 * drive
         hazard = base_hazard + drive_boost
@@ -152,7 +152,8 @@ class Layer1Process(nn.Module):
         
         Args:
             active_states: Control from L2 via Markov blanket
-                - policy_confidence: float (0-1)
+                - policy_drive: float (0-1) (transition urge)
+                - policy_confidence: float (0-1) (posterior confidence)
                 - mu_x: Optional[torch.Tensor] (target network activations)
         
         Returns:
@@ -160,7 +161,7 @@ class Layer1Process(nn.Module):
             current_state: str
         """
         # Extract control signals
-        drive = active_states.get('policy_confidence', 0.0)
+        drive = active_states.get('policy_drive', active_states.get('policy_confidence', 0.0))
         drive = to_float(drive)
         
         # Check for state transition
@@ -199,7 +200,7 @@ class Layer1Process(nn.Module):
             curr_x = torch.clamp(curr_x, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
         self.x = curr_x
-        self.smoothed_x = 0.7 * self.smoothed_x + 0.3 * self.x  # EMA smoothing
+        self.smoothed_x = 0.4 * self.smoothed_x + 0.6 * self.x  # EMA smoothing
         
         # Return as dict for Markov blanket
         network_acts = {net: self.smoothed_x[i] for i, net in enumerate(NETWORKS)}
