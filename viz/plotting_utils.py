@@ -171,7 +171,6 @@ def get_tail_stats(stats_data, tail=TAIL_STEPS):
         'transition_hazard_history',
         'activation_burden_component_history',
         'coupling_burden_component_history',
-        'transition_drive_history',
         'recon_loss_history',
         'kl_div_history',
         'latent_reconstruction_history',

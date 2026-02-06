@@ -117,7 +117,7 @@ class MeditationTrainer:
         
         # Forward model loss calculation
         step_loss = free_energy
-        action_pred_error_val = 0.0
+        prediction_error_val = 0.0
         
         # Current observation (for forward model)
         x_current = networks_to_tensor(network_acts, NETWORKS)
@@ -129,16 +129,16 @@ class MeditationTrainer:
                 self._last_x_actual['x'],
                 self._last_x_actual['action']
             )
-            action_pred_error = torch.mean((x_current.detach() - x_pred)**2)
-            action_pred_error_val = action_pred_error.item()
+            prediction_error = torch.mean((x_current.detach() - x_pred)**2)
+            prediction_error_val = prediction_error.item()
             
             # L3 precision weighting
-            precision = policy_result['sensory_precision']
-            precision_weight = precision_to_weight(precision)
-            action_loss_weight = FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision_weight
+            precision = policy_result['precision_sensory']
+            precision_gain = precision_to_weight(precision)
+            precision_weight = FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision_gain
             
             # Combined loss
-            step_loss = free_energy + action_loss_weight * action_pred_error
+            step_loss = free_energy + precision_weight * prediction_error
             
             # Recognition Loss (Amortized Inference)
             # Train encoder to predict the optimized thoughtseeds (z) from observations (x)
@@ -176,7 +176,7 @@ class MeditationTrainer:
             'new_state': new_state,
             'free_energy': free_energy.detach().item(),
             'meta_awareness': meta_awareness,
-            'action_error': action_pred_error_val,
+            'action_error': prediction_error_val,
             'network_activations': network_acts_serializable,
             'thoughtseed_activations': ts_acts,
             'dominant_thoughtseed': THOUGHTSEEDS[dominant_idx]
@@ -224,10 +224,10 @@ class MeditationTrainer:
         
         # Initialize blankets
         self.blanket_l1l2.update_active_states({
-            'action_mu': None,
-            'l2_precision_gain': 0.0,
+            'mu_x': None,
+            'precision_gain': 0.0,
             'noise_reduction': 1.0,
-            'transition_drive': 0.0
+            'policy_confidence': 0.0
         })
         self.blanket_l2l3.reset()
         

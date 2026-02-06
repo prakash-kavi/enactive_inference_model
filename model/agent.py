@@ -200,7 +200,7 @@ class Layer2Agent(nn.Module):
 
         # Variational optimization loop (fixed-step VI for stability)
         vi_steps = 2
-        vi_lr = 0.24
+        vi_lr = 0.2
         with torch.enable_grad():
             for _ in range(vi_steps):
                 # Decode to networks (Generative Model)

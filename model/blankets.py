@@ -57,8 +57,8 @@ class MarkovBlanketL1L2(MarkovBlanket):
         - State burdens/costs (optional for lean model)
     
     Active (L2 -> L1):
-        - action_mu: Target network activations (policy)
-        - transition_drive: L2 policy confidence / drive
+        - mu_x: Target network activations (policy)
+        - policy_confidence: L2 policy confidence / drive
     """
     
     def __init__(self, smoothing: float = 0.7):
@@ -75,18 +75,18 @@ class MarkovBlanketL2L3(MarkovBlanket):
         - thoughtseed_activations: Dict[str, float] (for meta-awareness)
     
     Active (L3 -> L2):
-        - sensory_precision: float (0-1, precision surrogate)
-        - transition_drive: float (0-1, policy-driven state change pressure)
+        - precision_sensory: float (0-1, precision surrogate)
+        - policy_confidence: float (0-1, policy-driven state change pressure)
     """
     
     def __init__(self, smoothing: float = 0.7):
         super().__init__(smoothing=smoothing)
         # Initialize with defaults
-        self.active_states['sensory_precision'] = 0.5
-        self.active_states['transition_drive'] = 0.0
+        self.active_states['precision_sensory'] = 0.5
+        self.active_states['policy_confidence'] = 0.0
 
     def reset(self) -> None:
         """Reset state and restore defaults."""
         super().reset()
-        self.active_states['sensory_precision'] = 0.5
-        self.active_states['transition_drive'] = 0.0
+        self.active_states['precision_sensory'] = 0.5
+        self.active_states['policy_confidence'] = 0.0

@@ -36,7 +36,7 @@ class Layer3Monitor(nn.Module):
         self.efe_ambiguity_mean = 0.0
         self.efe_ambiguity_var = 1.0
         self.meta_awareness_ema = None
-        self.prev_transition_drive = 0.0
+        self.prev_policy_confidence = 0.0
 
     def reset(self) -> None:
         """Reset monitor state for an isolated training run."""
@@ -49,7 +49,7 @@ class Layer3Monitor(nn.Module):
         self.efe_ambiguity_mean = 0.0
         self.efe_ambiguity_var = 1.0
         self.meta_awareness_ema = None
-        self.prev_transition_drive = 0.0
+        self.prev_policy_confidence = 0.0
         self.blanket_l2l3.reset()
     
     def update_meta_awareness(self, current_state: str, z: torch.Tensor) -> float:
@@ -85,7 +85,7 @@ class Layer3Monitor(nn.Module):
             vfe: Variational free energy F from L2
         
         Returns:
-            dict with sensory_precision (precision surrogate), policy_confidence, policy info
+            dict with precision_sensory (precision surrogate), policy_confidence, policy info
         """
         # Update VFE EMA (sigmoid-transformed for transition drive)
         vfe_sig = 1.0 / (1.0 + np.exp(-vfe))
@@ -99,7 +99,7 @@ class Layer3Monitor(nn.Module):
         # Precision modulation: inverse of prediction error (self-organizing)
         # Low VFE -> high precision, high VFE -> low precision
         vfe_norm = self._zscore(vfe, self.vfe_mean, self.vfe_var)
-        sensory_precision = clip_probability(1.0 / (1.0 + np.exp(vfe_norm)))
+        precision_sensory = clip_probability(1.0 / (1.0 + np.exp(vfe_norm)))
         transparency = meta  # (1 - opacity)
 
         # Policy evaluation via EFE (G)
@@ -125,16 +125,16 @@ class Layer3Monitor(nn.Module):
         policy_confidence = clip_probability(0.5 * (base_drive + efe_drive))
         
         # Store for next iteration
-        self.prev_transition_drive = policy_confidence
+        self.prev_policy_confidence = policy_confidence
         
         # Send active states to L2 via Markov blanket
         self.blanket_l2l3.update_active_states({
-            'sensory_precision': sensory_precision,
-            'transition_drive': policy_confidence
+            'precision_sensory': precision_sensory,
+            'policy_confidence': policy_confidence
         })
         
         return {
-            'sensory_precision': sensory_precision,
+            'precision_sensory': precision_sensory,
             'policy_confidence': policy_confidence,
             'efe_risk': efe_risk,
             'efe_ambiguity': efe_ambiguity,
@@ -158,7 +158,7 @@ class Layer3Monitor(nn.Module):
             'redirect_attention': 0.6
         }
 
-        drive = clip_probability(self.prev_transition_drive)
+        drive = clip_probability(self.prev_policy_confidence)
         blend = drive
 
         predicted_probs = {}

@@ -15,7 +15,7 @@
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
                | Sensory: meta_awareness, opacity
-| Active:  sensory_precision, transition_drive
+| Active:  precision_sensory, policy_confidence
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
@@ -24,7 +24,7 @@
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
                | Sensory: DMN, VAN, DAN, FPN activations
-| Active:  action_mu, transition_drive
+| Active:  mu_x, policy_confidence
 +------------------------------v-------------------------------+
 | Layer 1: Neural Generative Process (MVOU)                    |
 | - 4 brain networks (DMN, VAN, DAN, FPN)                      |
