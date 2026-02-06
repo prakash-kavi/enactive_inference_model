@@ -46,7 +46,10 @@ def softmax(logits: np.ndarray) -> np.ndarray:
         return logits
     shifted = logits - np.max(logits)
     exp = np.exp(shifted)
-    return exp / (exp.sum() + EPS)
+    exp_sum = exp.sum()
+    if exp_sum <= 0.0:
+        return np.full_like(exp, 1.0 / max(exp.size, 1))
+    return exp / exp_sum
 
 def entropy(probabilities: np.ndarray, eps: float = EPS) -> float:
     """Shannon entropy for a probability vector."""

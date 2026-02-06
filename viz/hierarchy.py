@@ -50,15 +50,8 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     ax1 = fig.add_subplot(gs[0])
     meta_awareness = data['meta_awareness_history']
     
-    # Smooth the data for better visualization
-    smoothed_meta = np.zeros_like(meta_awareness)
-    alpha = 0.3
-    smoothed_meta[0] = meta_awareness[0]
-    for j in range(1, len(meta_awareness)):
-        smoothed_meta[j] = (1 - alpha) * smoothed_meta[j-1] + alpha * meta_awareness[j]
-    
-    ax1.plot(time_steps, smoothed_meta, color='#4363d8', linewidth=2)
-    ax1.fill_between(time_steps, smoothed_meta, alpha=0.2, color='#4363d8')
+    ax1.plot(time_steps, meta_awareness, color='#4363d8', linewidth=2)
+    ax1.fill_between(time_steps, meta_awareness, alpha=0.2, color='#4363d8')
     ax1.set_ylabel('Meta-Awareness Level', fontsize=12)
     ax1.set_title('Level 3: Metacognition', fontsize=14, fontweight='bold')
     ax1.set_ylim(0, 1.05)

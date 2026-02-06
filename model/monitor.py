@@ -15,6 +15,7 @@ class Layer3Monitor(nn.Module):
     """Metacognitive monitor: precision inference for policy and perception."""
     GAMMA_MIN = 0.1
     GAMMA_MAX = 3.0
+    GAMMA_DECAY = 0.98
     
     def __init__(self, experience_level: str = 'expert',
                  blanket_l2l3: Optional[MarkovBlanketL2L3] = None):
@@ -85,8 +86,9 @@ class Layer3Monitor(nn.Module):
         """
         if forward_prediction_error is not None:
             err = max(EPS, to_float(forward_prediction_error))
-            self.alpha += 0.5
-            self.beta += 0.5 * err
+            decay = self.GAMMA_DECAY
+            self.alpha = decay * self.alpha + 0.5
+            self.beta = decay * self.beta + 0.5 * err
 
         gamma, precision_sensory = self._update_precision_states()
 

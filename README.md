@@ -9,22 +9,22 @@
 ```
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |
-| - Evaluates attentional quality (meta-awareness)             |
-| - Computes Expected Free Energy (EFE) for policy selection   |
-| - Modulates L2 precision (policy/sensory precision signals)   |
+| - Tracks meta-awareness from L2 thoughtseeds                 |
+| - Infers policy precision via Gamma posterior                |
+| - Sends precision_sensory + policy_precision to L2           |
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
                | Sensory: meta_awareness, opacity
-| Active:  precision_sensory, policy_confidence
+| Active:  precision_sensory, policy_precision
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
 | - VAE encoder/decoder + forward dynamics model               |
-| - Action selection minimizes predicted error; L3 sets pressure |
+| - Policy posterior q(pi) via softmax of G(pi)                |
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
                | Sensory: DMN, VAN, DAN, FPN activations
-| Active:  mu_x, policy_confidence
+| Active:  mu_x, policy_drive, precision_gain
 +------------------------------v-------------------------------+
 | Layer 1: Neural Generative Process (MVOU)                    |
 | - 4 brain networks (DMN, VAN, DAN, FPN)                      |
@@ -154,7 +154,7 @@ Backpropagation Through Time optimizes:
 - VAE encoder/decoder (representation learning)
 - Forward model (dynamics prediction)
 - Loss = VFE + forward prediction error (+ recognition loss for expert)
-- L3 precision is computed as inverse variance of prediction error (sensory/state precision)
+- L3 precision is inferred via a Gamma posterior on forward prediction error
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
@@ -182,27 +182,28 @@ Backpropagation Through Time optimizes:
 
 ```
 .
-├── run_meditation.py          # Main entry point
-├── model/                     # Core Logic
-│   ├── train.py               # MeditationTrainer class
-│   ├── process.py             # Layer1Process (MVOU dynamics)
-│   ├── agent.py               # Layer2Agent (VAE + forward model)
-│   ├── monitor.py             # Layer3Monitor (EFE policy)
-│   └── blankets.py            # Markov blanket interfaces
-├── utils/                     # Utilities & Config
-│   ├── config.py              # Constants and universal priors
-│   ├── math_utils.py          # Tensor/math operations
-│   └── analysis_utils.py      # Metrics computation
-├── data/                      # Training results (JSON)
-├── plots/                     # Generated figures (PNG)
-└── viz/                       # Plotting modules
-     analysis.py
-     attractors.py
-     convergence.py
-     diagnostics.py
-     hierarchy.py
-     radar_plot.py
-     plotting_utils.py
++-- run_meditation.py          # Main entry point
++-- model/                     # Core Logic
+|   +-- train.py               # MeditationTrainer class
+|   +-- process.py             # Layer1Process (MVOU dynamics)
+|   +-- agent.py               # Layer2Agent (VAE + forward model)
+|   +-- monitor.py             # Layer3Monitor (precision inference)
+|   +-- blankets.py            # Markov blanket interfaces
++-- utils/                     # Utilities & Config
+|   +-- config.py              # Constants and universal priors
+|   +-- math_utils.py          # Tensor/math operations
+|   +-- analysis_utils.py      # Metrics computation
++-- data/                      # Training results (JSON)
++-- plots/                     # Generated figures (PNG)
++-- viz/                       # Plotting modules
+    +-- analysis.py
+    +-- attractors.py
+    +-- convergence.py
+    +-- diagnostics.py
+    +-- hierarchy.py
+    +-- radar_plot.py
+    +-- plotting_utils.py
+```
 
 ---
 
@@ -211,11 +212,11 @@ Backpropagation Through Time optimizes:
 ### Layer 1: Generative Process
 Multivariate Ornstein-Uhlenbeck (MVOU) process:
 ```
-dx = Θ(s)[μ(s) - x]dt + σ(s)dW
+dx = Theta(s) * [mu(s) - x] dt + sigma(s) dW
 ```
-- State-dependent coupling matrices Θ(s)
-- State-specific attractors μ(s)
-- Gaussian noise σ(s)
+- State-dependent coupling matrices Theta(s)
+- State-specific attractors mu(s)
+- Gaussian noise sigma(s)
 
 ### Layer 2: Thoughtseed Dynamics
 VAE architecture:
@@ -229,13 +230,16 @@ F = Reconstruction_Error + KL_Divergence
 ```
 Training loss additionally includes forward prediction error, and expert-only recognition loss.
 
-### Layer 3: Policy Selection
-Expected Free Energy per policy π (policy precision is inverse variance of G):
+### Layer 3: Policy Precision + Policy Posterior
+Policy posterior uses softmax over G(pi):
 ```
-EFE(π) = E_q[log q(o|π) - log p(o|C)] + E_q[KL[q(s|π)||q(s)]]
-         \_____________v_____________/   \__________v__________/
-              Pragmatic value              Epistemic value
+q(pi) = softmax( log E(pi) - gamma * G(pi) )
 ```
+First-pass G(pi) uses risk against preferred outcomes C:
+```
+G(pi) = D_KL( x_pred || C )
+```
+Policy precision gamma is inferred from a Gamma posterior over prediction error.
 
 ---
 

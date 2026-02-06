@@ -14,6 +14,7 @@ from typing import Dict, Optional
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
+    NETWORK_PROFILES,
     get_params, get_thoughtseed_priors, get_exit_transition_probs
 )
 from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
@@ -120,9 +121,6 @@ class Layer2Agent(nn.Module):
             for param in self.vae.parameters():
                 param.requires_grad = False
         
-        # EMA for thoughtseed activations
-        self.register_buffer('z_ema', torch.zeros(len(THOUGHTSEEDS)))
-        self.z_ema_initialized = False
     
     def infer_z_from_x(self) -> torch.Tensor:
         """Bottom-up inference: encode networks (x) → posterior latent (z) aka thoughtseeds."""
@@ -229,13 +227,6 @@ class Layer2Agent(nn.Module):
         # Finalize
         updated = z_var.detach()
         
-        # EMA smoothing for stability
-        if not self.z_ema_initialized:
-            self.z_ema = updated.clone()
-            self.z_ema_initialized = True
-        else:
-            self.z_ema = 0.75 * self.z_ema + 0.25 * updated
-        
         return clamp_activation(updated, clip_min, clip_max)
     
     def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
@@ -270,7 +261,9 @@ class Layer2Agent(nn.Module):
             for candidate_state in candidates:
                 mu_candidate = self.mu_params[candidate_state]
                 x_pred = self.vae.predict_next(x_current, mu_candidate)
-                x_pref = self.decode_with_state(mu_candidate)
+                # Preference profile C for candidate state (exogenous target)
+                pref_profile = NETWORK_PROFILES[candidate_state][self.level]
+                x_pref = networks_to_tensor(pref_profile, NETWORKS, device=x_pred.device)
                 
                 # Risk for G(pi) (ambiguity disabled for stability)
                 risk = 1.5 * bernoulli_kl(x_pred, x_pref, EPS)
@@ -286,7 +279,8 @@ class Layer2Agent(nn.Module):
         
         log_prior = np.log(np.array(priors, dtype=float))
         gamma = max(EPS, to_float(self.blanket_l2l3.active_states.get('policy_precision', 1.0)))
-        q_pi = policy_posterior(log_prior, np.array(g_vals, dtype=float), gamma)
+        gamma_eff = 2.0 * gamma
+        q_pi = policy_posterior(log_prior, np.array(g_vals, dtype=float), gamma_eff)
         pi_conf = policy_confidence(q_pi)
         policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
         

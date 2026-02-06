@@ -27,7 +27,7 @@ class Layer1Process(nn.Module):
     INIT_ACTIVATION = 0.5
     
     # Experience-dependent noise variance
-    BASE_VARIANCE = {'expert': 0.002, 'novice': 0.005}
+    BASE_VARIANCE = {'expert': 0.001, 'novice': 0.005}
     
     def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None):
         super().__init__()
@@ -154,6 +154,7 @@ class Layer1Process(nn.Module):
             active_states: Control from L2 via Markov blanket
                 - policy_drive: float (0-1) (transition urge)
                 - policy_confidence: float (0-1) (posterior confidence)
+                - precision_gain: float (0-1) (action precision gain)
                 - mu_x: Optional[torch.Tensor] (target network activations)
         
         Returns:
@@ -176,7 +177,7 @@ class Layer1Process(nn.Module):
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
             bias_strength = active_states.get('precision_gain', 0.0)
-            bias_strength = clip_probability(bias_strength)
+            bias_strength = 0.5 * clip_probability(bias_strength)
             
             if not isinstance(mu_x, torch.Tensor):
                 mu_x = torch.tensor(mu_x, device=mu.device, dtype=torch.float32)

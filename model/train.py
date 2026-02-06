@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 from utils.config import (
-    STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS,
+    STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
     FORWARD_LOSS_BASE_WEIGHT, FORWARD_LOSS_PRECISION_SCALE,
     get_params, get_thoughtseed_priors
 )
@@ -22,7 +22,7 @@ from .process import Layer1Process
 from .agent import Layer2Agent
 from .monitor import Layer3Monitor
 from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils.math_utils import networks_to_tensor, clip_probability
+from utils.math_utils import networks_to_tensor, clip_probability, softmax
 
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
@@ -41,8 +41,8 @@ class MeditationTrainer:
         np.random.seed(seed)
         
         # Markov blankets
-        self.blanket_l1l2 = MarkovBlanketL1L2(smoothing=0.7)
-        self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.7)
+        self.blanket_l1l2 = MarkovBlanketL1L2(smoothing=0.0)
+        self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.0)
         
         # Hierarchical layers
         self.process = Layer1Process(experience_level=experience_level, seed=seed)
@@ -85,10 +85,28 @@ class MeditationTrainer:
         # Update L1->L2 sensory states (observations)
         self.blanket_l1l2.update_sensory_states(network_acts)
         
+        # Current observation (for forward model + precision update)
+        x_current = networks_to_tensor(network_acts, NETWORKS)
+        forward_prediction_error = None
+        forward_prediction_error_val = 0.0
+        meta_result = None
+
+        if self._last_x_actual is not None:
+            # Predict current observation from previous (x, action)
+            x_pred = self.agent.vae.predict_next(
+                self._last_x_actual['x'],
+                self._last_x_actual['action']
+            )
+            forward_prediction_error = torch.mean((x_current.detach() - x_pred) ** 2)
+            forward_prediction_error_val = forward_prediction_error.item()
+
+            # L3 precision posterior (Gamma update from prediction error)
+            meta_result = self.monitor.infer_meta_posterior(forward_prediction_error_val)
+
         # ===== Layer 2: Attentional Agent =====
         # Perception: Encode networks -> thoughtseeds
         z_recognition = self.agent.infer_z_from_x()
-        
+
         # Variational inference: Update thoughtseed dynamics
         activations = self.agent.update_posterior_z(
             current_state=new_state,
@@ -96,64 +114,46 @@ class MeditationTrainer:
             observed_networks=network_acts,
             z_recognition=z_recognition
         ).detach()  # VI not part of BPTT gradient flow
-        
+
         # Compute VFE (L2's free energy)
         free_energy = self.agent.compute_vfe(
             new_state, activations, network_acts
         )
-        
+
         # ===== Layer 3: Metacognitive Monitor =====
         # Update meta-awareness using new state
         meta_awareness = self.monitor.update_meta_awareness(new_state, activations)
-        
+
         # ===== Policy Inference =====
         prescription = self.agent.infer_pi(activations, new_state)
-        
+        selected_action_mu = prescription['selected_action_mu']
+
         # Update L2->L1 active states (action policy)
         self.blanket_l1l2.update_active_states(prescription)
-        
+
         # Forward model loss calculation
         step_loss = free_energy
-        forward_prediction_error_val = 0.0
-        meta_result = None
-        
-        # Current observation (for forward model)
-        x_current = networks_to_tensor(network_acts, NETWORKS)
-        selected_action_mu = prescription['selected_action_mu']
-        
-        if self._last_x_actual is not None:
-            # Predict current observation from previous (x, action)
-            x_pred = self.agent.vae.predict_next(
-                self._last_x_actual['x'],
-                self._last_x_actual['action']
-            )
-            forward_prediction_error = torch.nn.functional.binary_cross_entropy(
-                x_pred,
-                x_current.detach(),
-            )
-            forward_prediction_error_val = forward_prediction_error.item()
-            
-            # L3 precision posterior (Gamma update from prediction error)
-            meta_result = self.monitor.infer_meta_posterior(forward_prediction_error_val)
+
+        if forward_prediction_error is not None and meta_result is not None:
             precision = meta_result['precision_sensory']
             precision_gain = clip_probability(precision)
             forward_weight = (FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision_gain)
             forward_weight = max(forward_weight, 0.5)
-            
+
             # Combined loss
             step_loss = free_energy + forward_weight * forward_prediction_error
-            
+
             # Recognition Loss (Amortized Inference)
             # Train encoder to predict the optimized thoughtseeds (z) from observations (x)
             # This enables "Expert Intuition" mechanism
             if enable_learning and self.level == 'expert':
                 # Re-run encoder on current observation
                 z_recognition = self.agent.vae.encode(x_current.detach())
-                
+
                 # Target is the optimized z from VFE loop (which is detached)
                 # Recognition loss = MSE(Encoder(x), VI_Optimized_z)
                 rec_loss = torch.nn.functional.mse_loss(z_recognition, activations.detach())
-                
+
                 # Add to total loss (weighted)
                 step_loss = step_loss + rec_loss
             
@@ -180,7 +180,18 @@ class MeditationTrainer:
         }
         
         ts_acts = activations.detach().cpu().numpy().tolist()
-        dominant_idx = np.argmax(ts_acts)
+        if new_state == 'mind_wandering':
+            precision = self.blanket_l2l3.active_states.get('precision_sensory', 1.0)
+            tau = max(EPS, 1.0 - clip_probability(precision))
+            probs = softmax(np.array(ts_acts, dtype=float) / tau)
+            prob_sum = float(np.sum(probs))
+            if prob_sum <= 0.0:
+                probs = np.full(len(THOUGHTSEEDS), 1.0 / len(THOUGHTSEEDS))
+            else:
+                probs = probs / prob_sum
+            dominant_idx = int(np.random.choice(len(THOUGHTSEEDS), p=probs))
+        else:
+            dominant_idx = int(np.argmax(ts_acts))
         
         metrics = {
             'timestamp': t,
@@ -303,8 +314,6 @@ class MeditationTrainer:
             with torch.no_grad():
                 self.process.x = self.process.x.detach()
                 self.process.smoothed_x = self.process.smoothed_x.detach()
-                if hasattr(self.agent, 'z_ema'):
-                    self.agent.z_ema = self.agent.z_ema.detach()
                 activations = activations.detach()
         
         return self._package_results()
@@ -399,8 +408,6 @@ class MeditationTrainer:
         self._last_x_actual = None
         self.blanket_l1l2.reset()
         self.monitor.reset()
-        self.agent.z_ema.zero_()
-        self.agent.z_ema_initialized = False
 
         if reseed_rng:
             seed = self.seed if run_seed is None else int(run_seed)

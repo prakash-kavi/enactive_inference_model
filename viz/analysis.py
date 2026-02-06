@@ -118,13 +118,6 @@ def plot_belief_about_belief(novice_results: Dict, expert_results: Dict, save_pa
     ax = axes[0, 0]
     ax.plot(timesteps_novice, meta_novice, color='#F57C00', linewidth=0.5, alpha=0.6)
     
-    # Running average
-    window = min(100, len(meta_novice) // 10)
-    if window > 1:
-        meta_smooth = np.convolve(meta_novice, np.ones(window)/window, mode='valid')
-        ax.plot(timesteps_novice[:len(meta_smooth)], meta_smooth, 
-                color='#E65100', linewidth=2, label='Running avg')
-    
     ax.axhline(y=threshold_val, color='gray', linestyle='--', alpha=0.7, label=threshold_label)
         
     ax.set_xlabel('Timestep')
@@ -138,13 +131,6 @@ def plot_belief_about_belief(novice_results: Dict, expert_results: Dict, save_pa
     ax = axes[0, 1]
     
     ax.plot(timesteps_expert, meta_expert, color='#F57C00', linewidth=0.5, alpha=0.6)
-    
-    # Running average
-    window = min(100, len(meta_expert) // 10)
-    if window > 1:
-        meta_smooth = np.convolve(meta_expert, np.ones(window)/window, mode='valid')
-        ax.plot(timesteps_expert[:len(meta_smooth)], meta_smooth, 
-                color='#E65100', linewidth=2, label='Running avg')
     
     ax.axhline(y=threshold_val, color='gray', linestyle='--', alpha=0.7, label=threshold_label)
         
