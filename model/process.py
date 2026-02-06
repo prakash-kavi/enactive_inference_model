@@ -153,7 +153,7 @@ class Layer1Process(nn.Module):
         Args:
             active_states: Control from L2 via Markov blanket
                 - transition_drive: float (0-1)
-                - agent_bias: Optional[torch.Tensor] (target network activations)
+                - action_mu: Optional[torch.Tensor] (target network activations)
         
         Returns:
             network_acts: {network_name: activation}
@@ -171,15 +171,15 @@ class Layer1Process(nn.Module):
         theta = self._get_coupling(self.current_state)
         theta = self._clamp_theta(theta)
         
-        # Apply agent bias if present (L2 → L1 active inference)
-        agent_bias = active_states.get('agent_bias')
-        if agent_bias is not None:
-            bias_strength = active_states.get('l2tol1_enactive_bias', 0.0)
+        # Apply agent bias if present (L2 -> L1 active inference)
+        action_mu = active_states.get('action_mu')
+        if action_mu is not None:
+            bias_strength = active_states.get('l2_precision_gain', 0.0)
             bias_strength = clip_probability(bias_strength)
             
-            if not isinstance(agent_bias, torch.Tensor):
-                agent_bias = torch.tensor(agent_bias, device=mu.device, dtype=torch.float32)
-            mu = (1 - bias_strength) * mu + bias_strength * agent_bias
+            if not isinstance(action_mu, torch.Tensor):
+                action_mu = torch.tensor(action_mu, device=mu.device, dtype=torch.float32)
+            mu = (1 - bias_strength) * mu + bias_strength * action_mu
         
         # Expertise-dependent noise, modulated by L3 precision via L2
         base_variance = self.BASE_VARIANCE[self.level]

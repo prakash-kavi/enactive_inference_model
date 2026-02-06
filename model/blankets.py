@@ -52,13 +52,13 @@ class MarkovBlanket:
 class MarkovBlanketL1L2(MarkovBlanket):
     """Markov blanket between L1 (generative process) and L2 (attentional agent).
     
-    Sensory (L1 → L2):
+    Sensory (L1 -> L2):
         - Network activations: {DMN, VAN, DAN, FPN}
         - State burdens/costs (optional for lean model)
     
-    Active (L2 → L1):
-        - Target network activations
-        - Transition drive (L2's pressure to change state)
+    Active (L2 -> L1):
+        - action_mu: Target network activations (policy)
+        - transition_drive: L2 policy confidence / drive
     """
     
     def __init__(self, smoothing: float = 0.7):
@@ -69,24 +69,24 @@ class MarkovBlanketL1L2(MarkovBlanket):
 class MarkovBlanketL2L3(MarkovBlanket):
     """Markov blanket between L2 (attentional agent) and L3 (metacognitive monitor).
     
-    Sensory (L2 → L3):
+    Sensory (L2 -> L3):
         - current_state: str (meditation state label)
         - dwell_progress: float (0-1, how long in current state)
         - thoughtseed_activations: Dict[str, float] (for meta-awareness)
     
-    Active (L3 → L2):
-        - precision_modulation: float (0-1, attentional precision)
+    Active (L3 -> L2):
+        - sensory_precision: float (0-1, precision surrogate)
         - transition_drive: float (0-1, policy-driven state change pressure)
     """
     
     def __init__(self, smoothing: float = 0.7):
         super().__init__(smoothing=smoothing)
         # Initialize with defaults
-        self.active_states['precision_modulation'] = 0.5
+        self.active_states['sensory_precision'] = 0.5
         self.active_states['transition_drive'] = 0.0
 
     def reset(self) -> None:
         """Reset state and restore defaults."""
         super().reset()
-        self.active_states['precision_modulation'] = 0.5
+        self.active_states['sensory_precision'] = 0.5
         self.active_states['transition_drive'] = 0.0

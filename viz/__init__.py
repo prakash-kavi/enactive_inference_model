@@ -11,11 +11,11 @@ Streamlined plotting modules for Royal Society paper:
 from viz import plotting_utils
 
 # Streamlined plotting modules
-from viz.lean_convergence import plot_convergence
-from viz.lean_comparison import plot_comparison
-from viz.lean_hierarchy import plot_hierarchy
-from viz.lean_attractors import plot_attractor_2d, plot_attractor_3d
-from viz.lean_diagnostics import plot_fe_and_dwell, plot_transitions
+from viz.convergence import plot_convergence
+from viz.radar_plot import plot_comparison
+from viz.hierarchy import plot_hierarchy
+from viz.attractors import plot_attractor_2d, plot_attractor_3d
+from viz.diagnostics import plot_fe_and_dwell, plot_transitions
 
 __all__ = [
     'plotting_utils',

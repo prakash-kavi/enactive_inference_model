@@ -4,6 +4,8 @@ from typing import Dict, Iterable, Union
 import numpy as np
 import torch
 
+from utils.config import EPS
+
 def to_float(value: Union[float, int, torch.Tensor]) -> float:
     """Convert scalar-like values (including 0-dim tensors) to float."""
     if isinstance(value, torch.Tensor):
@@ -15,6 +17,54 @@ def clip_probability(value: Union[float, int, torch.Tensor]) -> float:
     """Clamp scalar-like values to [0, 1]."""
     return float(np.clip(to_float(value), 0.0, 1.0))
 
+def precision_to_weight(precision: Union[float, int, torch.Tensor]) -> float:
+    """Map raw precision (>0) to a bounded weight in [0, 1)."""
+    p = max(0.0, to_float(precision))
+    return float(p / (1.0 + p))
+
+def precision_from_variance(variance: Union[float, int, torch.Tensor], eps: float = EPS) -> float:
+    """Precision as inverse variance (act-inf convention)."""
+    v = max(0.0, to_float(variance))
+    return float(1.0 / (v + eps))
+
+def precision_from_error(error: Union[float, int, torch.Tensor], eps: float = EPS) -> float:
+    """Precision as inverse prediction error (act-inf heuristic)."""
+    e = max(0.0, to_float(error))
+    return float(1.0 / (1.0 + e + eps))
+
+def ema_update(value: Union[float, int, torch.Tensor], mean: float, var: float, beta: float = 0.9) -> tuple[float, float]:
+    """Exponential moving mean/variance update."""
+    v = to_float(value)
+    new_mean = beta * mean + (1.0 - beta) * v
+    diff = v - new_mean
+    new_var = beta * var + (1.0 - beta) * (diff * diff)
+    return new_mean, new_var
+
+def softmax(logits: np.ndarray) -> np.ndarray:
+    """Stable softmax for 1D arrays."""
+    if logits.size == 0:
+        return logits
+    shifted = logits - np.max(logits)
+    exp = np.exp(shifted)
+    return exp / (exp.sum() + EPS)
+
+def entropy(probabilities: np.ndarray, eps: float = EPS) -> float:
+    """Shannon entropy for a probability vector."""
+    if probabilities.size == 0:
+        return 0.0
+    p = np.clip(probabilities, eps, 1.0)
+    return float(-np.sum(p * np.log(p)))
+
+def policy_posterior(log_prior: np.ndarray, g_vals: np.ndarray, gamma: float) -> np.ndarray:
+    """Active-inference policy posterior: softmax(log_prior - gamma * G)."""
+    return softmax(log_prior - gamma * g_vals)
+
+def policy_confidence(pi: np.ndarray, eps: float = EPS) -> float:
+    """Policy confidence = 1 - normalized entropy."""
+    if pi.size == 0:
+        return 0.0
+    denom = np.log(len(pi) + eps)
+    return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
 
 def clamp_for_log(x: torch.Tensor, eps: float) -> torch.Tensor:
     """Clamp tensor to open interval used in log-probability terms."""

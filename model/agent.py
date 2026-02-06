@@ -21,6 +21,9 @@ from utils.math_utils import (
     bernoulli_kl,
     clamp_activation,
     clip_probability,
+    precision_to_weight,
+    precision_from_error,
+    to_float,
     networks_to_tensor,
 )
 
@@ -110,7 +113,6 @@ class Layer2Agent(nn.Module):
             # Prior beliefs are fixed structural knowledge (Goal State)
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
         
-        # Differential Learning:
         # Expert: Unfrozen VAE (Learns amortized inference)
         # Novice: Frozen VAE (Stuck with random initialization)
         if self.level == 'novice':
@@ -121,8 +123,8 @@ class Layer2Agent(nn.Module):
         self.register_buffer('z_ema', torch.zeros(len(THOUGHTSEEDS)))
         self.z_ema_initialized = False
     
-    def perceptual_inference(self) -> torch.Tensor:
-        """Bottom-up: Encode L1 networks → thoughtseed activations."""
+    def infer_z_from_x(self) -> torch.Tensor:
+        """Bottom-up inference: encode networks (x) → posterior latent (z) aka thoughtseeds."""
         network_acts = self.blanket_l1l2.sensory_states
         device = next(self.vae.parameters()).device
         
@@ -130,6 +132,7 @@ class Layer2Agent(nn.Module):
         x = networks_to_tensor(network_acts, NETWORKS, device=device)
         
         # Encode
+        # q(z|x): recognition density
         z = self.vae.encode(x.unsqueeze(0) if x.dim() == 1 else x)
         if z.dim() > 1:
             z = z.squeeze(0)
@@ -145,75 +148,87 @@ class Layer2Agent(nn.Module):
             decoded = self.vae.decode(z)
         
         return torch.clamp(decoded, 0.0, 1.0)
+
+    def compute_vfe(self, state: str, z: torch.Tensor, observed_networks: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """Compute variational free energy F = reconstruction + KL(q||p)."""
+        recon_x = self.decode_with_state(z)
+        observed_x = networks_to_tensor(observed_networks, NETWORKS, device=z.device, detach=True)
+
+        recon_loss = torch.nn.functional.mse_loss(recon_x, observed_x)
+        prior = self.mu_params[state].detach()
+        kl_div = bernoulli_kl(z, prior, EPS)
+
+        return recon_loss + kl_div
     
-    def update_thoughtseeds(self, 
-                            current_state: str,
-                            activations: torch.Tensor,
-                            observed_networks: Dict[str, torch.Tensor],
-                            sensory_inference: torch.Tensor) -> torch.Tensor:
-        """Variational inference update for thoughtseed dynamics."""
+    def update_posterior_z(
+        self,
+        current_state: str,
+        activations: torch.Tensor,
+        observed_networks: Dict[str, torch.Tensor],
+        z_recognition: torch.Tensor,
+    ) -> torch.Tensor:
+        """Posterior update q(z): variational inference over thoughtseeds.
+
+        Fixed-step VI for stability; precision modulates sensory vs prior influence.
+        """
         device = activations.device
         clip_min = DEFAULTS['ACTIVATION_CLIP_MIN']
         clip_max = DEFAULTS['ACTIVATION_CLIP_MAX']
-        
+
         # Observed networks as tensor
         observed_vec = networks_to_tensor(observed_networks, NETWORKS, device=device)
         
         # Targets
         z_prev = clamp_activation(activations.detach(), clip_min, clip_max)
-        sensory_target = clamp_activation(sensory_inference.detach(), clip_min, clip_max)
-        # Clone prior to avoid gradient issues in BPTT
+        sensory_target = clamp_activation(z_recognition.detach(), clip_min, clip_max)
         prior_target = clamp_activation(self.mu_params[current_state].detach().clone(), clip_min, clip_max)
         
-        # Precision modulation from L3
-        precision = clip_probability(self.blanket_l2l3.active_states.get('precision_modulation', 0.5))
+        # Sensory precision from L3 (raw, >0)
+        precision = max(EPS, to_float(self.blanket_l2l3.active_states.get('sensory_precision', 1.0)))
+        precision_weight = precision_to_weight(precision)
         
-        # Initialize via blend
+        # Initialization: blend previous and sensory target, then bias toward prior by precision.
         z_init = 0.5 * z_prev + 0.5 * sensory_target
-        z_init = (1.0 - 0.5 * precision) * z_init + (0.5 * precision) * prior_target
+        z_init = (1.0 - precision_weight) * z_init + precision_weight * prior_target
         z_var = clamp_activation(z_init, clip_min, clip_max).requires_grad_(True)
         
-        # Variational optimization (2 steps)
-        vi_lr = self.params['l2_vi_lr']
-        obs_w = self.params['l2_vi_obs_weight']
-        prior_w = self.params['l2_vi_prior_weight']
-        sensory_w = self.params['l2_vi_sensory_weight'] * (1.0 - precision)
-        temporal_w = self.params['l2_vi_temporal_weight']
-        
-        # Ensure we can calculate gradients for z even if global autograd is off (e.g. inference)
+        # Weights for F-energy terms
+        # Low precision -> trust sensory/temporal terms
+        # High precision -> trust prior
+        sensory_w = 1.0 - precision_weight
+        temporal_w = precision_weight
+
+        # Variational optimization loop (fixed-step VI for stability)
+        vi_steps = 2
+        vi_lr = 0.24
         with torch.enable_grad():
-            for _ in range(self.params['l2_vi_steps']):
-                # Decode to networks
+            for _ in range(vi_steps):
+                # Decode to networks (Generative Model)
                 recon_x = self.decode_with_state(z_var)
                 
-                # VFE terms
+                # Component Losses
                 recon_loss = torch.nn.functional.mse_loss(recon_x, observed_vec)
-                
-                # KL with prior (Bernoulli)
                 kl_div = bernoulli_kl(z_var, prior_target, EPS)
-                
-                # Sensory + temporal consistency
                 sensory_loss = torch.nn.functional.mse_loss(z_var, sensory_target)
                 temporal_loss = torch.nn.functional.mse_loss(z_var, z_prev)
                 
-                # Total objective
-                loss = (obs_w * recon_loss + 
-                        prior_w * precision * kl_div + 
+                # Total Free Energy F(z)
+                loss = (recon_loss + 
+                        precision * kl_div + 
                         sensory_w * sensory_loss + 
                         temporal_w * temporal_loss)
                 
-                # Gradient descent
+                # Gradient Descent
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
-                grad = torch.clamp(grad, -5.0, 5.0)  # Clip gradients
+                grad = torch.clamp(grad, -5.0, 5.0)
                 
-                # Update (create new tensor, not in-place)
                 z_var = clamp_activation(z_var - vi_lr * grad, clip_min, clip_max)
                 z_var = z_var.detach().requires_grad_(True)
         
-        # Finalize (detach from graph - VI is not part of BPTT)
+        # Finalize
         updated = z_var.detach()
         
-        # EMA smoothing
+        # EMA smoothing for stability
         if not self.z_ema_initialized:
             self.z_ema = updated.clone()
             self.z_ema_initialized = True
@@ -222,19 +237,19 @@ class Layer2Agent(nn.Module):
         
         return clamp_activation(updated, clip_min, clip_max)
     
-    def prescriptive_action(self, z: torch.Tensor, current_state: str) -> Dict:
-        """Forward-informed action selection: evaluate candidates via prediction.
+    def policy_selection(self, z: torch.Tensor, current_state: str) -> Dict:
+        """Policy selection via forward prediction (EFE proxy).
         
         Returns dict with:
             - selected_action_mu: Thoughtseed target for selected action
-            - agent_bias: Network target for L1
-            - l2tol1_enactive_bias: Precision modulation
+            - action_mu: Network target for L1
+            - l2_precision_gain: Precision modulation (weight)
             - transition_drive: Pressure to change state
         """
         # Get current networks for forward prediction
         x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS, device=z.device)
         
-        # Candidate actions (state attractors)
+        # Candidate actions (policy set)
         candidates = [current_state]  # Always include "stay"
         if current_state == 'mind_wandering':
             candidates.append('meta_awareness')
@@ -266,10 +281,11 @@ class Layer2Agent(nn.Module):
         
         # Selected action
         selected_mu = best_mu if best_mu is not None else self.mu_params[current_state]
-        agent_bias = self.decode_with_state(selected_mu)
+        action_mu = self.decode_with_state(selected_mu)
         
-        # Precision from L3
-        precision = clip_probability(self.blanket_l2l3.active_states.get('precision_modulation', 0.5))
+        # Sensory precision from L3 (raw, >0)
+        precision = max(EPS, to_float(self.blanket_l2l3.active_states.get('sensory_precision', 1.0)))
+        precision_weight = precision_to_weight(precision)
         
         # Transition drive from L3
         transition_drive = clip_probability(self.blanket_l2l3.active_states.get('transition_drive', 0.0))
@@ -277,8 +293,8 @@ class Layer2Agent(nn.Module):
         # Package for L1 via Markov blanket
         return {
             'selected_action_mu': selected_mu,
-            'agent_bias': agent_bias,
-            'l2tol1_enactive_bias': precision,
-            'noise_reduction': float(np.clip(1.0 - 0.6 * precision, 0.4, 1.0)),
+            'action_mu': action_mu,
+            'l2_precision_gain': precision_weight,
+            'noise_reduction': float(np.clip(1.0 - 0.6 * precision_weight, 0.4, 1.0)),
             'transition_drive': transition_drive,
         }

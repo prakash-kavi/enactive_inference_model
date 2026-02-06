@@ -27,11 +27,11 @@ from utils.analysis_utils import (
 from utils.config import STATES, NETWORKS, THOUGHTSEEDS
 
 # Import publication plotting functions
-from viz.lean_convergence import plot_convergence
-from viz.lean_comparison import plot_comparison
-from viz.lean_hierarchy import plot_hierarchy
-from viz.lean_attractors import plot_attractor_2d, plot_attractor_3d
-from viz.lean_diagnostics import plot_fe_and_dwell, plot_transitions
+from viz.convergence import plot_convergence
+from viz.radar_plot import plot_comparison
+from viz.hierarchy import plot_hierarchy
+from viz.attractors import plot_attractor_2d, plot_attractor_3d
+from viz.diagnostics import plot_fe_and_dwell, plot_transitions
 
 # Fixed configuration for reproducibility
 SEED = 42
@@ -40,7 +40,6 @@ SEED = 42
 CURRENT_DIR = Path(__file__).parent
 OUTPUT_DIR = CURRENT_DIR / 'data'
 PLOT_DIR = CURRENT_DIR / 'plots'
-
 
 def run_training_and_simulation(timesteps: int):
     """Train both expert and novice, then run simulation for both."""
@@ -144,8 +143,8 @@ def generate_plots(expert_results, novice_results):
     plot_hierarchy(expert_tail, str(PLOT_DIR / "Fig4B_Hierarchy_Expert.png"), "Expert")
     
     # Fig5: Attractor plots (2D projection + 3D landscape from tail)
-    # print("  • Fig5A_Attractor2D.png")
-    # plot_attractor_2d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5A_Attractor2D.png"))
+    print("  • Fig5A_Attractor2D.png")
+    plot_attractor_2d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5A_Attractor2D.png"))
     
     print("  • Fig5B_Attractor3D.png")
     plot_attractor_3d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5B_Attractor3D.png"))
@@ -173,7 +172,7 @@ def generate_plots(expert_results, novice_results):
     print(f"  - Fig3D.png")
     print(f"  - Fig4A_Hierarchy_Novice.png")
     print(f"  - Fig4B_Hierarchy_Expert.png")
-    # print(f"  - Fig5A_Attractor2D.png")
+    print(f"  - Fig5A_Attractor2D.png")
     print(f"  - Fig5B_Attractor3D.png")
     print()
 

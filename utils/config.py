@@ -86,7 +86,7 @@ DWELL_TIMES = {
 # Exit transition probabilities priors (exclude self-transitions)
 STATE_TRANSITION_PROBS = {
     'expert': {
-        'breath_focus': {'mind_wandering': 0.60, 'meta_awareness': 0.25, 'redirect_attention': 0.20},
+        'breath_focus': {'mind_wandering': 0.60, 'meta_awareness': 0.20, 'redirect_attention': 0.20},
         'mind_wandering': {'meta_awareness': 0.75, 'redirect_attention': 0.15, 'breath_focus': 0.10},
         'meta_awareness': {'redirect_attention': 0.85, 'breath_focus': 0.10, 'mind_wandering': 0.05},
         'redirect_attention': {'breath_focus': 0.80, 'meta_awareness': 0.15, 'mind_wandering': 0.05}
@@ -163,46 +163,10 @@ META_THOUGHTSEED_WEIGHTS = {
 # =============================================================================
 # Active Inference Parameters (Fine-Tuned)
 # =============================================================================
-
-ACTINF_PARAMS = {
-    "novice": {
-        # Training
-        "learning_rate": 0.01,
-        "kl_beta": 1.0,
-        "init_noise_sigma": 0.05,
-        
-        # L2 inference
-        "l2_vi_steps": 2,
-        "l2_vi_lr": 0.24,
-        "l2_vi_obs_weight": 1.0,
-        "l2_vi_prior_weight": 1.0,
-        "l2_vi_sensory_weight": 0.35,
-        "l2_vi_temporal_weight": 0.12,
-        
-        # L3 policy
-        "efe_ambiguity_weight": 0.4,
-        "efe_cycle_strength": 0.35,
-        "l3tol2_precision_range": (0.4, 0.6),
-    },
-    "expert": {
-        # Training
-        "learning_rate": 0.02,
-        "kl_beta": 0.55,
-        "init_noise_sigma": 0.02,
-        
-        # L2 inference
-        "l2_vi_steps": 2,
-        "l2_vi_lr": 0.24,
-        "l2_vi_obs_weight": 1.0,
-        "l2_vi_prior_weight": 1.0,
-        "l2_vi_sensory_weight": 0.35,
-        "l2_vi_temporal_weight": 0.12,
-        
-        # L3 policy
-        "efe_ambiguity_weight": 0.35,
-        "efe_cycle_strength": 0.35,
-        "l3tol2_precision_range": (0.4, 0.6),
-    }
+NOISE_SIGMA = 0.02
+LEARNING_RATES = {
+    "novice": 0.01,
+    "expert": 0.02,
 }
 
 FORWARD_LOSS_BASE_WEIGHT = 0.05
@@ -214,7 +178,9 @@ FORWARD_LOSS_PRECISION_SCALE = 0.1  # Modulated by L3 precision
 
 def get_params(experience_level):
     """Get all parameters for experience level."""
-    return ACTINF_PARAMS[experience_level].copy()
+    params = {"learning_rate": LEARNING_RATES[experience_level]}
+    params['noise_sigma'] = NOISE_SIGMA
+    return params
 
 def get_thoughtseed_priors(state): 
     """Get thoughtseed prior activations for state (Universal)."""
@@ -223,24 +189,13 @@ def get_thoughtseed_priors(state):
 def compute_meta_awareness(state, thoughtseed_activations):
     """Compute meta-awareness from weighted thoughtseeds."""
     weights = META_THOUGHTSEED_WEIGHTS.get(state, {})
-    if not weights:
-        return 0.0
-    
-    weighted_sum = 0.0
-    weight_total = 0.0
-    for ts, weight in weights.items():
-        weight_total += float(weight)
-        weighted_sum += float(thoughtseed_activations.get(ts, 0.0)) * float(weight)
-    
-    if weight_total <= 0.0:
-        return 0.0
-    return float(max(0.0, min(1.0, weighted_sum / weight_total)))
+    weighted_sum = sum(float(thoughtseed_activations.get(ts, 0.0)) * float(w) for ts, w in weights.items())
+    weight_total = sum(float(w) for w in weights.values())
+    meta = weighted_sum / weight_total if weight_total > 0.0 else 0.0
+    return float(max(0.0, min(1.0, meta)))
 
 def get_exit_transition_probs(experience_level, current_state):
     """Get normalized exit probabilities (exclude self-transition)."""
-    probs = STATE_TRANSITION_PROBS[experience_level][current_state].copy()
+    probs = STATE_TRANSITION_PROBS[experience_level][current_state]
     total = sum(probs.values())
-    if total <= 0.0:
-        # Uniform fallback
-        return {s: 1.0 / len(probs) for s in probs}
-    return {s: p / total for s, p in probs.items()}
+    return {s: p / total for s, p in probs.items()} if total else {s: 1.0 / len(probs) for s in probs}

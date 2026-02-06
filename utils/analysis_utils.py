@@ -34,7 +34,7 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'network_activations_history',
         'thoughtseed_activations_history',
         'dominant_ts_history',
-        'action_errors'
+        'action_errors_history'
     ]
     
     for key in time_series_keys:

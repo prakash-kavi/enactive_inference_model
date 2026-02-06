@@ -1,10 +1,10 @@
 """Layer 3: Metacognitive monitor with EFE-based policy evaluation.
 
-Implements planning/deliberation via Expected Free Energy:
-- Meta-awareness: Tracks attentional quality from L2 thoughtseeds
-- Policy evaluation: Risk + ambiguity decomposition
-- Precision modulation: Top-down attentional control signal
-- Transition pressure: Policy-driven state change signal
+Implements planning/deliberation via Expected Free Energy (G):
+- Meta-awareness: tracks attentional quality from L2 thoughtseeds
+- Policy evaluation: risk + ambiguity decomposition
+- Sensory precision: precision from VFE (F) fluctuations
+- Policy confidence: transition drive signal
 """
 
 import numpy as np
@@ -12,46 +12,48 @@ import torch
 import torch.nn as nn
 from typing import Dict, Optional
 
-from utils.config import THOUGHTSEEDS, compute_meta_awareness, get_exit_transition_probs
+from utils.config import THOUGHTSEEDS, compute_meta_awareness, get_exit_transition_probs, EPS
 from .blankets import MarkovBlanketL2L3
-from utils.math_utils import clip_probability, to_float
+from utils.math_utils import clip_probability, ema_update, to_float
 
 class Layer3Monitor(nn.Module):
-    """Metacognitive monitor: EFE-based policy selection."""
+    """Metacognitive monitor: EFE-based policy inference (G)."""
     
     def __init__(self, experience_level: str = 'expert',
-                 blanket_l2l3: Optional[MarkovBlanketL2L3] = None,
-                 params: Optional[Dict] = None):
+                 blanket_l2l3: Optional[MarkovBlanketL2L3] = None):
         super().__init__()
         
         self.level = experience_level
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.7)
-        
-        # Parameters (from config)
-        if params is None:
-            from utils.config import get_params
-            params = get_params(experience_level)
-        
-        self.efe_ambiguity_weight = params['efe_ambiguity_weight']
-        self.efe_cycle_strength = params['efe_cycle_strength']
-        self.precision_range = params['l3tol2_precision_range']
-        
+
         # EMA tracking
         self.vfe_ema = 0.0
+        self.vfe_mean = 0.0
+        self.vfe_var = 1.0
         self.efe_ema = 0.0
+        self.efe_risk_mean = 0.0
+        self.efe_risk_var = 1.0
+        self.efe_ambiguity_mean = 0.0
+        self.efe_ambiguity_var = 1.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
 
     def reset(self) -> None:
         """Reset monitor state for an isolated training run."""
         self.vfe_ema = 0.0
+        self.vfe_mean = 0.0
+        self.vfe_var = 1.0
         self.efe_ema = 0.0
+        self.efe_risk_mean = 0.0
+        self.efe_risk_var = 1.0
+        self.efe_ambiguity_mean = 0.0
+        self.efe_ambiguity_var = 1.0
         self.meta_awareness_ema = None
         self.prev_transition_drive = 0.0
         self.blanket_l2l3.reset()
     
     def update_meta_awareness(self, current_state: str, z: torch.Tensor) -> float:
-        """Compute meta-awareness from L2 thoughtseed activations."""
+        """Compute meta-awareness (A) from L2 thoughtseed activations."""
         # Convert thoughtseed activations to dict
         z_dict = {ts: z[i].item() for i, ts in enumerate(THOUGHTSEEDS)}
         
@@ -75,110 +77,110 @@ class Layer3Monitor(nn.Module):
         
         return meta
     
-    def evaluate_policies(self, current_state: str, vfe: float) -> Dict:
-        """Evaluate policies via EFE and output control signals.
+    def infer_policy_posterior(self, current_state: str, vfe: float) -> Dict:
+        """Infer policy posterior via expected free energy (G).
         
         Args:
             current_state: Current meditation state
-            vfe: Variational free energy from L2
+            vfe: Variational free energy F from L2
         
         Returns:
-            dict with precision_modulation, transition_pressure, policy info
+            dict with sensory_precision (precision surrogate), policy_confidence, policy info
         """
-        # Update VFE EMA (sigmoid-transformed)
+        # Update VFE EMA (sigmoid-transformed for transition drive)
         vfe_sig = 1.0 / (1.0 + np.exp(-vfe))
         self.vfe_ema = 0.9 * self.vfe_ema + 0.1 * vfe_sig
-        
+        self.vfe_mean, self.vfe_var = ema_update(vfe, self.vfe_mean, self.vfe_var)
+
         # Meta-awareness from L2 (via Markov blanket)
         meta = self.blanket_l2l3.sensory_states.get('meta_awareness', 0.5)
         meta = to_float(meta)
-        
-        # Precision modulation: Maps meta-awareness → attentional precision
-        # High meta-awareness → high precision (tight prior adherence)
+
+        # Precision modulation: inverse of prediction error (self-organizing)
+        # Low VFE -> high precision, high VFE -> low precision
+        vfe_norm = self._zscore(vfe, self.vfe_mean, self.vfe_var)
+        sensory_precision = clip_probability(1.0 / (1.0 + np.exp(vfe_norm)))
         transparency = meta  # (1 - opacity)
-        prec_min, prec_max = self.precision_range
-        precision = prec_min + (prec_max - prec_min) * transparency
-        precision = clip_probability(precision)
-        
-        # Policy evaluation via EFE
+
+        # Policy evaluation via EFE (G)
         efe_risk, efe_ambiguity = self._compute_efe(current_state)
-        efe_total = efe_risk + self.efe_ambiguity_weight * efe_ambiguity
-        
+        self.efe_risk_mean, self.efe_risk_var = ema_update(
+            efe_risk, self.efe_risk_mean, self.efe_risk_var
+        )
+        self.efe_ambiguity_mean, self.efe_ambiguity_var = ema_update(
+            efe_ambiguity, self.efe_ambiguity_mean, self.efe_ambiguity_var
+        )
+        risk_norm = self._zscore(efe_risk, self.efe_risk_mean, self.efe_risk_var)
+        ambiguity_norm = self._zscore(
+            efe_ambiguity, self.efe_ambiguity_mean, self.efe_ambiguity_var
+        )
+        efe_total = 0.5 * (risk_norm + ambiguity_norm)
+
         # Update EFE EMA
         self.efe_ema = 0.9 * self.efe_ema + 0.1 * efe_total
-        
-        # Transition pressure: Combine meta-awareness + VFE + EFE
+
+        # Policy confidence: combine meta-awareness + VFE + EFE (heuristic)
         base_drive = 0.5 * (transparency + self.vfe_ema)
-        efe_drive = 0.35 * self.efe_ema if self.efe_ema > 0.0 else 0.0
-        
-        # Apply state-specific temperature to transition pressure (DEPRECATED: Using temp=1.0)
-        raw_pressure = base_drive + efe_drive
-        transition_pressure = clip_probability(raw_pressure)
+        efe_drive = 1.0 / (1.0 + np.exp(-self.efe_ema))
+        policy_confidence = clip_probability(0.5 * (base_drive + efe_drive))
         
         # Store for next iteration
-        self.prev_transition_drive = transition_pressure
+        self.prev_transition_drive = policy_confidence
         
         # Send active states to L2 via Markov blanket
         self.blanket_l2l3.update_active_states({
-            'precision_modulation': precision,
-            'transition_drive': transition_pressure
+            'sensory_precision': sensory_precision,
+            'transition_drive': policy_confidence
         })
         
         return {
-            'precision_modulation': precision,
-            'transition_pressure': transition_pressure,
+            'sensory_precision': sensory_precision,
+            'policy_confidence': policy_confidence,
             'efe_risk': efe_risk,
             'efe_ambiguity': efe_ambiguity,
             'efe_total': efe_total,
         }
-    
+
+    def _zscore(self, value: float, mean: float, var: float) -> float:
+        """Normalize using EMA mean/variance."""
+        return (value - mean) / np.sqrt(var + EPS)
+
     def _compute_efe(self, current_state: str) -> tuple[float, float]:
-        """Compute Expected Free Energy: risk + ambiguity.
-        
-        Args:
-            current_state: Current meditation state
-        
-        Returns:
-            (risk, ambiguity) floats
-        """
-        # Get base transition probabilities
-        base_probs = get_exit_transition_probs(self.level, current_state)
-        
-        # Cycle preferences (meditation goal: breath_focus)
-        cycle_prefs = {
+        """Compute Expected Free Energy: risk + ambiguity."""
+        # E: policy prior
+        policy_prior_E = get_exit_transition_probs(self.level, current_state)
+
+        # C: preferences
+        preferences_C = {
             'breath_focus': 0.8,
             'mind_wandering': 0.1,
             'meta_awareness': 0.5,
             'redirect_attention': 0.6
         }
-        
-        # Predicted distribution: blend base + preferences
-        drive = self.prev_transition_drive
-        blend = drive * self.efe_cycle_strength
-        
+
+        drive = clip_probability(self.prev_transition_drive)
+        blend = drive
+
         predicted_probs = {}
-        for state in base_probs:
-            base_p = base_probs[state]
-            pref_p = cycle_prefs.get(state, 0.5)
+        for state in policy_prior_E:
+            base_p = policy_prior_E[state]
+            pref_p = preferences_C.get(state, 0.5)
             predicted_probs[state] = (1.0 - blend) * base_p + blend * pref_p
-        
-        # Normalize
+
         total = sum(predicted_probs.values())
         if total > 0:
             predicted_probs = {s: p / total for s, p in predicted_probs.items()}
-        
-        # Risk: KL divergence between predicted and preferred
-        eps = 1e-8
+
         risk = 0.0
         for state in predicted_probs:
-            p_pred = max(eps, predicted_probs[state])
-            p_pref = max(eps, cycle_prefs.get(state, 0.5))
+            p_pred = max(EPS, predicted_probs[state])
+            p_pref = max(EPS, preferences_C.get(state, 0.5))
             risk += p_pred * np.log(p_pred / p_pref)
-        
-        # Ambiguity: Entropy of predicted distribution
+
         ambiguity = 0.0
         for state in predicted_probs:
-            p = max(eps, predicted_probs[state])
+            p = max(EPS, predicted_probs[state])
             ambiguity -= p * np.log(p)
-        
+
         return float(risk), float(ambiguity)
+    

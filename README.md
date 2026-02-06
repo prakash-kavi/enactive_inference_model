@@ -5,33 +5,33 @@
 ---
 
 ## Architecture
-
+![Thoughtseeds Framework](Thoughtseeds_Framework.jpg)
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Layer 3: Metacognitive Monitor                              │
-│ • Evaluates attentional quality (meta-awareness)            │
-│ • Computes Expected Free Energy (EFE) for policy selection  │
-│ • Modulates L2 precision (top-down control)                 │
-└────────────────┬────────────────────────────────────────────┘
-                 │ Markov Blanket L2↔L3
-                 │ Sensory: meta_awareness, state_progress
-                 │ Active:  precision_modulation, exit_drive
-┌────────────────▼────────────────────────────────────────────┐
-│ Layer 2: Attentional Agent (Thoughtseeds)                   │
-│ • Compresses neural dynamics into 5 thoughtseeds            │
-│ • VAE encoder/decoder + forward dynamics model              │
-│ • Action selection minimizes EFE informed by predictions    │
-└────────────────┬────────────────────────────────────────────┘
-                 │ Markov Blanket L1↔L2
-                 │ Sensory: DMN, VAN, DAN, FPN activations
-                 │ Active:  target_networks, state_transition
-┌────────────────▼────────────────────────────────────────────┐
-│ Layer 1: Neural Generative Process (MVOU)                   │
-│ • 4 brain networks (DMN, VAN, DAN, FPN)                     │
-│ • 4 meditation states (BF, MW, MA, RA)                      │
-│ • Multivariate Ornstein-Uhlenbeck dynamics                  │
-│ • State-dependent coupling (Θ matrices)                     │
-└─────────────────────────────────────────────────────────────┘
++--------------------------------------------------------------+
+| Layer 3: Metacognitive Monitor                               |
+| - Evaluates attentional quality (meta-awareness)             |
+| - Computes Expected Free Energy (EFE) for policy selection   |
+| - Modulates L2 precision (policy/sensory precision signals)   |
++------------------------------+-------------------------------+
+               | Markov Blanket L2<->L3
+               | Sensory: meta_awareness, opacity
+| Active:  sensory_precision, transition_drive
++------------------------------v-------------------------------+
+| Layer 2: Attentional Agent (Thoughtseeds)                    |
+| - Compresses neural dynamics into 5 thoughtseeds             |
+| - VAE encoder/decoder + forward dynamics model               |
+| - Action selection minimizes predicted error; L3 sets pressure |
++------------------------------+-------------------------------+
+               | Markov Blanket L1<->L2
+               | Sensory: DMN, VAN, DAN, FPN activations
+| Active:  action_mu, transition_drive
++------------------------------v-------------------------------+
+| Layer 1: Neural Generative Process (MVOU)                    |
+| - 4 brain networks (DMN, VAN, DAN, FPN)                      |
+| - 4 meditation states (BF, MW, MA, RA)                       |
+| - Multivariate Ornstein-Uhlenbeck dynamics                   |
+| - State-dependent coupling (Theta matrices)                 |
++--------------------------------------------------------------+
 ```
 
 ## Core Components
@@ -65,9 +65,9 @@ pip install torch numpy matplotlib
 ```
 
 **Requirements:**
-- Python 3.8+
-- PyTorch 1.10+
-- NumPy, Matplotlib
+- Python 3.9+
+- PyTorch 1.13+
+- NumPy 1.25+, Matplotlib 3.8+
 
 ---
 
@@ -108,7 +108,7 @@ Each contains:
 - Free energy history
 - Meta-awareness evolution
 - Transition statistics
-- Learned model parameters
+- Action prediction error summaries
 
 ### Plots
 Generated in `plots/`:
@@ -121,7 +121,7 @@ Generated in `plots/`:
 - `Fig3A_Network_Radar.png` - Network profiles across states (Expert vs Novice)
 - `Fig3B_FE_and_Dwell.png` - Free energy and dwell times per state
 - `Fig3C_Transitions.png` - State transition probability matrices
-- `Fig3D_Belief_about_Belief.png` - L3 meta-awareness & L2 free energy evolution
+- `Fig3D.png` - L3 meta-awareness & L2 free energy evolution
 
 **Dynamics:**
 - `Fig4A_Hierarchy_Novice.png` - 3-layer hierarchical dynamics over time
@@ -141,10 +141,10 @@ Each layer interfaces through Markov blankets defining:
 - **Active states**: How the layer influences layers below
 
 ### 2. Thoughtseeds as Tractable Bottleneck
-Layer 2 compresses 4 network activations → 5 thoughtseeds, making neural state "tractable" for conscious access and metacognitive monitoring.
+Layer 2 compresses 4 network activations -> 5 thoughtseeds, making neural state "tractable" for conscious access and metacognitive monitoring.
 
 ### 3. Forward Dynamics Model
-Layer 2 learns to predict future thoughtseed states, enabling:
+Layer 2 learns to predict future network activations from (x, z), enabling:
 - Anticipatory action selection
 - Policy evaluation beyond immediate outcomes
 - Counterfactual reasoning ("what if I stay in MW?")
@@ -153,7 +153,8 @@ Layer 2 learns to predict future thoughtseed states, enabling:
 Backpropagation Through Time optimizes:
 - VAE encoder/decoder (representation learning)
 - Forward model (dynamics prediction)
-- Action policies (minimize expected free energy)
+- Loss = VFE + forward prediction error (+ recognition loss for expert)
+- L3 precision is computed as inverse variance of prediction error (sensory/state precision)
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
@@ -170,20 +171,10 @@ Backpropagation Through Time optimizes:
 
 ## Key Results
 
-**Behavioral Signatures:**
-- **Expert**: 119 timesteps average BF dwell, 59% MW→MA transition rate
-- **Novice**: 56 timesteps average BF dwell, 66% MW→MA transition rate (but higher MA threshold)
-
-**Learning Dynamics:**
-- Expert converges to lower free energy (better prediction accuracy)
-- Novice shows higher meta-awareness variability
-- Forward model reduces action prediction errors by ~40%
-
-**Network Profiles:**
-- BF state: DAN+FPN dominant
-- MW state: DMN dominant
-- MA state: VAN+FPN (detection + reorienting)
-- RA state: Balanced DAN+FPN (executive control)
+**Behavioral Signatures (run-dependent):**
+- Expert typically shows lower free energy and a more stable breath-focus basin
+- Novice shows broader excursions and shallower basins
+- See `data/` and `plots/` for the current run's quantitative summaries
 
 ---
 
@@ -205,15 +196,13 @@ Backpropagation Through Time optimizes:
 ├── data/                      # Training results (JSON)
 ├── plots/                     # Generated figures (PNG)
 └── viz/                       # Plotting modules
-    ├── lean_convergence.py
-    ├── lean_comparison.py
-    ├── lean_hierarchy.py
-    ├── lean_attractors.py
-    ├── lean_diagnostics.py
-    └── plotting_utils.py
-```
-
-**Total:** ~2,000 lines of core implementation + visualization
+     analysis.py
+     attractors.py
+     convergence.py
+     diagnostics.py
+     hierarchy.py
+     radar_plot.py
+     plotting_utils.py
 
 ---
 
@@ -230,17 +219,18 @@ dx = Θ(s)[μ(s) - x]dt + σ(s)dW
 
 ### Layer 2: Thoughtseed Dynamics
 VAE architecture:
-- **Encoder**: Networks → Thoughtseeds (4 → 5 latent dims)
-- **Decoder**: Thoughtseeds → Networks (reconstruction)
-- **Forward Model**: Predicts thoughtseeds at t+1 given current state and action
+- **Encoder**: Networks -> Thoughtseeds (4 -> 5 latent dims)
+- **Decoder**: Thoughtseeds -> Networks (reconstruction)
+- **Forward Model**: Predicts next networks given (x, z)
 
-Free Energy:
+Free Energy (VFE used for reporting):
 ```
-F = Reconstruction_Error + KL_Divergence + Forward_Prediction_Error
+F = Reconstruction_Error + KL_Divergence
 ```
+Training loss additionally includes forward prediction error, and expert-only recognition loss.
 
 ### Layer 3: Policy Selection
-Expected Free Energy per policy π:
+Expected Free Energy per policy π (policy precision is inverse variance of G):
 ```
 EFE(π) = E_q[log q(o|π) - log p(o|C)] + E_q[KL[q(s|π)||q(s)]]
          \_____________v_____________/   \__________v__________/
@@ -252,11 +242,11 @@ EFE(π) = E_q[log q(o|π) - log p(o|C)] + E_q[KL[q(s|π)||q(s)]]
 ## Configuration
 
 Edit `config.py` to modify:
-- Network/state parameters (Θ matrices, μ attractors)
-- Thoughtseed Priors (THOUGHTSEED_STATE_PRIORS)
+- Network/state parameters (Theta matrices, mu attractors)
+- Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
 - Learning rates (0.01 - 0.02)
-- Loss weights (forward model, KL divergence, recognition loss)
-- Expertise levels (Phenotypes defined by Encoder Plasticity)
+- Noise sigma
+- Expertise levels (phenotypes defined by encoder plasticity)
 
 ---
 

@@ -1,9 +1,9 @@
 """Training orchestrator: BPTT loop with hierarchical free energy minimization.
 
 Implements the "awareness as hyperparameter optimization" framework:
-- L2 minimizes VFE: reconstruction + KL divergence + forward prediction error
-- L3 modulates L2's precision (hyperparameter) via meta-awareness
-- Phase 4: Forward model trains on action-conditioned prediction
+- L2 minimizes VFE (F): reconstruction + KL divergence + forward prediction error
+- L3 modulates L2 precision via meta-awareness
+- Forward model trains on action-conditioned prediction
 """
 
 import numpy as np
@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 from utils.config import (
-    STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
+    STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS,
     FORWARD_LOSS_BASE_WEIGHT, FORWARD_LOSS_PRECISION_SCALE,
     get_params, get_thoughtseed_priors
 )
@@ -22,7 +22,7 @@ from .process import Layer1Process
 from .agent import Layer2Agent
 from .monitor import Layer3Monitor
 from .blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils.math_utils import bernoulli_kl, networks_to_tensor
+from utils.math_utils import networks_to_tensor, precision_to_weight
 
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
@@ -53,8 +53,7 @@ class MeditationTrainer:
         )
         self.monitor = Layer3Monitor(
             experience_level=experience_level,
-            blanket_l2l3=self.blanket_l2l3,
-            params=self.params
+            blanket_l2l3=self.blanket_l2l3
         )
         
         # Optimizer
@@ -74,7 +73,7 @@ class MeditationTrainer:
             enable_learning: Whether to track gradients
             
         Returns:
-            step_loss: Loss for this step
+            step_loss: Loss for this step (F + forward prediction error)
             new_state: Updated state
             activations: Updated thoughtseed activations
             metrics: Dict of step metrics for history
@@ -83,26 +82,24 @@ class MeditationTrainer:
         # Update L1 state based on previous active states (action)
         network_acts, new_state = self.process.update(self.blanket_l1l2.active_states)
         
-        # Update L1→L2 sensory states
+        # Update L1->L2 sensory states (observations)
         self.blanket_l1l2.update_sensory_states(network_acts)
         
         # ===== Layer 2: Attentional Agent =====
-        # Perception: Encode networks → thoughtseeds
-        sensory_inference = self.agent.perceptual_inference()
+        # Perception: Encode networks -> thoughtseeds
+        z_recognition = self.agent.infer_z_from_x()
         
         # Variational inference: Update thoughtseed dynamics
-        # Note: current_state here is the *new* state from L1 (consistent with original logic)
-        activations = self.agent.update_thoughtseeds(
+        activations = self.agent.update_posterior_z(
             current_state=new_state,
             activations=activations,
             observed_networks=network_acts,
-            sensory_inference=sensory_inference
+            z_recognition=z_recognition
         ).detach()  # VI not part of BPTT gradient flow
         
         # Compute VFE (L2's free energy)
-        device = next(self.agent.parameters()).device
-        free_energy = self._compute_vfe(
-            new_state, activations, network_acts, device
+        free_energy = self.agent.compute_vfe(
+            new_state, activations, network_acts
         )
         
         # ===== Layer 3: Metacognitive Monitor =====
@@ -110,12 +107,12 @@ class MeditationTrainer:
         meta_awareness = self.monitor.update_meta_awareness(new_state, activations)
         
         # Policy evaluation (EFE-based)
-        policy_result = self.monitor.evaluate_policies(new_state, free_energy.item())
+        policy_result = self.monitor.infer_policy_posterior(new_state, free_energy.item())
         
-        # ===== Phase 4: Forward-Informed Action Selection =====
-        prescription = self.agent.prescriptive_action(activations, new_state)
+        # ===== Forward-Informed Action Selection =====
+        prescription = self.agent.policy_selection(activations, new_state)
         
-        # Update L2→L1 active states (action)
+        # Update L2->L1 active states (action policy)
         self.blanket_l1l2.update_active_states(prescription)
         
         # Forward model loss calculation
@@ -136,8 +133,9 @@ class MeditationTrainer:
             action_pred_error_val = action_pred_error.item()
             
             # L3 precision weighting
-            precision = policy_result['precision_modulation']
-            action_loss_weight = FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision
+            precision = policy_result['sensory_precision']
+            precision_weight = precision_to_weight(precision)
+            action_loss_weight = FORWARD_LOSS_BASE_WEIGHT + FORWARD_LOSS_PRECISION_SCALE * precision_weight
             
             # Combined loss
             step_loss = free_energy + action_loss_weight * action_pred_error
@@ -204,7 +202,6 @@ class MeditationTrainer:
         Returns:
             Training results dict
         """
-        # Initialize
         # Initialize run state
         self._reset_run_state(reseed_rng=reseed_rng, run_seed=run_seed)
         
@@ -212,7 +209,7 @@ class MeditationTrainer:
         if self.level == 'novice':
             print(f"PHENOTYPE: NOVICE (Encoder Frozen - No Amortized Inference Learning)")
         else:
-            print(f"PHENOTYPE: EXPERT (Encoder Unfrozen - Learning Active)")
+            print(f"PHENOTYPE: EXPERT (Encoder Unfrozen - Amortized Inference Learning Active)")
 
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
@@ -221,14 +218,14 @@ class MeditationTrainer:
         device = next(self.agent.parameters()).device
         priors = get_thoughtseed_priors(current_state)
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
-        activations_np += np.random.normal(0, self.params['init_noise_sigma'], size=len(activations_np))
+        activations_np += np.random.normal(0, self.params['noise_sigma'], size=len(activations_np))
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
         activations = torch.clamp(activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
         # Initialize blankets
         self.blanket_l1l2.update_active_states({
-            'agent_bias': None,
-            'l2tol1_enactive_bias': 0.0,
+            'action_mu': None,
+            'l2_precision_gain': 0.0,
             'noise_reduction': 1.0,
             'transition_drive': 0.0
         })
@@ -271,7 +268,7 @@ class MeditationTrainer:
                             'timestamp': t,
                             'from': current_state,
                             'to': new_state,
-                            'free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0
+                            'free_energy': metrics['free_energy']
                         })
                         current_state = new_state
                     
@@ -280,13 +277,7 @@ class MeditationTrainer:
                         window_loss = step_loss if window_loss is None else (window_loss + step_loss)
                     
                     # Record history
-                    self.history['states'].append(current_state)
-                    self.history['free_energy'].append(metrics['free_energy'])
-                    self.history['meta_awareness'].append(metrics['meta_awareness'])
-                    self.history['action_errors'].append(metrics['action_error'])
-                    self.history['network_activations'].append(metrics['network_activations'])
-                    self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
-                    self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
+                    self._append_history(current_state, metrics)
             
             # Gradient step (after accumulating gradients from all steps in window)
             if enable_learning:
@@ -305,32 +296,20 @@ class MeditationTrainer:
         
         return self._package_results()
     
-    def _compute_vfe(self, state: str, z: torch.Tensor, 
-                     network_acts: Dict, device: torch.device) -> torch.Tensor:
-        """Compute variational free energy: reconstruction + KL divergence."""
-        # Decode thoughtseeds → predicted networks
-        recon_x = self.agent.decode_with_state(z)
-        
-        # Observed networks
-        observed_x = networks_to_tensor(network_acts, NETWORKS, device=device, detach=True)
-        
-        # Reconstruction loss (observation model)
-        recon_loss = torch.nn.functional.mse_loss(recon_x, observed_x)
-        
-        # KL divergence (prior)
-        prior = self.agent.mu_params[state].detach()
-        kl_div = bernoulli_kl(z, prior, EPS)
-        
-        # Total VFE
-        beta = self.params['kl_beta']
-        vfe = recon_loss + beta * kl_div
-        
-        return vfe
+    def _append_history(self, current_state: str, metrics: Dict) -> None:
+        """Append per-timestep metrics to training history."""
+        self.history['states'].append(current_state)
+        self.history['free_energy'].append(metrics['free_energy'])
+        self.history['meta_awareness'].append(metrics['meta_awareness'])
+        self.history['action_errors'].append(metrics['action_error'])
+        self.history['network_activations'].append(metrics['network_activations'])
+        self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+        self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
+
     
     def _package_results(self) -> Dict:
         """Package training results for analysis."""
         # Compute dwell times directly from contiguous state runs.
-        # This is deterministic and does not depend on transition bookkeeping.
         dwell_times = {state: [] for state in STATES}
         state_sequence = self.history['states']
         if state_sequence:
@@ -388,7 +367,8 @@ class MeditationTrainer:
             'final_free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0,
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
-            'dominant_ts_history': self.history['dominant_thoughtseed']
+            'dominant_ts_history': self.history['dominant_thoughtseed'],
+            'action_errors_history': self.history['action_errors']
         }
     
     def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
@@ -405,7 +385,6 @@ class MeditationTrainer:
         }
         self._last_x_actual = None
         self.blanket_l1l2.reset()
-        self.blanket_l2l3.reset()
         self.monitor.reset()
         self.agent.z_ema.zero_()
         self.agent.z_ema_initialized = False
