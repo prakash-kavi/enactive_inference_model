@@ -247,7 +247,7 @@ class Layer2Agent(nn.Module):
         exit_probs = get_exit_transition_probs(self.level, current_state)
         avg_exit = (sum(exit_probs.values()) / len(exit_probs)) if exit_probs else (1.0 / max(len(candidates), 1))
         dwell_progress = to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0))
-        hazard = clip_probability(dwell_progress)
+        hazard = clip_probability(dwell_progress ** 2)
         
         priors = []
         g_vals = []
@@ -298,6 +298,8 @@ class Layer2Agent(nn.Module):
         weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype, device=mu_candidates[0].device)
         mu_stack = torch.stack(mu_candidates, dim=0)
         selected_mu = torch.sum(weights.unsqueeze(-1) * mu_stack, dim=0)
+        mu_current = self.mu_params[current_state].detach()
+        selected_mu = (1.0 - hazard) * mu_current + hazard * selected_mu
         mu_x = self.decode_with_state(selected_mu)
         
         precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
