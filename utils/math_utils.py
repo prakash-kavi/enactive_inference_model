@@ -12,7 +12,6 @@ def to_float(value: Union[float, int, torch.Tensor]) -> float:
         return float(value.detach().item())
     return float(value)
 
-
 def clip_probability(value: Union[float, int, torch.Tensor]) -> float:
     """Clamp scalar-like values to [0, 1]."""
     return float(np.clip(to_float(value), 0.0, 1.0))

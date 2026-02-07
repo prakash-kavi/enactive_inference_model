@@ -87,12 +87,14 @@ def plot_belief_about_belief(novice_results: Dict, expert_results: Dict, save_pa
         save_path: Optional path to save figure
     """
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("L3 Meta-Awareness and L2 Variational Free Energy Evolution", 
+    fig.suptitle("L3 Meta-Awareness + Opacity and L2 Variational Free Energy Evolution", 
                  fontsize=14, fontweight='bold')
     
     # Extract data first
     meta_novice = np.array(novice_results['meta_awareness_history'])
     meta_expert = np.array(expert_results['meta_awareness_history'])
+    opacity_novice = np.array(novice_results.get('opacity_history', []))
+    opacity_expert = np.array(expert_results.get('opacity_history', []))
     fe_novice = np.array(novice_results['free_energy_history'])
     fe_expert = np.array(expert_results['free_energy_history'])
     timesteps_novice = np.arange(len(meta_novice))
@@ -116,7 +118,9 @@ def plot_belief_about_belief(novice_results: Dict, expert_results: Dict, save_pa
 
     # ===== L3 Meta-Awareness - Novice (Top-Left) =====
     ax = axes[0, 0]
-    ax.plot(timesteps_novice, meta_novice, color='#F57C00', linewidth=0.5, alpha=0.6)
+    ax.plot(timesteps_novice, meta_novice, color='#F57C00', linewidth=0.5, alpha=0.6, label='Meta-awareness')
+    if opacity_novice.size == meta_novice.size and opacity_novice.size > 0:
+        ax.plot(timesteps_novice, opacity_novice, color='#00796B', linewidth=0.6, alpha=0.7, label='Opacity')
     
     ax.axhline(y=threshold_val, color='gray', linestyle='--', alpha=0.7, label=threshold_label)
         
@@ -130,7 +134,9 @@ def plot_belief_about_belief(novice_results: Dict, expert_results: Dict, save_pa
     # ===== L3 Meta-Awareness - Expert (Top-Right) =====
     ax = axes[0, 1]
     
-    ax.plot(timesteps_expert, meta_expert, color='#F57C00', linewidth=0.5, alpha=0.6)
+    ax.plot(timesteps_expert, meta_expert, color='#F57C00', linewidth=0.5, alpha=0.6, label='Meta-awareness')
+    if opacity_expert.size == meta_expert.size and opacity_expert.size > 0:
+        ax.plot(timesteps_expert, opacity_expert, color='#00796B', linewidth=0.6, alpha=0.7, label='Opacity')
     
     ax.axhline(y=threshold_val, color='gray', linestyle='--', alpha=0.7, label=threshold_label)
         

@@ -169,8 +169,7 @@ LEARNING_RATES = {
     "expert": 0.02,
 }
 
-FORWARD_LOSS_BASE_WEIGHT = 0.05
-FORWARD_LOSS_PRECISION_SCALE = 0.1  # Modulated by L3 precision
+FORWARD_LOSS_WEIGHT = 0.5
 
 # =============================================================================
 # Utility Functions

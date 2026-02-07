@@ -14,11 +14,11 @@ Key Features:
 """
 
 from utils.config import STATES, NETWORKS, THOUGHTSEEDS, get_params
-from model.process import Layer1Process
-from model.agent import Layer2Agent
-from model.monitor import Layer3Monitor
-from model.blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from model.train import MeditationTrainer, train_meditation
+from model.l1_generative_process import Layer1Process
+from model.l2_recognition import Layer2Agent
+from model.l3_metacognition import Layer3Monitor
+from model.markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
+from model.training_loop import MeditationTrainer, train_meditation
 from viz.analysis import (
     compute_metrics,
     plot_belief_about_belief,

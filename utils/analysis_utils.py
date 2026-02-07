@@ -31,6 +31,7 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'state_history',
         'free_energy_history',
         'meta_awareness_history',
+        'opacity_history',
         'network_activations_history',
         'thoughtseed_activations_history',
         'dominant_ts_history',
