@@ -1,6 +1,6 @@
 # Vipassana Meditation Model: Hierarchical Active Inference
 
-**A minimal implementation of three-layer active inference for meditation attention dynamics.**
+
 
 ---
 
@@ -10,7 +10,7 @@
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |
 | - Tracks meta-awareness from L2 thoughtseeds                 |
-| - Sends meta-awareness to L2 (sensory)                       |
+| - Sends meta-awareness to L2 (sensory) to modulate precision                       |
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
                | Sensory: meta_awareness
@@ -20,8 +20,8 @@
 | - Compresses neural dynamics into 5 thoughtseeds             |
 | - VAE encoder/decoder + forward dynamics model               |
 | - Policy posterior q(pi) via softmax of G(pi)                |
-| - Policy precision from entropy(q_pi)|
-| - Sensory precision from forward prediction error            |
+| - Policy precision from entropy(q_pi)
+| - Sensory precision from forward prediction error + meta-awareness            |
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
                | Sensory: DMN, VAN, DAN, FPN activations
@@ -93,7 +93,7 @@ python run_enactive_inference.py run --timesteps 10000  # Custom training length
 python run_enactive_inference.py plot
 ```
 
-Generates 10 publication-quality figures from saved training results.
+Generates 8 publication-quality figures from saved training results.
 
 ---
 
@@ -152,9 +152,10 @@ Layer 2 learns to predict future network activations from (x, z), enabling:
 Backpropagation Through Time optimizes:
 - VAE encoder/decoder (representation learning)
 - Forward model (dynamics prediction)
-- Loss = VFE + forward prediction error (+ recognition loss for expert)
+- Loss = VFE + w_fwd * forward prediction error + alpha_rec * recognition loss
+- Recognition loss uses alpha_rec=1 for expert and alpha_rec=lr_novice/lr_expert for novice
 - Policy precision is derived from policy posterior entropy (q_pi)
-- Sensory precision is derived from forward prediction error with noise floor
+- Sensory precision blends forward prediction error with meta-awareness
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
@@ -279,6 +280,7 @@ E(s') = h * P(s' | s)
 ```
 Expected free energy:
 ```
+C_s = decode(mu_z(s))
 G(pi) = KL_Bernoulli(x_pred || C_s) + H(x_pred)
 ```
 Policy posterior:
@@ -320,7 +322,7 @@ Edit `config.py` to modify:
 - Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
 - Learning rates (0.01 - 0.02)
 - Process noise (NOISE_LEVEL)
-- Phenotype differences (learning rate + expert-only recognition loss)
+- Phenotype differences (learning rate + recognition loss scaling)
 
 ---
 
@@ -343,3 +345,7 @@ If you use this model in your research:
   year={2026}
 }
 ```
+This repository is a significant step forward in enhancing the Thoughtseeds Framework fadapting code snippets from below:
+  https://github.com/prakash-kavi/thoughtseeds_vipassana 
+  https://github.com/prakash-kavi/viapssana_ts2  
+  https://github.com/prakash-kavi/aif_iwai2025_thoughtseeds

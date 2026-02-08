@@ -38,7 +38,6 @@ class Layer1Process(nn.Module):
         
         # Network state
         self.x = torch.full((len(NETWORKS),), self.INIT_ACTIVATION, dtype=torch.float32)
-        self.smoothed_x = self.x.clone()
         
         # State machine
         self.current_state = 'breath_focus'
@@ -201,10 +200,9 @@ class Layer1Process(nn.Module):
             curr_x = torch.clamp(curr_x, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
         self.x = curr_x
-        self.smoothed_x = 0.4 * self.smoothed_x + 0.6 * self.x  # EMA smoothing
         
         # Return as dict for Markov blanket
-        network_acts = {net: self.smoothed_x[i] for i, net in enumerate(NETWORKS)}
+        network_acts = {net: self.x[i] for i, net in enumerate(NETWORKS)}
         return network_acts, self.current_state
     
     def reset(self, state: str = 'breath_focus') -> None:
@@ -212,4 +210,3 @@ class Layer1Process(nn.Module):
         self.current_state = state
         self._sample_next_dwell()
         self.x = torch.full((len(NETWORKS),), self.INIT_ACTIVATION, dtype=torch.float32)
-        self.smoothed_x = self.x.clone()

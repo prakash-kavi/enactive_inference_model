@@ -64,12 +64,11 @@ class MeditationTrainer:
         self._last_x_actual = None
         self._loss_balance = {}
     
-    def step(self, t: int, current_state: str, activations: torch.Tensor, enable_learning: bool = True) -> tuple[torch.Tensor, str, torch.Tensor, Dict]:
+    def step(self, t: int, activations: torch.Tensor, enable_learning: bool = True) -> tuple[torch.Tensor, str, torch.Tensor, Dict]:
         """Execute a single simulation step.
         
         Args:
             t: Current timestep
-            current_state: State at start of step
             activations: Current thoughtseed activations (L2 hidden state)
             enable_learning: Whether to track gradients
             
@@ -95,6 +94,7 @@ class MeditationTrainer:
         x_current = networks_to_tensor(network_acts, NETWORKS)
         forward_prediction_error = None
         forward_prediction_error_val = 0.0
+        base_precision = float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
 
         if self._last_x_actual is not None:
             # Predict current observation from previous (x, action)
@@ -105,8 +105,8 @@ class MeditationTrainer:
             forward_prediction_error = torch.mean((x_current.detach() - x_pred) ** 2)
             forward_prediction_error_val = forward_prediction_error.item()
             base_variance = float(self.process.NOISE_LEVEL)
-            precision_sensory = base_variance / (base_variance + forward_prediction_error_val + EPS)
-            self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
+            base_precision = base_variance / (base_variance + forward_prediction_error_val + EPS)
+            self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
         # ===== Layer 2: Attentional Agent =====
         # Perception: Encode networks -> thoughtseeds
@@ -129,6 +129,11 @@ class MeditationTrainer:
         # Update meta-awareness using new state
         meta_awareness = self.monitor.update_meta_awareness(new_state, activations)
 
+        # Meta-awareness modulates sensory precision (L3 -> L2)
+        precision_sensory = 0.5 * (base_precision + float(meta_awareness))
+        precision_sensory = max(0.0, min(1.0, precision_sensory))
+        self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
+
         # ===== Policy Inference =====
         prescription = self.agent.infer_pi(activations, new_state)
         selected_action_mu = prescription['selected_action_mu']
@@ -142,7 +147,6 @@ class MeditationTrainer:
         if forward_prediction_error is not None:
             self._loss_balance['fe_sum'] += float(free_energy.detach().item())
             self._loss_balance['fpe_sum'] += float(forward_prediction_error_val)
-            self._loss_balance['count'] += 1
             if self._loss_balance['fpe_sum'] > EPS:
                 forward_weight = self._loss_balance['fe_sum'] / (self._loss_balance['fpe_sum'] + EPS)
             else:
@@ -199,8 +203,6 @@ class MeditationTrainer:
         
         metrics = {
             'timestamp': t,
-            'current_state': current_state,
-            'new_state': new_state,
             'free_energy': free_energy.detach().item(),
             'meta_awareness': meta_awareness,
             'action_error': forward_prediction_error_val,
@@ -284,7 +286,6 @@ class MeditationTrainer:
                     # Execute step
                     step_loss, new_state, activations, metrics = self.step(
                         t=t,
-                        current_state=current_state,
                         activations=activations,
                         enable_learning=enable_learning
                     )
@@ -316,7 +317,6 @@ class MeditationTrainer:
             # Detach states (BPTT boundary)
             with torch.no_grad():
                 self.process.x = self.process.x.detach()
-                self.process.smoothed_x = self.process.smoothed_x.detach()
                 activations = activations.detach()
         
         return self._package_results()
@@ -384,7 +384,6 @@ class MeditationTrainer:
             'free_energy_history': self.history['free_energy'],
             'meta_awareness_history': self.history['meta_awareness'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
-            'state_sequence': self.history['states'],  # Keep for backward compat
             'transitions': self.history['transitions'],
             'avg_dwell_times': avg_dwell,
             'transition_matrix': trans_matrix,
@@ -409,7 +408,7 @@ class MeditationTrainer:
             'dominant_thoughtseed': []
         }
         self._last_x_actual = None
-        self._loss_balance = {'fe_sum': 0.0, 'fpe_sum': 0.0, 'count': 0}
+        self._loss_balance = {'fe_sum': 0.0, 'fpe_sum': 0.0}
         self.blanket_l1l2.reset()
         self.monitor.reset()
 

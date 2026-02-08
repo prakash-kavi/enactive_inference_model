@@ -19,7 +19,7 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
     
     Args:
         results: Full training results dictionary
-        tail_steps: Number of steps from end to extract (default: 200)
+        tail_steps: Number of steps from end to extract (default: 2000)
         
     Returns:
         Dictionary with tail-sliced time series data

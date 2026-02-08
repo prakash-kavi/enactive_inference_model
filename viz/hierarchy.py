@@ -103,7 +103,7 @@ def plot_hierarchy(data, save_path: str, level_name: str):
         # Extract data for this network
         net_acts = [n[net] for n in data['network_activations_history']]
         
-        # Smooth the data (EMA)
+    # Smooth the data (EMA) for visualization only (does not affect model dynamics)
         alpha = 0.3
         smoothed_acts = pd.Series(net_acts, dtype=float).ewm(alpha=alpha, adjust=False).mean().to_numpy()
         

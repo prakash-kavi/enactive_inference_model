@@ -1,9 +1,9 @@
 """Visualization module for lean meditation model.
 
-Streamlined plotting modules for Royal Society paper:
+Streamlined plotting modules for the manuscript:
 - lean_convergence: FigS1 (convergence plots)
 - lean_comparison: Fig3A (radar)
-- lean_diagnostics: Fig3B (FE+Dwell), Fig3C (Transitions), Fig3D (Belief about Belief)
+- lean_diagnostics: Fig3B (FE+Dwell), Fig3C (Transitions)
 - lean_hierarchy: Fig4A/B (3-level dynamics)
 - lean_attractors: Fig5 (PCA trajectories across hierarchy)
 """

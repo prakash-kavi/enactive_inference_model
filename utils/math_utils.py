@@ -16,20 +16,10 @@ def clip_probability(value: Union[float, int, torch.Tensor]) -> float:
     """Clamp scalar-like values to [0, 1]."""
     return float(np.clip(to_float(value), 0.0, 1.0))
 
-def precision_to_weight(precision: Union[float, int, torch.Tensor]) -> float:
-    """Map raw precision (>0) to a bounded weight in [0, 1)."""
-    p = max(0.0, to_float(precision))
-    return float(p / (1.0 + p))
-
 def precision_from_variance(variance: Union[float, int, torch.Tensor], eps: float = EPS) -> float:
     """Precision as inverse variance (act-inf convention)."""
     v = max(0.0, to_float(variance))
     return float(1.0 / (v + eps))
-
-def precision_from_error(error: Union[float, int, torch.Tensor], eps: float = EPS) -> float:
-    """Precision as inverse prediction error (act-inf heuristic)."""
-    e = max(0.0, to_float(error))
-    return float(1.0 / (1.0 + e + eps))
 
 def ema_update(value: Union[float, int, torch.Tensor], mean: float, var: float, beta: float = 0.9) -> tuple[float, float]:
     """Exponential moving mean/variance update."""

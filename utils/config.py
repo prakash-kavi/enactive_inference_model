@@ -77,7 +77,7 @@ DWELL_TIMES = {
     },
     'novice': {
         'breath_focus': (8, 15),
-        'mind_wandering': (15, 35),
+        'mind_wandering': (18, 35),
         'meta_awareness': (5, 10),
         'redirect_attention': (5, 10)
     }
@@ -175,6 +175,7 @@ LEARNING_RATES = {
 
 def get_params(experience_level):
     """Get all parameters for experience level."""
+    # Only learning rate is phenotype-specific in the current configuration.
     params = {"learning_rate": LEARNING_RATES[experience_level]}
     return params
 

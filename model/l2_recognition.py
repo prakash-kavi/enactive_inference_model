@@ -1,7 +1,7 @@
 """Layer 2: Attentional agent with VAE, thoughtseeds, and forward dynamics.
 
 Implements perception-action loop:
-- Perception: Encode L1 networks → thoughtseed activations (recognition model)
+- Perception: Encode L1 networks -> thoughtseed activations (recognition model)
 - Dynamics: Update thoughtseeds via variational inference 
 - Action: Select policy via forward-informed EFE minimization
 - Forward model: Predict sensory consequences of actions (enactive)
@@ -14,7 +14,6 @@ from typing import Dict, Optional
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    NETWORK_PROFILES,
     get_params, get_thoughtseed_priors, get_exit_transition_probs
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
@@ -36,7 +35,7 @@ class MeditationVAE(nn.Module):
     def __init__(self, input_dim=4, latent_dim=5, hidden_dim=32):
         super().__init__()
         
-        # Encoder: Networks → Thoughtseed logits
+        # Encoder: Networks -> Thoughtseed logits
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
@@ -45,7 +44,7 @@ class MeditationVAE(nn.Module):
             nn.Linear(hidden_dim, latent_dim)
         )
         
-        # Decoder: Thoughtseeds → Networks
+        # Decoder: Thoughtseeds -> Networks
         self.decoder = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
             nn.ReLU(),
@@ -55,7 +54,7 @@ class MeditationVAE(nn.Module):
             nn.Sigmoid()
         )
         
-        # Forward model: (Networks, Thoughtseeds) → Next Networks
+        # Forward model: (Networks, Thoughtseeds) -> Next Networks
         self.forward_net = nn.Sequential(
             nn.Linear(input_dim + latent_dim, hidden_dim),
             nn.ReLU(),
@@ -66,12 +65,12 @@ class MeditationVAE(nn.Module):
         )
     
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Networks → Thoughtseed logits."""
+        """Networks -> Thoughtseed logits."""
         logits = self.encoder(x)
         return torch.sigmoid(logits)  # Independent strengths (no softmax)
     
     def decode(self, z: torch.Tensor) -> torch.Tensor:
-        """Thoughtseeds → Networks."""
+        """Thoughtseeds -> Networks."""
         return self.decoder(z)
     
     def predict_next(self, x_t: torch.Tensor, z_t: torch.Tensor) -> torch.Tensor:
@@ -121,7 +120,7 @@ class Layer2Agent(nn.Module):
         
     
     def infer_z_from_x(self) -> torch.Tensor:
-        """Bottom-up inference: encode networks (x) → posterior latent (z) aka thoughtseeds."""
+        """Bottom-up inference: encode networks (x) -> posterior latent (z) aka thoughtseeds."""
         network_acts = self.blanket_l1l2.sensory_states
         device = next(self.vae.parameters()).device
         
@@ -137,7 +136,7 @@ class Layer2Agent(nn.Module):
         return clamp_activation(z, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
     
     def decode_with_state(self, z: torch.Tensor) -> torch.Tensor:
-        """Top-down: Decode thoughtseeds → networks."""
+        """Top-down: Decode thoughtseeds -> networks."""
         if z.dim() == 1:
             z_in = z.unsqueeze(0)
             decoded = self.vae.decode(z_in).squeeze(0)
@@ -254,9 +253,8 @@ class Layer2Agent(nn.Module):
             for candidate_state in candidates:
                 mu_candidate = self.mu_params[candidate_state]
                 x_pred = self.vae.predict_next(x_current, mu_candidate)
-                # Preference profile C for candidate state (exogenous target)
-                pref_profile = NETWORK_PROFILES[candidate_state][self.level]
-                x_pref = networks_to_tensor(pref_profile, NETWORKS, device=x_pred.device)
+                # Preference profile C from generative model (self-consistent target)
+                x_pref = self.decode_with_state(mu_candidate)
                 
                 # Risk + Ambiguity for G(pi) (ActInf standard form)
                 risk = bernoulli_kl(x_pred, x_pref, EPS)
