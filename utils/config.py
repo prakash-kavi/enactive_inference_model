@@ -163,7 +163,6 @@ META_THOUGHTSEED_WEIGHTS = {
 # =============================================================================
 # Active Inference Parameters (Fine-Tuned)
 # =============================================================================
-NOISE_SIGMA = 0.02
 LEARNING_RATES = {
     "novice": 0.01,
     "expert": 0.02,
@@ -178,7 +177,6 @@ FORWARD_LOSS_WEIGHT = 0.5
 def get_params(experience_level):
     """Get all parameters for experience level."""
     params = {"learning_rate": LEARNING_RATES[experience_level]}
-    params['noise_sigma'] = NOISE_SIGMA
     return params
 
 def get_thoughtseed_priors(state): 

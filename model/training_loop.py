@@ -233,7 +233,6 @@ class MeditationTrainer:
         device = next(self.agent.parameters()).device
         priors = get_thoughtseed_priors(current_state)
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
-        activations_np += np.random.normal(0, self.params['noise_sigma'], size=len(activations_np))
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
         activations = torch.clamp(activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
         
