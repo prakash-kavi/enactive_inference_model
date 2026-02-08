@@ -10,6 +10,7 @@ import json
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import copy
 from pathlib import Path
 
@@ -64,7 +65,7 @@ os.makedirs(PLOT_DIR, exist_ok=True)
 
 def set_plot_style():
     """Set a consistent publication-ready style for matplotlib."""
-    plt.style.use("seaborn-v0_8-whitegrid")
+    sns.set_theme(style="whitegrid", context="paper")
     plt.rcParams["font.family"] = "DejaVu Sans"
     plt.rcParams["axes.linewidth"] = 0.5
     plt.rcParams["grid.linewidth"] = 0.5

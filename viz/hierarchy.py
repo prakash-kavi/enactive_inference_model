@@ -6,6 +6,7 @@ Adapted to take data dict instead of loading from file.
 """
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from pathlib import Path
@@ -102,12 +103,9 @@ def plot_hierarchy(data, save_path: str, level_name: str):
         # Extract data for this network
         net_acts = [n[net] for n in data['network_activations_history']]
         
-        # Smooth the data
-        smoothed_acts = np.zeros_like(net_acts)
+        # Smooth the data (EMA)
         alpha = 0.3
-        smoothed_acts[0] = net_acts[0]
-        for j in range(1, len(net_acts)):
-            smoothed_acts[j] = (1 - alpha) * smoothed_acts[j-1] + alpha * net_acts[j]
+        smoothed_acts = pd.Series(net_acts, dtype=float).ewm(alpha=alpha, adjust=False).mean().to_numpy()
         
         ax3.plot(time_steps, smoothed_acts, label=net, color=NETWORK_COLORS[net], linewidth=2)
     
@@ -138,9 +136,9 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     
     # Create a separate legend for state abbreviations below the plot
     state_legend = fig.legend(handles=state_legend_elements, loc='lower center', 
-                            fontsize=10, frameon=False, ncol=4, bbox_to_anchor=(0.5, 0.01))
+                            fontsize=10, frameon=False, ncol=4, bbox_to_anchor=(0.5, 0.02))
     
-    ax3.set_xlabel('Time (seconds)', fontsize=12)
+    ax3.set_xlabel('Time (seconds)', fontsize=12, labelpad=12)
     ax3.set_ylabel('Network Activation', fontsize=12)
     ax3.set_title('Level 1: Network Dynamics', fontsize=14, fontweight='bold')
     ax3.legend(loc='upper right', fontsize=10)
@@ -151,6 +149,6 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     
     fig.suptitle(f'Hierarchical Dynamics ({level_name})', fontsize=16, fontweight='bold')
     
-    plt.tight_layout(rect=[0, 0, 1, 0.99])
+    plt.tight_layout(rect=[0, 0.05, 1, 0.99])
     save_figure(fig, Path(save_path), f"Hierarchy_{level_name}")
     plt.close(fig)

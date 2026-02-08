@@ -26,8 +26,8 @@ class Layer1Process(nn.Module):
     N_SUBSTEPS = 2
     INIT_ACTIVATION = 0.5
     
-    # Experience-dependent noise variance
-    BASE_VARIANCE = {'expert': 0.001, 'novice': 0.005}
+    # Global noise variance (shared across phenotypes)
+    NOISE_LEVEL = 0.004
     
     def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None):
         super().__init__()
@@ -184,7 +184,7 @@ class Layer1Process(nn.Module):
             mu = (1 - bias_strength) * mu + bias_strength * mu_x
         
         # Expertise-dependent noise, modulated by L3 precision via L2
-        base_variance = self.BASE_VARIANCE[self.level]
+        base_variance = self.NOISE_LEVEL
         noise_reduction = active_states.get('noise_reduction', 1.0)
         variance = base_variance * to_float(noise_reduction)  # L3 precision reduces L1 noise
         sigma = np.sqrt(variance)

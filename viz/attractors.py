@@ -1,21 +1,29 @@
 """
 lean_attractors.py
 
-Attractor landscape visualizations - EXACT copy from viz/viz/plot_attractors.py
-Adapted imports for lean_model structure.
+Attractor visualizations using PCA projections.
 """
 
 from __future__ import annotations
+
+import json
+import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
+
+# Allow running as a script: `python viz/attractors.py`
+if __package__ is None or __package__ == "":
+    repo_root = Path(__file__).resolve().parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib import patheffects
-from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.collections import LineCollection
+from sklearn.decomposition import PCA
 
-from utils.config import STATES, THOUGHTSEEDS
+from utils.config import STATES, THOUGHTSEEDS, NETWORKS
 from viz.plotting_utils import (
     STATE_COLORS,
     STATE_SHORT_NAMES,
@@ -23,309 +31,328 @@ from viz.plotting_utils import (
     set_plot_style,
 )
 
-# Use constants
-STATE_SHORT = STATE_SHORT_NAMES
-
-TS_BF = THOUGHTSEEDS.index("attend_breath")
-TS_PT = THOUGHTSEEDS.index("pending_tasks")
-
-
 def _prepare_data(tail_data: dict) -> Dict:
     """Prepare data dict in format expected by plot functions."""
     ts_history = tail_data.get('thoughtseed_activations_history', [])
     activations = np.array(ts_history) if ts_history else np.zeros((0, len(THOUGHTSEEDS)))
+    state_history = tail_data.get('state_history', [])
+
+    net_history = tail_data.get('network_activations_history', [])
+    if net_history:
+        net_acts = np.array(
+            [[row.get(net, 0.0) for net in NETWORKS] for row in net_history],
+            dtype=float,
+        )
+    else:
+        net_acts = np.zeros((0, len(NETWORKS)), dtype=float)
     
     activation_means = tail_data.get('thoughtseed_means_per_state', {})
     activation_means_dict = {}
     for state, ts_array in activation_means.items():
         activation_means_dict[state] = {ts: float(ts_array[i]) for i, ts in enumerate(THOUGHTSEEDS)}
+
+    network_means_dict = {}
+    if net_acts.size and state_history:
+        for state in STATES:
+            idx = [i for i, st in enumerate(state_history) if st == state]
+            if idx:
+                means = net_acts[idx].mean(axis=0)
+                network_means_dict[state] = {
+                    net: float(means[j]) for j, net in enumerate(NETWORKS)
+                }
     
     return {
         "activations": activations,
+        "network_activations": net_acts,
         "free_energy": np.array(tail_data.get('free_energy_history', [])),
-        "states": tail_data.get('state_history', []),
+        "states": state_history,
         "activation_means": activation_means_dict,
+        "network_means": network_means_dict,
     }
 
 
-def _state_centroids(
-    activations: np.ndarray,
+def _fit_pca(X: np.ndarray) -> tuple[PCA | None, np.ndarray]:
+    if X.size == 0 or X.shape[0] < 2:
+        return None, np.zeros(2, dtype=float)
+    n_components = min(2, X.shape[1])
+    pca = PCA(n_components=n_components)
+    pca.fit(X)
+    var_ratio = pca.explained_variance_ratio_
+    if var_ratio.size < 2:
+        var_ratio = np.pad(var_ratio, (0, 2 - var_ratio.size))
+    return pca, var_ratio[:2]
+
+
+def _project_pca(X: np.ndarray, pca: PCA | None) -> np.ndarray:
+    if X.size == 0 or pca is None:
+        return np.zeros((0, 2), dtype=float)
+    proj = pca.transform(X)
+    if proj.shape[1] == 1:
+        proj = np.column_stack([proj, np.zeros(proj.shape[0], dtype=float)])
+    return proj
+
+
+def _state_centroids_pca(
+    projected: np.ndarray,
     states: List[str],
-    means_by_state: Dict[str, Dict[str, float]],
-    axis_indices: Tuple[int, int],
-    axis_labels: Tuple[str, str],
+    means_by_state: Dict[str, Dict[str, float]] | None,
+    feature_names: List[str],
+    pca: PCA | None,
 ) -> Dict[str, np.ndarray]:
     centroids: Dict[str, np.ndarray] = {}
-    x_idx, y_idx = axis_indices
-    x_label, y_label = axis_labels
+    if pca is None:
+        return centroids
+    mean = pca.mean_
+    comps = pca.components_
+    if comps.shape[0] == 1:
+        comps = np.vstack([comps, np.zeros_like(comps)])
     for state in STATES:
         idx = [i for i, st in enumerate(states) if st == state]
         if idx:
-            subset = activations[idx][:, [x_idx, y_idx]]
-            centroids[state] = subset.mean(axis=0)
-        elif state in means_by_state:
-            means = means_by_state[state]
-            centroids[state] = np.array([
-                float(means.get(x_label, 0.5)),
-                float(means.get(y_label, 0.5)),
-            ])
+            centroids[state] = projected[idx].mean(axis=0)
+        elif means_by_state and state in means_by_state:
+            vec = np.array([float(means_by_state[state].get(f, 0.5)) for f in feature_names])
+            centroids[state] = (vec - mean) @ comps.T
     return centroids
 
 
-def _smooth_path(series: np.ndarray, kernel: np.ndarray | None = None) -> np.ndarray:
-    if series.size < 3:
-        return series.copy()
-    if kernel is None:
-        kernel = np.array([0.2, 0.6, 0.2], dtype=float)
-    kernel = kernel / kernel.sum()
-    pad = len(kernel) // 2
-    padded = np.pad(series, pad_width=pad, mode="edge")
-    smoothed = np.convolve(padded, kernel, mode="valid")
-    return smoothed.astype(float)
+def _plot_pca_pair(
+    axes: tuple[plt.Axes, plt.Axes],
+    novice: Dict[str, np.ndarray],
+    expert: Dict[str, np.ndarray],
+    feature_key: str,
+    means_key: str,
+    feature_names: List[str],
+    row_title: str,
+    cmap: LinearSegmentedColormap,
+    norm: mpl.colors.Normalize,
+) -> None:
+    all_acts = np.concatenate([novice[feature_key], expert[feature_key]], axis=0)
+    pca, var_ratio = _fit_pca(all_acts)
+    nov_proj = _project_pca(novice[feature_key], pca)
+    exp_proj = _project_pca(expert[feature_key], pca)
 
-
-def _kernel_surface(
-    x: np.ndarray,
-    y: np.ndarray,
-    z: np.ndarray,
-    grid_x: np.ndarray,
-    grid_y: np.ndarray,
-    bandwidth: float = 0.12,
-    max_samples: int = 1200,
-) -> np.ndarray:
-    if z.size == 0:
-        return np.full_like(grid_x, np.nan, dtype=float)
-
-    step = max(1, z.size // max_samples)
-    xs = x[::step][:, None]
-    ys = y[::step][:, None]
-    zs = z[::step][:, None]
-
-    coords = np.stack((grid_x.ravel(), grid_y.ravel()), axis=1)
-    dx2 = (coords[:, 0:1] - xs.T) ** 2
-    dy2 = (coords[:, 1:2] - ys.T) ** 2
-    dist2 = dx2 + dy2
-
-    denom = 2.0 * max(1e-6, bandwidth**2)
-    weights = np.exp(-dist2 / denom)
-    weighted = weights @ zs
-    normaliser = weights.sum(axis=1, keepdims=True) + 1e-12
-    surface = (weighted / normaliser).reshape(grid_x.shape)
-    z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))
-    return np.clip(surface, z_min, z_max)
-
-
-def plot_attractor_2d(novice_data: dict, expert_data: dict, save_path: str):
-    """Figure 5A: 2D Attractor Landscape """
-    novice = _prepare_data(novice_data)
-    expert = _prepare_data(expert_data)
-    
-    axis_indices = (TS_BF, TS_PT)
-    axis_labels = ("attend_breath", "pending_tasks")
-    axis_titles = ("Attend Breath activation", "Pending Tasks activation")
-    
-    set_plot_style()
-
-    nov_fe = novice["free_energy"]
-    exp_fe = expert["free_energy"]
-    
-    all_fe = np.concatenate([nov_fe, exp_fe])
-    fe_min, fe_max = all_fe.min(), all_fe.max()
-    fe_range = fe_max - fe_min + 1e-10
-
-    cmap = LinearSegmentedColormap.from_list(
-        "fe_gradient", ["#0072B2", "#009E73", "#D55E00"]
+    axis_titles = (
+        f"PC1 ({var_ratio[0]*100:.1f}%)",
+        f"PC2 ({var_ratio[1]*100:.1f}%)",
     )
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
 
-    for ax, cohort_data, title in zip(axes, (novice, expert), ("Novice", "Expert")):
-        acts = cohort_data["activations"]
+    for ax, cohort_data, proj, title in zip(
+        axes, (novice, expert), (nov_proj, exp_proj), ("Novice", "Expert")
+    ):
         fe = cohort_data["free_energy"]
         states = cohort_data["states"]
-        means = cohort_data["activation_means"]
+        means = cohort_data[means_key]
 
-        x = acts[:, axis_indices[0]]
-        y = acts[:, axis_indices[1]]
-
-        x_smooth = _smooth_path(x)
-        y_smooth = _smooth_path(y)
+        x = proj[:, 0] if proj.size else np.zeros(0, dtype=float)
+        y = proj[:, 1] if proj.size else np.zeros(0, dtype=float)
 
         if fe.size:
-            fe_norm = (fe - fe_min) / fe_range
+            n = min(len(x), len(fe))
+            x = x[:n]
+            y = y[:n]
+            fe_vals = np.asarray(fe[:n], dtype=float)
         else:
-            fe_norm = np.zeros_like(x)
+            fe_vals = np.zeros_like(x, dtype=float)
 
-        for i in range(len(x) - 1):
-            ax.plot(
-                x_smooth[i : i + 2],
-                y_smooth[i : i + 2],
-                color=cmap(fe_norm[i]),
-                linewidth=1.6,
-                alpha=0.9,
-            )
+        if len(x) > 1:
+            max_points = 1200
+            step = max(1, len(x) // max_points)
+            x_s = x[::step]
+            y_s = y[::step]
+            fe_s = fe_vals[::step]
 
-        centroids = _state_centroids(acts, states, means, axis_indices, axis_labels)
+            points = np.column_stack([x_s, y_s])
+            if len(points) > 1:
+                segments = np.stack([points[:-1], points[1:]], axis=1)
+                lc = LineCollection(segments, cmap=cmap, norm=norm)
+                lc.set_array(fe_s[:-1])
+                lc.set_linewidth(1.0)
+                lc.set_alpha(0.35)
+                ax.add_collection(lc)
+
+
+        centroids = _state_centroids_pca(
+            proj, states, means, feature_names, pca
+        )
         for state, centre in centroids.items():
             ax.text(
                 centre[0],
                 centre[1],
-                STATE_SHORT.get(state, state),
+                STATE_SHORT_NAMES.get(state, state),
                 color=STATE_COLORS.get(state, "#000000"),
-                fontsize=12,
+                fontsize=11,
                 fontweight="bold",
                 ha="center",
                 va="center",
                 bbox=dict(facecolor="white", alpha=0.65, edgecolor="none", pad=2),
             )
 
-        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.set_title(title, fontsize=12, fontweight="bold")
         ax.set_xlabel(axis_titles[0], fontweight="bold")
-        ax.set_xlim(0.0, 1.0)
-        ax.set_ylim(0.0, 1.0)
         ax.grid(False)
+        ax.margins(0.05)
+        ax.set_aspect("equal", adjustable="box")
 
     axes[0].set_ylabel(axis_titles[1], fontweight="bold")
+    axes[0].text(
+        -0.18,
+        0.5,
+        row_title,
+        transform=axes[0].transAxes,
+        rotation=90,
+        va="center",
+        ha="center",
+        fontsize=12,
+        fontweight="bold",
+    )
 
-    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.32, top=0.9, wspace=0.12)
 
-    cbar_ax = fig.add_axes([0.12, 0.1, 0.76, 0.03])
-    sm = mpl.cm.ScalarMappable(cmap=cmap)
+def plot_attractor_pca(
+    novice_data: dict,
+    expert_data: dict,
+    save_path: str,
+    show: bool = False,
+):
+    """Figure 5: Stacked PCA trajectories (Thoughtseeds + Networks)."""
+    novice = _prepare_data(novice_data)
+    expert = _prepare_data(expert_data)
+
+    set_plot_style()
+
+    cmap = LinearSegmentedColormap.from_list(
+        "fe_gradient", ["#0072B2", "#009E73", "#D55E00"]
+    )
+    fe_all = np.concatenate(
+        [
+            novice["free_energy"],
+            expert["free_energy"],
+        ]
+    )
+    if fe_all.size:
+        fe_min, fe_max = float(fe_all.min()), float(fe_all.max())
+        if abs(fe_max - fe_min) < 1e-9:
+            fe_max = fe_min + 1e-6
+    else:
+        fe_min, fe_max = 0.0, 1.0
+    norm = mpl.colors.PowerNorm(gamma=0.2, vmin=fe_min, vmax=fe_max)
+
+    fig = plt.figure(figsize=(12, 9))
+    gs = fig.add_gridspec(2, 2, hspace=0.35, wspace=0.15)
+
+    ax_ts_left = fig.add_subplot(gs[0, 0])
+    ax_ts_right = fig.add_subplot(gs[0, 1], sharex=ax_ts_left, sharey=ax_ts_left)
+    ax_net_left = fig.add_subplot(gs[1, 0])
+    ax_net_right = fig.add_subplot(gs[1, 1], sharex=ax_net_left, sharey=ax_net_left)
+
+    _plot_pca_pair(
+        (ax_ts_left, ax_ts_right),
+        novice,
+        expert,
+        "activations",
+        "activation_means",
+        THOUGHTSEEDS,
+        "L2 Thoughtseeds",
+        cmap,
+        norm,
+    )
+    _plot_pca_pair(
+        (ax_net_left, ax_net_right),
+        novice,
+        expert,
+        "network_activations",
+        "network_means",
+        NETWORKS,
+        "L1 Networks",
+        cmap,
+        norm,
+    )
+
+    cbar_ax = fig.add_axes([0.12, 0.06, 0.76, 0.02])
+    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
     cbar = fig.colorbar(sm, cax=cbar_ax, orientation="horizontal")
     cbar.set_label("Normalized Free Energy", fontweight="bold")
-    cbar.set_ticks([0, 0.5, 1])
+    mid = (fe_min + fe_max) / 2.0
+    cbar.set_ticks([fe_min, mid, fe_max])
     cbar.set_ticklabels(["Low", "Medium", "High"])
     for tick in cbar.ax.get_xticklabels():
         tick.set_fontweight("bold")
 
-    fig.suptitle("Thoughtseed Attractor Trajectories", fontsize=16, fontweight="bold")
+    fig.suptitle("PCA Trajectories Across the Hierarchy", fontsize=16, fontweight="bold")
 
-    save_figure(fig, Path(save_path), "Attractor 2D")
-    plt.close(fig)
+    save_figure(fig, Path(save_path), "Fig5 PCA")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
-def plot_attractor_3d(novice_data: dict, expert_data: dict, save_path: str):
-    """Figure 5B: 3D Free Energy Landscape - EXACT COPY from viz/viz/plot_attractors.py"""
-    novice = _prepare_data(novice_data)
-    expert = _prepare_data(expert_data)
-    
-    axis_indices = (TS_BF, TS_PT)
-    axis_labels = ("attend_breath", "pending_tasks")
-    axis_titles = ("Attend Breath activation", "Pending Tasks activation")
-    bandwidth = 0.12
-    
-    set_plot_style()
+def _load_results(data_dir: Path, cohort: str, seed: int) -> dict:
+    path = data_dir / f"training_results_{cohort}_seed{seed}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Missing results file: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
 
-    xg = np.linspace(0.0, 1.0, 120)
-    yg = np.linspace(0.0, 1.0, 120)
-    grid_x, grid_y = np.meshgrid(xg, yg)
 
-    def _prepare_surface(data: Dict[str, np.ndarray]) -> tuple:
-        acts = data["activations"]
-        fe = data["free_energy"]
-        x = acts[:, axis_indices[0]]
-        y = acts[:, axis_indices[1]]
-        return x, y, fe
+if __name__ == "__main__":
+    import argparse
+    import json
 
-    nov_x, nov_y, nov_fe = _prepare_surface(novice)
-    exp_x, exp_y, exp_fe = _prepare_surface(expert)
+    from utils.analysis_utils import (
+        TAIL_STEPS,
+        get_tail_window,
+        compute_network_profiles,
+        compute_thoughtseed_means,
+        compute_tail_statistics,
+    )
 
-    all_fe = np.concatenate([nov_fe, exp_fe])
-    fe_min, fe_max = all_fe.min(), all_fe.max()
-    fe_range = fe_max - fe_min + 1e-10
+    parser = argparse.ArgumentParser(description="Generate Fig5 PCA trajectories.")
+    parser.add_argument("--seed", type=int, default=42, help="Seed used in results filenames.")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=str(Path(__file__).resolve().parent.parent / "data"),
+        help="Directory containing training_results_*.json files.",
+    )
+    parser.add_argument(
+        "--plot-path",
+        type=str,
+        default=str(Path(__file__).resolve().parent.parent / "plots" / "Fig5_PCA_Trajectories.png"),
+        help="Output path for Fig5 PCA plot.",
+    )
+    parser.add_argument(
+        "--tail-steps",
+        type=int,
+        default=TAIL_STEPS,
+        help="Tail window length for trajectories.",
+    )
+    parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Display the plot window after saving.",
+    )
+    args = parser.parse_args()
 
-    nov_fe_norm = (nov_fe - fe_min) / fe_range
-    exp_fe_norm = (exp_fe - fe_min) / fe_range
+    data_dir = Path(args.data_dir)
+    expert_results = _load_results(data_dir, "expert", args.seed)
+    novice_results = _load_results(data_dir, "novice", args.seed)
 
-    nov_surface = _kernel_surface(nov_x, nov_y, nov_fe_norm, grid_x, grid_y, bandwidth)
-    exp_surface = _kernel_surface(exp_x, exp_y, exp_fe_norm, grid_x, grid_y, bandwidth)
+    expert_tail = get_tail_window(expert_results, args.tail_steps)
+    novice_tail = get_tail_window(novice_results, args.tail_steps)
 
-    z_min, z_max = 0.0, 1.0
+    expert_network_profiles = compute_network_profiles(expert_results, STATES, NETWORKS, args.tail_steps)
+    novice_network_profiles = compute_network_profiles(novice_results, STATES, NETWORKS, args.tail_steps)
+    expert_ts_means = compute_thoughtseed_means(expert_results, STATES, THOUGHTSEEDS, args.tail_steps)
+    novice_ts_means = compute_thoughtseed_means(novice_results, STATES, THOUGHTSEEDS, args.tail_steps)
+    expert_tail_stats = compute_tail_statistics(expert_results, STATES, args.tail_steps)
+    novice_tail_stats = compute_tail_statistics(novice_results, STATES, args.tail_steps)
 
-    fig = plt.figure(figsize=(14, 6.2), constrained_layout=True)
-    gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 0.04])
-    ax_left = fig.add_subplot(gs[0, 0], projection="3d")
-    ax_right = fig.add_subplot(gs[0, 1], projection="3d")
-    cax = fig.add_subplot(gs[0, 2])
+    expert_tail["network_profiles_mean"] = expert_network_profiles
+    novice_tail["network_profiles_mean"] = novice_network_profiles
+    expert_tail["thoughtseed_means_per_state"] = expert_ts_means
+    novice_tail["thoughtseed_means_per_state"] = novice_ts_means
+    expert_tail.update(expert_tail_stats)
+    novice_tail.update(novice_tail_stats)
 
-    for ax in (ax_left, ax_right):
-        ax.set_xlim(0.0, 1.0)
-        ax.set_ylim(0.0, 1.0)
-        ax.set_zlim(z_min, z_max)
-        ax.view_init(elev=22, azim=140)
-        ax.set_box_aspect((1, 1, 0.6))
-        ax.set_xlabel(axis_titles[0], labelpad=8, fontweight="bold")
-        ax.set_ylabel(axis_titles[1], labelpad=8, fontweight="bold")
-        ax.set_zlabel("Normalized Free Energy", labelpad=8, fontweight="bold")
-        ax.grid(False)
-        ax.set_zticks([])
-
-    cmap = plt.get_cmap("viridis")
-    norm = mpl.colors.Normalize(vmin=z_min, vmax=z_max)
-    ax_left.plot_surface(grid_x, grid_y, nov_surface, cmap=cmap, vmin=z_min, vmax=z_max, linewidth=0, antialiased=True, alpha=0.65)
-    ax_right.plot_surface(grid_x, grid_y, exp_surface, cmap=cmap, vmin=z_min, vmax=z_max, linewidth=0, antialiased=True, alpha=0.65)
-
-    levels = np.linspace(z_min, z_max, 8)
-    ax_left.contour(grid_x, grid_y, nov_surface, levels=levels, colors="k", linestyles="--", offset=z_min, alpha=0.4)
-    ax_right.contour(grid_x, grid_y, exp_surface, levels=levels, colors="k", linestyles="--", offset=z_min, alpha=0.4)
-
-    for ax, data, title in (
-        (ax_left, novice, "Novice"),
-        (ax_right, expert, "Expert"),
-    ):
-        centroids = _state_centroids(
-            data["activations"],
-            data["states"],
-            data["activation_means"],
-            axis_indices=axis_indices,
-            axis_labels=axis_labels,
-        )
-        surface = nov_surface if title == "Novice" else exp_surface
-        for state, centre in centroids.items():
-            xi = int(np.abs(xg - centre[0]).argmin())
-            yi = int(np.abs(yg - centre[1]).argmin())
-            try:
-                z_val = float(surface[yi, xi])
-            except Exception:
-                z_val = float(z_min)
-
-            z_plot = min(0.98, z_val + 0.02)
-
-            cmap_rgba = cmap(norm(z_val))
-            r, g, b = cmap_rgba[0], cmap_rgba[1], cmap_rgba[2]
-            luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-            if luminance < 0.5:
-                text_color = "#FFFFFF"
-            else:
-                text_color = "#003366"
-
-            txt = ax.text(
-                centre[0],
-                centre[1],
-                z_plot + 0.01,
-                STATE_SHORT.get(state, state),
-                color=text_color,
-                fontsize=11,
-                fontweight="bold",
-                ha="center",
-                va="center",
-            )
-            txt.set_path_effects([
-                patheffects.Stroke(linewidth=3, foreground="#000000" if text_color=="#FFFFFF" else "white"),
-                patheffects.Normal()
-            ])
-        ax.set_title(title, fontsize=13, fontweight="bold")
-
-    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, cax=cax, shrink=0.45, aspect=16)
-    cbar.set_label("Normalized Free Energy", fontweight="bold")
-    cbar.set_ticks([0, 0.5, 1])
-    cbar.set_ticklabels(["Low", "Medium", "High"])
-    cbar.ax.tick_params(labelsize=9)
-
-    fig.suptitle("Free-energy Landscape over Thoughtseed Phase Space", fontsize=16, fontweight="bold")
-
-    save_figure(fig, Path(save_path), "Attractor 3D")
-    plt.close(fig)
+    plot_attractor_pca(novice_tail, expert_tail, args.plot_path, show=args.show)

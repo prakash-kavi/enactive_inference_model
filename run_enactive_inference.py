@@ -12,7 +12,6 @@ from pathlib import Path
 
 from model.training_loop import train_meditation
 from viz.analysis import (
-    plot_belief_about_belief,
     print_summary
 )
 
@@ -30,7 +29,7 @@ from utils.config import STATES, NETWORKS, THOUGHTSEEDS
 from viz.convergence import plot_convergence
 from viz.radar_plot import plot_comparison
 from viz.hierarchy import plot_hierarchy
-from viz.attractors import plot_attractor_2d, plot_attractor_3d
+from viz.attractors import plot_attractor_pca
 from viz.diagnostics import plot_fe_and_dwell, plot_transitions
 
 # Fixed configuration for reproducibility
@@ -142,12 +141,10 @@ def generate_plots(expert_results, novice_results):
     print("  • Fig4B_Hierarchy_Expert.png")
     plot_hierarchy(expert_tail, str(PLOT_DIR / "Fig4B_Hierarchy_Expert.png"), "Expert")
     
-    # Fig5: Attractor plots (2D projection + 3D landscape from tail)
-    print("  • Fig5A_Attractor2D.png")
-    plot_attractor_2d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5A_Attractor2D.png"))
-    
-    print("  • Fig5B_Attractor3D.png")
-    plot_attractor_3d(novice_tail, expert_tail, str(PLOT_DIR / "Fig5B_Attractor3D.png"))
+    # Fig5: PCA trajectories (thoughtseeds + networks)
+    print("  • Fig5_PCA_Trajectories.png")
+    plot_attractor_pca(novice_tail, expert_tail, str(PLOT_DIR / "Fig5_PCA_Trajectories.png"))
+
     
     # ===== Diagnostic plots =====
     print("\n--- Diagnostic Plots ---")
@@ -157,8 +154,6 @@ def generate_plots(expert_results, novice_results):
     print("  • Fig3C_Transitions.png")
     plot_transitions(novice_tail, expert_tail, str(PLOT_DIR / "Fig3C_Transitions.png"))
     
-    print("  • Fig3D_MetaAwareness_Opacity.png")
-    plot_belief_about_belief(novice_results, expert_results, str(PLOT_DIR / "Fig3D_MetaAwareness_Opacity.png"))
     
     print("\n" + "="*70)
     print("PLOTTING COMPLETE")
@@ -169,11 +164,9 @@ def generate_plots(expert_results, novice_results):
     print(f"  - Fig3A_Network_Radar.png")
     print(f"  - Fig3B_FE_and_Dwell.png")
     print(f"  - Fig3C_Transitions.png")
-    print(f"  - Fig3D_MetaAwareness_Opacity.png")
     print(f"  - Fig4A_Hierarchy_Novice.png")
     print(f"  - Fig4B_Hierarchy_Expert.png")
-    print(f"  - Fig5A_Attractor2D.png")
-    print(f"  - Fig5B_Attractor3D.png")
+    print(f"  - Fig5_PCA_Trajectories.png")
     print()
 
 

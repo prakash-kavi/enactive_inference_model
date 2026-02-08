@@ -1,4 +1,7 @@
 numpy>=1.25
 matplotlib>=3.8
 torch>=1.13
+scikit-learn>=1.4
+pandas>=2.2
+seaborn>=0.13
 # Requires Python >=3.9

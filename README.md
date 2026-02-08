@@ -122,15 +122,13 @@ Generated in `plots/`:
 - `Fig3A_Network_Radar.png` - Network profiles across states (Expert vs Novice)
 - `Fig3B_FE_and_Dwell.png` - Free energy and dwell times per state
 - `Fig3C_Transitions.png` - State transition probability matrices
-- `Fig3D_MetaAwareness_Opacity.png` - L3 meta-awareness + opacity & L2 free energy evolution
 
 **Dynamics:**
 - `Fig4A_Hierarchy_Novice.png` - 3-layer hierarchical dynamics over time
 - `Fig4B_Hierarchy_Expert.png`
 
 **State Space:**
-- `Fig5A_Attractor2D.png` - 2D thoughtseed trajectory (Novice vs Expert)
-- `Fig5B_Attractor3D.png` - 3D free energy landscape
+- `Fig5_PCA_Trajectories.png` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
 
 ---
 
@@ -260,7 +258,7 @@ Continuous-time dynamics:
 dx = -Theta(s) (x - mu_x(s)) dt + sigma_s dW
 ```
 Discrete integration (Euler with substeps) uses state-specific coupling `Theta(s)` and noise
-`sigma_s = sqrt(BASE_VARIANCE[level])`.
+`sigma_s = sqrt(NOISE_LEVEL)`.
 
 ### L2: Recognition + Variational Inference
 Encoder (recognition): `q(z|x)`  
@@ -292,7 +290,7 @@ epsilon = mean((x_t - x_pred)^2)
 
 Sensory precision is derived from prediction error and L1 noise floor:
 ```
-precision = 1 / (epsilon + BASE_VARIANCE[level] + eps)
+precision = 1 / (epsilon + NOISE_LEVEL + eps)
 precision_sensory = precision / (1 + precision)   # bounded weight
 ```
 
@@ -341,7 +339,7 @@ Preferences in policy evaluation use the same state-conditioned attractors as ta
 
 **Noise model**
 ```
-sigma_s^2 = BASE_VARIANCE[level]
+sigma_s^2 = NOISE_LEVEL
 ```
 Expert/novice phenotypes differ in baseline process noise.
 

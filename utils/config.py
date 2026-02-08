@@ -77,7 +77,7 @@ DWELL_TIMES = {
     },
     'novice': {
         'breath_focus': (8, 15),
-        'mind_wandering': (20, 35),
+        'mind_wandering': (15, 35),
         'meta_awareness': (5, 10),
         'redirect_attention': (5, 10)
     }

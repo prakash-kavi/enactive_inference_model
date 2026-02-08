@@ -10,6 +10,7 @@ Generates FigS1_Convergence_{Expert/Novice}.png:
 """
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Dict, List
@@ -30,10 +31,8 @@ def rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
         return np.array([])
     if window <= 1 or arr.size < window:
         return np.full(arr.shape, np.nan, dtype=float)
-    cumsum = np.cumsum(np.insert(arr, 0, 0.0))
-    means = (cumsum[window:] - cumsum[:-window]) / window
-    pad = np.full(window - 1, np.nan)
-    return np.concatenate([pad, means])
+    series = pd.Series(arr, dtype=float)
+    return series.rolling(window=window, min_periods=window).mean().to_numpy()
 
 
 def rolling_std(arr: np.ndarray, window: int) -> np.ndarray:
@@ -42,11 +41,8 @@ def rolling_std(arr: np.ndarray, window: int) -> np.ndarray:
         return np.array([])
     if window <= 1 or arr.size < window:
         return np.full(arr.shape, np.nan, dtype=float)
-    mean = rolling_mean(arr, window)
-    squared = rolling_mean(arr ** 2, window)
-    variance = squared - mean ** 2
-    variance = np.clip(variance, 0.0, None)
-    return np.sqrt(variance)
+    series = pd.Series(arr, dtype=float)
+    return series.rolling(window=window, min_periods=window).std(ddof=0).to_numpy()
 
 
 def cumulative_state_fraction(states: List[str]) -> Dict[str, np.ndarray]:

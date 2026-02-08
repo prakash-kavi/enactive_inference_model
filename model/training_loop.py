@@ -103,7 +103,7 @@ class MeditationTrainer:
             )
             forward_prediction_error = torch.mean((x_current.detach() - x_pred) ** 2)
             forward_prediction_error_val = forward_prediction_error.item()
-            base_variance = float(self.process.BASE_VARIANCE[self.level])
+            base_variance = float(self.process.NOISE_LEVEL)
             precision_sensory = base_variance / (base_variance + forward_prediction_error_val + EPS)
             self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
 
