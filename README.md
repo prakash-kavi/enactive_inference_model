@@ -20,7 +20,7 @@
 | - Compresses neural dynamics into 5 thoughtseeds             |
 | - VAE encoder/decoder + forward dynamics model               |
 | - Policy posterior q(pi) via softmax of G(pi)                |
-| - Policy precision from entropy(q_pi); opacity from precision|
+| - Policy precision from entropy(q_pi)|
 | - Sensory precision from forward prediction error            |
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
@@ -163,7 +163,7 @@ Backpropagation Through Time optimizes:
 - **Physiology:** Stronger FPN activation, longer BF dwell times.
 
 **Novice:**
-- **Frozen Encoder:** Lacks "Amortized Inference" (relies on slow, effortful VFE minimization).
+- **Weak Amortized Inference:** Learns more slowly due to lower learning rate, so recognition is less reliable.
 - **Universal Priors:** Holds the same goal (Focus) but lacks the intuition to recognize it.
 - **Physiology:** DMN-dominant profile, shorter BF dwell times.
 
@@ -209,140 +209,109 @@ Backpropagation Through Time optimizes:
 
 ## Technical Details
 
-### Layer 1: Generative Process
-Multivariate Ornstein-Uhlenbeck (MVOU) process:
-```
-dx = Theta(s) * [mu(s) - x] dt + sigma(s) dW
-```
-- State-dependent coupling matrices Theta(s)
-- State-specific attractors mu(s)
-- Gaussian noise sigma(s)
-
-### Layer 2: Thoughtseed Dynamics
-VAE architecture:
-- **Encoder**: Networks -> Thoughtseeds (4 -> 5 latent dims)
-- **Decoder**: Thoughtseeds -> Networks (reconstruction)
-- **Forward Model**: Predicts next networks given (x, z)
-
-Free Energy (VFE used for reporting):
-```
-F = Reconstruction_Error + KL_Divergence
-```
-Training loss additionally includes forward prediction error, and expert-only recognition loss.
-
-### Layer 3: Policy Precision + Policy Posterior
-Policy posterior uses softmax over G(pi):
-```
-q(pi) = softmax( log E(pi) - gamma * G(pi) )
-```
-First-pass G(pi) uses risk against preferred outcomes C:
-```
-G(pi) = D_KL( x_pred || C )
-```
-Policy precision gamma is derived from policy posterior entropy (q_pi).
-Sensory precision is derived from forward prediction error with a noise floor.
-
----
-
-## Mathematical Model (Methods-ready)
-
 ### Notation
-- Networks (L1): `x ∈ R^4` for {DMN, VAN, DAN, FPN}
-- Thoughtseeds (L2): `z ∈ [0,1]^5`
-- Meditation state: `s ∈ {BF, MW, MA, RA}`
-- State-dependent priors: `mu_z(s)` for thoughtseeds, `mu_x(s)` for networks
+- `x in R^4`: L1 network activations ordered {DMN, VAN, DAN, FPN}
+- `z in [0,1]^5`: L2 thoughtseed activations
+- `s in {BF, MW, MA, RA}`: meditation state
+- `mu_x(s)`, `mu_z(s)`: state-conditioned network and thoughtseed priors
+- `Theta(s)`: state-conditioned coupling matrix
+- `NOISE_LEVEL`: L1 process noise variance
 
-### L1: Generative Process (MVOU)
+### Layer 1: Generative Process (MVOU)
 Continuous-time dynamics:
 ```
-dx = -Theta(s) (x - mu_x(s)) dt + sigma_s dW
+dx = -Theta(s) (x - mu_x(s)) dt + sigma dW
 ```
-Discrete integration (Euler with substeps) uses state-specific coupling `Theta(s)` and noise
-`sigma_s = sqrt(NOISE_LEVEL)`.
+with `sigma^2 = NOISE_LEVEL`. Euler integration is used with state-specific `Theta(s)`.
 
-### L2: Recognition + Variational Inference
-Encoder (recognition): `q(z|x)`  
-Decoder (generative): `p(x|z)`
+### Layer 2: Recognition + Variational Inference (VAE)
+VAE components:
+- **Encoder**: `q(z|x)` (networks -> thoughtseeds)
+- **Decoder**: `p(x|z)` (reconstruction)
+- **Forward model**: `f(x, z)` predicts next networks
 
-Per-step VFE used in training:
+Per-step VFE:
 ```
-F(z) = ||decode(z) - x||^2 + D_KL(z || mu_z(s))
-```
-
-Fixed-step VI update (2 steps) optimizes:
-```
-L(z) = ||decode(z) - x||^2
-     + precision * D_KL(z || mu_z(s))
-     + (1 - precision) * ||z - z_rec||^2
-     + precision * ||z - z_prev||^2
-```
-where `precision = precision_sensory` from L3/L2.
-
-### Forward Model + Prediction Error
-Forward model predicts next networks:
-```
-x_pred = f(x_t, z_t)
-```
-Forward prediction error:
-```
-epsilon = mean((x_t - x_pred)^2)
+F(z) = MSE(decode(z), x) + KL_Bernoulli(z || mu_z(s))
 ```
 
-Sensory precision is derived from prediction error and L1 noise floor:
+Fixed-step VI (2 steps, lr=0.2) optimizes:
 ```
-precision = 1 / (epsilon + NOISE_LEVEL + eps)
-precision_sensory = precision / (1 + precision)   # bounded weight
+L(z) = recon_loss + KL
+     + precision_w * MSE(z, z_rec)
+     + (1 - precision_w) * MSE(z, z_prev)
 ```
+Initialization:
+```
+z_init = 0.5 * z_prev + 0.5 * z_rec
+z_init = precision_w * z_init + (1 - precision_w) * mu_z(s)
+```
+where `precision_w = clip(precision_sensory)` in [0, 1].
+
+### Sensory Precision (from prediction error)
+Forward prediction:
+```
+x_pred = f(x_{t-1}, a_{t-1})
+epsilon_fwd = mean((x_t - x_pred)^2)
+```
+Precision update:
+```
+precision_sensory = NOISE_LEVEL / (NOISE_LEVEL + epsilon_fwd + eps)
+```
+
+### Layer 3: Meta-Awareness
+Meta-awareness is a weighted sum of thoughtseeds:
+```
+meta = sum_i w_i z_i / sum_i w_i
+```
+clipped to [0, 1], with state-dependent weights.
 
 ### Policy Inference (L2)
-Expected free energy (risk-only):
+Candidate policies: stay in `s` or transition to each other state.
+Hazard from dwell:
 ```
-G(pi) = D_KL(x_pred || C_s)
+h = clip(dwell_progress^2)
+```
+Policy prior:
+```
+E(stay) = 1 - h
+E(s') = h * P(s' | s)
+```
+Expected free energy:
+```
+G(pi) = KL_Bernoulli(x_pred || C_s) + H(x_pred)
 ```
 Policy posterior:
 ```
 q(pi) = softmax(log E(pi) - gamma * G(pi))
 ```
-
-Policy precision from policy posterior entropy:
+Policy precision:
 ```
 gamma = 1 - H(q(pi)) / log(N_pi)
 ```
-Opacity (global metacognitive gain) is set to `gamma` and logged in Fig3D.
+Action target:
+```
+mu = sum_pi q(pi) * mu_z(s_pi)
+mu = (1 - h) * mu_current + h * mu
+mu_x = decode(mu)
+```
 
 ### Learning Objective
-Training loss (expert):
+Auto-balanced forward weight:
 ```
-L_total = F(z) + w_fwd * epsilon + ||encode(x) - z||^2
+w_fwd = sum_t F_t / (sum_t epsilon_fwd + eps)
 ```
-Novice: encoder frozen; recognition loss is omitted.
+Total loss:
+```
+L_total = F + w_fwd * epsilon_fwd + alpha_rec * L_rec
+```
+where `L_rec = MSE(encode(x), z*)`. Experts use `alpha_rec = 1`. Novices use a weak
+weight tied to learning rate: `alpha_rec = lr_novice / lr_expert`.
 
-### Model Components (Act-Inf Form)
-**State priors and transitions**
-```
-P(s_{t+1} | s_t) = E(s_{t+1} | s_t)   # state transition prior
-```
-Candidate policies correspond to admissible next states; the policy prior `E(pi)` is
-induced by transition probabilities over states.
+### Training Loop
+BPTT windows of 50 steps; gradients accumulated per window.
 
-**Thoughtseed priors**
-```
-p(z | s) ~ Bernoulli(mu_z(s))
-```
-State-conditioned thoughtseed priors define the structural content landscape.
-
-**Network priors / preferences**
-```
-p(x | s) ~ Bernoulli(mu_x(s))   and   C_s := mu_x(s)
-```
-Preferences in policy evaluation use the same state-conditioned attractors as targets.
-
-**Noise model**
-```
-sigma_s^2 = NOISE_LEVEL
-```
-Expert/novice phenotypes differ in baseline process noise.
-
+---
 
 ## Configuration
 
@@ -350,8 +319,8 @@ Edit `config.py` to modify:
 - Network/state parameters (Theta matrices, mu attractors)
 - Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
 - Learning rates (0.01 - 0.02)
-- Noise sigma
-- Expertise levels (phenotypes defined by encoder plasticity)
+- Process noise (NOISE_LEVEL)
+- Phenotype differences (learning rate + expert-only recognition loss)
 
 ---
 

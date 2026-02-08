@@ -115,8 +115,8 @@ THOUGHTSEED_STATE_PRIORS = {
     "mind_wandering": {
         "attend_breath": 0.15,
         "equanimity": 0.1,
-        "pain_discomfort": 0.8,  
-        "pending_tasks": 0.75,      
+        "pain_discomfort": 0.65,  
+        "pending_tasks": 0.6,      
         "aha_moment": 0.15
     },
     "meta_awareness": {
@@ -124,14 +124,14 @@ THOUGHTSEED_STATE_PRIORS = {
         "equanimity": 0.35,
         "pain_discomfort": 0.2,
         "pending_tasks": 0.2,
-        "aha_moment": 0.95
+        "aha_moment": 0.85
     },
     "redirect_attention": {
         "attend_breath": 0.7,
         "equanimity": 0.85,
         "pain_discomfort": 0.15,
         "pending_tasks": 0.15,
-        "aha_moment": 0.35
+        "aha_moment": 0.25
     }
 
 }
@@ -144,9 +144,9 @@ META_THOUGHTSEED_WEIGHTS = {
         "aha_moment": 0.25
     },
     "mind_wandering": {
-        "attend_breath": 0.10,
-        "equanimity": 0.20,
-        "aha_moment": 0.45
+        "attend_breath": 0.15,
+        "equanimity": 0.25,
+        "aha_moment": 0.20
     },
     "meta_awareness": {
         "attend_breath": 0.15,
@@ -155,8 +155,8 @@ META_THOUGHTSEED_WEIGHTS = {
     },
     "redirect_attention": {
         "attend_breath": 0.30,
-        "equanimity": 0.30,
-        "aha_moment": 0.50
+        "equanimity": 0.40,
+        "aha_moment": 0.25
     }
 }
 
@@ -168,7 +168,6 @@ LEARNING_RATES = {
     "expert": 0.02,
 }
 
-FORWARD_LOSS_WEIGHT = 0.5
 
 # =============================================================================
 # Utility Functions

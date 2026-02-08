@@ -117,10 +117,7 @@ class Layer2Agent(nn.Module):
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
         
         # Expert: Unfrozen VAE (Learns amortized inference)
-        # Novice: Frozen VAE (Stuck with random initialization)
-        if self.level == 'novice':
-            for param in self.vae.parameters():
-                param.requires_grad = False
+        # Novice: Unfrozen VAE (Weak/slow amortization via lower learning rate)
         
     
     def infer_z_from_x(self) -> torch.Tensor:
@@ -304,7 +301,6 @@ class Layer2Agent(nn.Module):
         
         precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
         precision_gain = clip_probability(precision_sensory)
-        opacity = gamma
         self.blanket_l2l3.update_active_states({
             'policy_precision': gamma,
         })
@@ -316,7 +312,6 @@ class Layer2Agent(nn.Module):
             'noise_reduction': float(np.clip(1.0 - 0.6 * precision_gain, 0.4, 1.0)),
             'policy_confidence': pi_conf,
             'policy_drive': policy_drive,
-            'opacity': opacity,
             'policy_precision': gamma,
             'precision_sensory': precision_sensory,
         }

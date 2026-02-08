@@ -15,7 +15,7 @@ from pathlib import Path
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    FORWARD_LOSS_WEIGHT,
+    LEARNING_RATES,
     get_params, get_thoughtseed_priors
 )
 from .l1_generative_process import Layer1Process
@@ -62,6 +62,7 @@ class MeditationTrainer:
         # History tracking (Initialized in reset)
         self.history = {}
         self._last_x_actual = None
+        self._loss_balance = {}
     
     def step(self, t: int, current_state: str, activations: torch.Tensor, enable_learning: bool = True) -> tuple[torch.Tensor, str, torch.Tensor, Dict]:
         """Execute a single simulation step.
@@ -131,7 +132,6 @@ class MeditationTrainer:
         # ===== Policy Inference =====
         prescription = self.agent.infer_pi(activations, new_state)
         selected_action_mu = prescription['selected_action_mu']
-        opacity = float(prescription.get('opacity', 0.0))
 
         # Update L2->L1 active states (action policy)
         self.blanket_l1l2.update_active_states(prescription)
@@ -140,32 +140,45 @@ class MeditationTrainer:
         step_loss = free_energy
 
         if forward_prediction_error is not None:
-            forward_weight = FORWARD_LOSS_WEIGHT
+            self._loss_balance['fe_sum'] += float(free_energy.detach().item())
+            self._loss_balance['fpe_sum'] += float(forward_prediction_error_val)
+            self._loss_balance['count'] += 1
+            if self._loss_balance['fpe_sum'] > EPS:
+                forward_weight = self._loss_balance['fe_sum'] / (self._loss_balance['fpe_sum'] + EPS)
+            else:
+                forward_weight = 1.0
 
             # Combined loss
             step_loss = free_energy + forward_weight * forward_prediction_error
 
             # Recognition Loss (Amortized Inference)
             # Train encoder to predict the optimized thoughtseeds (z) from observations (x)
-            # This enables "Expert Intuition" mechanism
-            if enable_learning and self.level == 'expert':
-                # Re-run encoder on current observation
-                z_recognition = self.agent.vae.encode(x_current.detach())
+            # Experts use full weight; novices use a weak weight tied to the LR ratio.
+            if enable_learning:
+                rec_scale = 1.0
+                if self.level == 'novice':
+                    rec_scale = self.params['learning_rate'] / max(LEARNING_RATES['expert'], EPS)
 
-                # Target is the optimized z from VFE loop (which is detached)
-                # Recognition loss = MSE(Encoder(x), VI_Optimized_z)
-                rec_loss = torch.nn.functional.mse_loss(z_recognition, activations.detach())
+                if rec_scale > 0.0:
+                    # Re-run encoder on current observation
+                    z_recognition = self.agent.vae.encode(x_current.detach())
 
-                # Add to total loss (weighted)
-                step_loss = step_loss + rec_loss
+                    # Target is the optimized z from VFE loop (which is detached)
+                    # Recognition loss = MSE(Encoder(x), VI_Optimized_z)
+                    rec_loss = torch.nn.functional.mse_loss(z_recognition, activations.detach())
+
+                    # Add to total loss (weighted)
+                    step_loss = step_loss + rec_scale * rec_loss
             
         if t % 500 == 0:
+            fw = forward_weight if forward_prediction_error is not None else 0.0
             print(
                 f"[diag t={t}] gamma={prescription.get('policy_precision', 0.0):.4f} "
                 f"precision_sensory={prescription.get('precision_sensory', 0.0):.4f} "
                 f"policy_confidence={prescription['policy_confidence']:.4f} "
                 f"policy_drive={prescription.get('policy_drive', 0.0):.4f} "
-                f"forward_pe={forward_prediction_error_val:.6f}"
+                f"forward_pe={forward_prediction_error_val:.6f} "
+                f"forward_w={fw:.4f}"
             )
 
         # Store for next iteration
@@ -190,7 +203,6 @@ class MeditationTrainer:
             'new_state': new_state,
             'free_energy': free_energy.detach().item(),
             'meta_awareness': meta_awareness,
-            'opacity': opacity,
             'action_error': forward_prediction_error_val,
             'network_activations': network_acts_serializable,
             'thoughtseed_activations': ts_acts,
@@ -222,7 +234,7 @@ class MeditationTrainer:
         
         # Log Phenotype status
         if self.level == 'novice':
-            print(f"PHENOTYPE: NOVICE (Encoder Frozen - No Amortized Inference Learning)")
+            print(f"PHENOTYPE: NOVICE (Encoder Unfrozen - Weak/Slow Amortized Inference Learning)")
         else:
             print(f"PHENOTYPE: EXPERT (Encoder Unfrozen - Amortized Inference Learning Active)")
 
@@ -314,7 +326,6 @@ class MeditationTrainer:
         self.history['states'].append(current_state)
         self.history['free_energy'].append(metrics['free_energy'])
         self.history['meta_awareness'].append(metrics['meta_awareness'])
-        self.history['opacity'].append(metrics['opacity'])
         self.history['action_errors'].append(metrics['action_error'])
         self.history['network_activations'].append(metrics['network_activations'])
         self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
@@ -372,7 +383,6 @@ class MeditationTrainer:
             'timesteps': len(self.history['states']),
             'free_energy_history': self.history['free_energy'],
             'meta_awareness_history': self.history['meta_awareness'],
-            'opacity_history': self.history['opacity'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
             'state_sequence': self.history['states'],  # Keep for backward compat
             'transitions': self.history['transitions'],
@@ -392,7 +402,6 @@ class MeditationTrainer:
             'states': [],
             'free_energy': [],
             'meta_awareness': [],
-            'opacity': [],
             'transitions': [],
             'action_errors': [],
             'network_activations': [],
@@ -400,6 +409,7 @@ class MeditationTrainer:
             'dominant_thoughtseed': []
         }
         self._last_x_actual = None
+        self._loss_balance = {'fe_sum': 0.0, 'fpe_sum': 0.0, 'count': 0}
         self.blanket_l1l2.reset()
         self.monitor.reset()
 
