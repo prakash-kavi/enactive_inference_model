@@ -3,7 +3,7 @@
 Each blanket enforces clean separation between levels:
 - Sensory states: Read-only observations (bottom-up)
 - Active states: Control signals (top-down)
-- EMA smoothing: Prevents discontinuities across hierarchy
+- Optional EMA smoothing on sensory states
 """
 
 import torch
@@ -12,7 +12,7 @@ from typing import Dict, Any
 class MarkovBlanket:
     """Base class for Markov blanket interfaces."""
     
-    def __init__(self, smoothing: float = 0.7):
+    def __init__(self, smoothing: float = 0.0):
         """
         Args:
             smoothing: EMA coefficient (0=no memory, 1=no update)
@@ -22,7 +22,7 @@ class MarkovBlanket:
         self.active_states: Dict[str, Any] = {}
         
     def update_sensory_states(self, new_states: Dict[str, Any]) -> None:
-        """Update sensory states with EMA smoothing."""
+        """Update sensory states with optional EMA smoothing."""
         for key, new_val in new_states.items():
             if key not in self.sensory_states:
                 # First observation: initialize directly
@@ -62,7 +62,7 @@ class MarkovBlanketL1L2(MarkovBlanket):
         - policy_confidence: L2 policy confidence (posterior)
     """
     
-    def __init__(self, smoothing: float = 0.7):
+    def __init__(self, smoothing: float = 0.0):
         super().__init__(smoothing=smoothing)
         # Initialize empty - will be populated by L1 process
         
@@ -80,7 +80,7 @@ class MarkovBlanketL2L3(MarkovBlanket):
         - policy_precision: float (>0, softmax inverse temperature)
     """
     
-    def __init__(self, smoothing: float = 0.7):
+    def __init__(self, smoothing: float = 0.0):
         super().__init__(smoothing=smoothing)
         # Initialize with defaults
         self.active_states['precision_sensory'] = 0.5

@@ -16,7 +16,7 @@ class Layer3Monitor(nn.Module):
         super().__init__()
         
         self.level = experience_level
-        self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.7)
+        self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.0)
 
         # Meta-awareness EMA
         self.meta_awareness_ema = None

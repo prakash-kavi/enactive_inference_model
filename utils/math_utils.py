@@ -16,6 +16,10 @@ def clip_probability(value: Union[float, int, torch.Tensor]) -> float:
     """Clamp scalar-like values to [0, 1]."""
     return float(np.clip(to_float(value), 0.0, 1.0))
 
+def precision_weight(value: Union[float, int, torch.Tensor]) -> float:
+    """Map a precision-like scalar to a bounded [0, 1] weight."""
+    return clip_probability(value)
+
 def precision_from_variance(variance: Union[float, int, torch.Tensor], eps: float = EPS) -> float:
     """Precision as inverse variance (act-inf convention)."""
     v = max(0.0, to_float(variance))

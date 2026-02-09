@@ -1,9 +1,6 @@
-"""
-lean_diagnostics.py
+"""Diagnostic comparison plots.
 
-Diagnostic comparison plots.
-Combines Free Energy bars + Dwell times bars in 2-panel figure.
-Enhanced with statistical significance brackets and cleaner aesthetics.
+Combines free energy bars and dwell time bars in a 2-panel figure.
 """
 
 import numpy as np
@@ -21,7 +18,7 @@ from utils.config import STATES, DEFAULTS
 
 
 def get_dwell_times(stats):
-    """Extract dwell times from state history - EXACT copy from plot_diagnostics.py"""
+    """Extract dwell times from state history."""
     state_history = stats.get("state_history", [])
     if not state_history: 
         return {s: [] for s in STATES}

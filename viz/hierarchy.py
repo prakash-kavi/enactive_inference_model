@@ -1,9 +1,4 @@
-"""
-lean_hierarchy.py
-
-Hierarchical dynamics visualization - EXACT copy from viz/viz/plot_diagnostics.py plot_hierarchy()
-Adapted to take data dict instead of loading from file.
-"""
+"""Hierarchical dynamics visualization."""
 
 import numpy as np
 import pandas as pd
@@ -24,14 +19,7 @@ from utils.config import NETWORKS, THOUGHTSEEDS, STATES, DEFAULTS
 
 
 def plot_hierarchy(data, save_path: str, level_name: str):
-    """
-    Figure 4A/4B: Hierarchical Dynamics visualization showing:
-    1. Level 3: Meta-awareness (Metacognition)
-    2. Level 2: Dominant Thoughtseed transitions
-    3. Level 1: Network activations (DMN, VAN, DAN, FPN)
-    
-    EXACT COPY from viz/viz/plot_diagnostics.py plot_hierarchy()
-    """
+    """Figure 3A/3B: hierarchical dynamics across L3, L2, and L1."""
     # Check for required data
     required_fields = ['state_history', 'meta_awareness_history', 'network_activations_history', 'dominant_ts_history']
     for field in required_fields:
@@ -138,7 +126,7 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     state_legend = fig.legend(handles=state_legend_elements, loc='lower center', 
                             fontsize=10, frameon=False, ncol=4, bbox_to_anchor=(0.5, 0.02))
     
-    ax3.set_xlabel('Time (seconds)', fontsize=12, labelpad=12)
+    ax3.set_xlabel('Time (timesteps)', fontsize=12, labelpad=12)
     ax3.set_ylabel('Network Activation', fontsize=12)
     ax3.set_title('Level 1: Network Dynamics', fontsize=14, fontweight='bold')
     ax3.legend(loc='upper right', fontsize=10)

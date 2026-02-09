@@ -1,5 +1,5 @@
 """
-lean_attractors.py
+attractors.py
 
 Attractor visualizations using PCA projections.
 """
@@ -281,7 +281,7 @@ def plot_attractor_pca(
 
     fig.suptitle("PCA Trajectories Across the Hierarchy", fontsize=16, fontweight="bold")
 
-    save_figure(fig, Path(save_path), "Fig5 PCA")
+    save_figure(fig, Path(save_path), "Fig4 PCA")
     if show:
         plt.show()
     else:
@@ -307,7 +307,7 @@ if __name__ == "__main__":
         compute_tail_statistics,
     )
 
-    parser = argparse.ArgumentParser(description="Generate Fig5 PCA trajectories.")
+    parser = argparse.ArgumentParser(description="Generate Fig4 PCA trajectories.")
     parser.add_argument("--seed", type=int, default=42, help="Seed used in results filenames.")
     parser.add_argument(
         "--data-dir",
@@ -318,8 +318,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--plot-path",
         type=str,
-        default=str(Path(__file__).resolve().parent.parent / "plots" / "Fig5_PCA_Trajectories.png"),
-        help="Output path for Fig5 PCA plot.",
+        default=str(Path(__file__).resolve().parent.parent / "plots" / "Fig4_PCA_Trajectories.png"),
+        help="Output path for Fig4 PCA plot.",
     )
     parser.add_argument(
         "--tail-steps",

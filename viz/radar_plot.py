@@ -16,9 +16,7 @@ from utils.config import STATES, NETWORKS
 
 
 def plot_comparison(novice_data: dict, expert_data: dict, save_path: str):
-    """
-    Fig3A: Network Activation Profiles (radar plots showing network expectations for each state)
-    """
+    """Fig2A: Network Activation Profiles (radar plots showing network expectations for each state)."""
     set_plot_style()
     
     # Map data to access pattern

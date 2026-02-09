@@ -25,6 +25,7 @@ from utils.math_utils import (
     entropy,
     policy_posterior,
     policy_confidence,
+    precision_weight,
     to_float,
     networks_to_tensor,
 )
@@ -97,8 +98,8 @@ class Layer2Agent(nn.Module):
         self.params = get_params(experience_level)
         
         # Markov blankets
-        self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.7)
-        self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.7)
+        self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.0)
+        self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.0)
         
         # VAE
         self.vae = MeditationVAE(
@@ -174,24 +175,27 @@ class Layer2Agent(nn.Module):
         # Observed networks as tensor
         observed_vec = networks_to_tensor(observed_networks, NETWORKS, device=device)
         
+        def clamp_z(t: torch.Tensor) -> torch.Tensor:
+            return clamp_activation(t, clip_min, clip_max)
+
         # Targets
-        z_prev = clamp_activation(activations.detach(), clip_min, clip_max)
-        sensory_target = clamp_activation(z_recognition.detach(), clip_min, clip_max)
-        prior_target = clamp_activation(self.mu_params[current_state].detach().clone(), clip_min, clip_max)
+        z_prev = clamp_z(activations.detach())
+        sensory_target = clamp_z(z_recognition.detach())
+        prior_target = clamp_z(self.mu_params[current_state].detach().clone())
         
         # Sensory precision from L3 (bounded weight)
         precision = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
-        precision_weight = clip_probability(precision)
+        precision_weight_val = precision_weight(precision)
         
         # Initialization: blend previous and sensory target, then bias toward sensory when precision is high.
         z_init = 0.5 * z_prev + 0.5 * sensory_target
-        z_init = precision_weight * z_init + (1.0 - precision_weight) * prior_target
-        z_var = clamp_activation(z_init, clip_min, clip_max).requires_grad_(True)
+        z_init = precision_weight_val * z_init + (1.0 - precision_weight_val) * prior_target
+        z_var = clamp_z(z_init).requires_grad_(True)
         
         # Weights for F-energy terms
         # High sensory precision -> trust sensory; low precision -> rely on temporal/prior
-        sensory_w = precision_weight
-        temporal_w = 1.0 - precision_weight
+        sensory_w = precision_weight_val
+        temporal_w = 1.0 - precision_weight_val
 
         # Variational optimization loop (fixed-step VI for stability)
         vi_steps = 2
@@ -217,13 +221,11 @@ class Layer2Agent(nn.Module):
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
                 grad = torch.clamp(grad, -5.0, 5.0)
                 
-                z_var = clamp_activation(z_var - vi_lr * grad, clip_min, clip_max)
+                z_var = clamp_z(z_var - vi_lr * grad)
                 z_var = z_var.detach().requires_grad_(True)
         
         # Finalize
-        updated = z_var.detach()
-        
-        return clamp_activation(updated, clip_min, clip_max)
+        return z_var.detach()
     
     def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
         """Policy inference via softmax posterior over candidate policies.
@@ -298,7 +300,7 @@ class Layer2Agent(nn.Module):
         mu_x = self.decode_with_state(selected_mu)
         
         precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
-        precision_gain = clip_probability(precision_sensory)
+        precision_gain = precision_weight(precision_sensory)
         self.blanket_l2l3.update_active_states({
             'policy_precision': gamma,
         })

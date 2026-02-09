@@ -119,54 +119,43 @@ def generate_plots(expert_results, novice_results):
     
     print(f"    Tail window: {TAIL_STEPS} steps (converged behavior)")
     print(f"    Full trajectory: {len(expert_results['state_history'])} steps")
-    
-    # ===== Publication-quality plots =====
-    print("\n--- Publication Figures ---")
-    
-    # FigS1: Convergence plots (full trajectories)
-    print("  • FigS1_Convergence_Expert.png")
-    plot_convergence(expert_results, str(PLOT_DIR / "FigS1_Convergence_Expert.png"))
-    
-    print("  • FigS1_Convergence_Novice.png")
-    plot_convergence(novice_results, str(PLOT_DIR / "FigS1_Convergence_Novice.png"))
-    
-    # Fig3: Comparison plot (radar + dwell + transitions from tail)
-    print("  • Fig3A_Network_Radar.png")
-    plot_comparison(novice_tail, expert_tail, str(PLOT_DIR / "Fig3A_Network_Radar.png"))
-    
-    # Fig4: Hierarchy plots (3-level dynamics from tail)
-    print("  • Fig4A_Hierarchy_Novice.png")
-    plot_hierarchy(novice_tail, str(PLOT_DIR / "Fig4A_Hierarchy_Novice.png"), "Novice")
-    
-    print("  • Fig4B_Hierarchy_Expert.png")
-    plot_hierarchy(expert_tail, str(PLOT_DIR / "Fig4B_Hierarchy_Expert.png"), "Expert")
-    
-    # Fig5: PCA trajectories (thoughtseeds + networks)
-    print("  • Fig5_PCA_Trajectories.png")
-    plot_attractor_pca(novice_tail, expert_tail, str(PLOT_DIR / "Fig5_PCA_Trajectories.png"))
 
-    
-    # ===== Diagnostic plots =====
-    print("\n--- Diagnostic Plots ---")
-    print("  • Fig3B_FE_and_Dwell.png")
-    plot_fe_and_dwell(novice_tail, expert_tail, str(PLOT_DIR / "Fig3B_FE_and_Dwell.png"))
-    
-    print("  • Fig3C_Transitions.png")
-    plot_transitions(novice_tail, expert_tail, str(PLOT_DIR / "Fig3C_Transitions.png"))
-    
-    
+    print("\n--- Figures ---")
+    print("  - FigS1_Convergence_Expert.png")
+    plot_convergence(expert_results, str(PLOT_DIR / "FigS1_Convergence_Expert.png"))
+
+    print("  - FigS1_Convergence_Novice.png")
+    plot_convergence(novice_results, str(PLOT_DIR / "FigS1_Convergence_Novice.png"))
+
+    print("  - Fig2A_Network_Radar.png")
+    plot_comparison(novice_tail, expert_tail, str(PLOT_DIR / "Fig2A_Network_Radar.png"))
+
+    print("  - Fig2B_FE_and_Dwell.png")
+    plot_fe_and_dwell(novice_tail, expert_tail, str(PLOT_DIR / "Fig2B_FE_and_Dwell.png"))
+
+    print("  - Fig2C_Transitions.png")
+    plot_transitions(novice_tail, expert_tail, str(PLOT_DIR / "Fig2C_Transitions.png"))
+
+    print("  - Fig3A_Hierarchy_Novice.png")
+    plot_hierarchy(novice_tail, str(PLOT_DIR / "Fig3A_Hierarchy_Novice.png"), "Novice")
+
+    print("  - Fig3B_Hierarchy_Expert.png")
+    plot_hierarchy(expert_tail, str(PLOT_DIR / "Fig3B_Hierarchy_Expert.png"), "Expert")
+
+    print("  - Fig4_PCA_Trajectories.png")
+    plot_attractor_pca(novice_tail, expert_tail, str(PLOT_DIR / "Fig4_PCA_Trajectories.png"))
     print("\n" + "="*70)
     print("PLOTTING COMPLETE")
     print("="*70)
     print(f"All plots: {PLOT_DIR}/")
     print(f"  - FigS1_Convergence_Expert.png")
     print(f"  - FigS1_Convergence_Novice.png")
-    print(f"  - Fig3A_Network_Radar.png")
-    print(f"  - Fig3B_FE_and_Dwell.png")
-    print(f"  - Fig3C_Transitions.png")
-    print(f"  - Fig4A_Hierarchy_Novice.png")
-    print(f"  - Fig4B_Hierarchy_Expert.png")
-    print(f"  - Fig5_PCA_Trajectories.png")
+    print(f"  - Fig2A_Network_Radar.png")
+    print(f"  - Fig2B_FE_and_Dwell.png")
+    print(f"  - Fig2C_Transitions.png")
+    print(f"  - Fig3A_Hierarchy_Novice.png")
+    print(f"  - Fig3B_Hierarchy_Expert.png")
+    print(f"  - Fig4_PCA_Trajectories.png")
     print()
 
 

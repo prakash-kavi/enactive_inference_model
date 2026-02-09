@@ -119,16 +119,16 @@ Generated in `plots/`:
 - `FigS1_Convergence_Novice.png`
 
 **Comparison:**
-- `Fig3A_Network_Radar.png` - Network profiles across states (Expert vs Novice)
-- `Fig3B_FE_and_Dwell.png` - Free energy and dwell times per state
-- `Fig3C_Transitions.png` - State transition probability matrices
+- `Fig2A_Network_Radar.png` - Network profiles across states (Expert vs Novice)
+- `Fig2B_FE_and_Dwell.png` - Free energy and dwell times per state
+- `Fig2C_Transitions.png` - State transition probability matrices
 
 **Dynamics:**
-- `Fig4A_Hierarchy_Novice.png` - 3-layer hierarchical dynamics over time
-- `Fig4B_Hierarchy_Expert.png`
+- `Fig3A_Hierarchy_Novice.png` - 3-layer hierarchical dynamics over time
+- `Fig3B_Hierarchy_Expert.png`
 
 **State Space:**
-- `Fig5_PCA_Trajectories.png` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
+- `Fig4_PCA_Trajectories.png` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
 
 ---
 

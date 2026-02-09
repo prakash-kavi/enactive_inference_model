@@ -1,8 +1,4 @@
-"""
-lean_convergence.py
-
-Convergence diagnostic plots for lean meditation model.
-Reuses plotting logic from viz/viz/plot_convergence.py.
+"""Convergence diagnostic plots.
 
 Generates FigS1_Convergence_{Expert/Novice}.png:
 - Panel 1: Free energy stabilization (raw + smoothed)

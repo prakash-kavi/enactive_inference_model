@@ -1,11 +1,11 @@
-"""Visualization module for lean meditation model.
+"""Visualization module for the meditation model.
 
-Streamlined plotting modules for the manuscript:
-- lean_convergence: FigS1 (convergence plots)
-- lean_comparison: Fig3A (radar)
-- lean_diagnostics: Fig3B (FE+Dwell), Fig3C (Transitions)
-- lean_hierarchy: Fig4A/B (3-level dynamics)
-- lean_attractors: Fig5 (PCA trajectories across hierarchy)
+Plotting modules for the manuscript:
+- convergence: FigS1 (convergence plots)
+- radar_plot: Fig2A (network radar)
+- diagnostics: Fig2B (FE+Dwell), Fig2C (Transitions)
+- hierarchy: Fig3A/B (3-level dynamics)
+- attractors: Fig4 (PCA trajectories across hierarchy)
 """
 
 from viz import plotting_utils
