@@ -1,6 +1,4 @@
-# Vipassana Meditation Model: Hierarchical Active Inference
-
-
+# Enactive Inference Model
 
 ---
 
