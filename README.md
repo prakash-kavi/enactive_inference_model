@@ -12,7 +12,7 @@
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
                | Sensory: meta_awareness
-               | Active:  lambda_sens, policy_precision
+               | Active:  precision_sensory, policy_precision
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
@@ -60,13 +60,12 @@ Compress high-dimensional neural state into interpretable mental content:
 ## Installation
 
 ```bash
-pip install torch numpy matplotlib
+pip install -r requirements.txt
 ```
 
 **Requirements:**
 - Python 3.9+
-- PyTorch 1.13+
-- NumPy 1.25+, Matplotlib 3.8+
+- See `requirements.txt`
 
 ---
 
@@ -108,7 +107,7 @@ Each contains:
 Generated in `figures/`:
 
 **Convergence:**
-- `FigS1_Convergence_Expert.pdf` - Free energy stabilization, state occupancy
+- `FigS1_Convergence_Expert.pdf` - Loss/free-energy convergence, state occupancy
 - `FigS1_Convergence_Novice.pdf`
 
 **Comparison:**
@@ -136,10 +135,7 @@ Each layer interfaces through Markov blankets defining:
 Layer 2 compresses 4 network activations -> 5 thoughtseeds, making neural state "tractable" for conscious access and metacognitive monitoring.
 
 ### 3. Forward Dynamics Model
-Layer 2 learns to predict future network activations from (x, z), enabling:
-- Anticipatory action selection
-- Policy evaluation beyond immediate outcomes
-- Counterfactual reasoning ("what if I stay in MW?")
+Layer 2 predicts next-step network activations from (x_t, z_t). This provides a prospective signal for policy scoring (stay/switch), and supplies forward surprisal for precision calibration.
 
 ### 4. BPTT Learning
 Backpropagation Through Time optimizes:
@@ -153,12 +149,12 @@ Backpropagation Through Time optimizes:
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
 - **Unfrozen Encoder:** Learns "Amortized Inference" (fast, intuitive state recognition).
-- **Universal Priors:** Accesses the "Universal/Goal" priors effectively.
+- **Phenotype priors:** Uses expert priors for dwell ranges and transition probabilities.
 - **Physiology:** Stronger FPN activation, longer BF dwell times.
 
 **Novice:**
 - **Weak Amortized Inference:** Learns more slowly due to lower learning rate, so recognition is less reliable.
-- **Universal Priors:** Holds the same goal (Focus) but lacks the intuition to recognize it.
+- **Phenotype priors:** Uses novice priors for dwell ranges and transition probabilities.
 - **Physiology:** DMN-dominant profile, shorter BF dwell times.
 
 ---
@@ -186,11 +182,11 @@ Backpropagation Through Time optimizes:
 +-- utils/                     # Utilities & Config
 |   +-- config.py              # Constants and universal priors
 |   +-- math_utils.py          # Tensor/math operations
-|   +-- analysis_utils.py      # Metrics computation
 +-- data/                      # Training results (JSON)
 +-- figures/                   # Generated figures (PDF)
 +-- viz/                       # Plotting modules
     +-- analysis.py
+    +-- analysis_utils.py
     +-- attractors.py
     +-- convergence.py
     +-- diagnostics.py
@@ -240,7 +236,7 @@ Initialization:
 z_init = 0.5 * z_prev + 0.5 * z_rec
 z_init = pi_w * z_init + (1 - pi_w) * mu_z(s)
 ```
-where `pi_w = clip(lambda_sens)` in [0, 1].
+where `pi_w = clip(precision_sensory)` in [0, 1].
 
 ### Sensory Precision (from forward surprisal)
 Forward prediction and surprisal (S_forward):
@@ -248,12 +244,12 @@ Forward prediction and surprisal (S_forward):
 x_pred = f(x_{t-1}, a_{t-1})
 S_forward = Surprisal_NLL_Bernoulli(x_pred, x_t)
 ```
-We map forward surprisal to sensory precision (lambda_sens), so higher surprise implies lower precision.
+We map forward surprisal to sensory precision (`precision_sensory`), so higher surprise implies lower precision.
 Precision update (Option A, Act-Inf aligned):
 ```
-lambda_sens = exp(-S_forward)
-lambda_sens = clip(lambda_sens, CLIP_MIN, CLIP_MAX)
-lambda_sens = fuse_logit(lambda_sens, meta)
+precision_sensory = exp(-S_forward)
+precision_sensory = clip(precision_sensory, CLIP_MIN, CLIP_MAX)
+precision_sensory = fuse_logit(precision_sensory, meta)
 ```
 
 ### Layer 3: Meta-Awareness
@@ -341,7 +337,7 @@ If you use this model in your research:
   year={2026}
 }
 ```
-This repository is a significant step forward in enhancing the Thoughtseeds Framework fadapting code snippets from below:
+This repository is a significant step forward in enhancing the Thoughtseeds Framework for Enactive Inference. It builds upon the foundational work of the Thoughtseeds Framework, adapting code snippets from below:
   https://github.com/prakash-kavi/thoughtseeds_vipassana 
   https://github.com/prakash-kavi/viapssana_ts2  
   https://github.com/prakash-kavi/aif_iwai2025_thoughtseeds
