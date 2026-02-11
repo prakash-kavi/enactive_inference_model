@@ -139,7 +139,7 @@ Layer 2 predicts next-step network activations from (x_t, z_t). This provides a 
 
 ### 4. BPTT Learning
 Backpropagation Through Time optimizes:
-- VAE encoder/decoder (representation learning)
+- VAE encoder/decoder (latent structure learning)
 - Forward model (dynamics prediction)
 - Loss = VFE + w_fwd * forward prediction error + alpha_rec * recognition loss
 - Recognition loss uses alpha_rec=1 for expert and alpha_rec=lr_novice/lr_expert for novice
