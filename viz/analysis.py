@@ -7,12 +7,10 @@ Provides metrics computation and plotting utilities:
 """
 
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 from typing import Dict
 
 from utils.config import STATES
-from utils.analysis_utils import get_tail_window, compute_tail_statistics, TAIL_STEPS
+from viz.analysis_utils import get_tail_window, compute_tail_statistics, TAIL_STEPS
 
 def compute_metrics(results: Dict, use_tail: bool = True) -> Dict:
     """Compute summary metrics from training results (default: uses tail window).

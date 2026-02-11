@@ -1,11 +1,11 @@
 """Visualization module for the meditation model.
 
 Plotting modules for the manuscript:
-- convergence: FigS1 (convergence plots)
-- radar_plot: Fig2A (network radar)
-- diagnostics: Fig2B (FE+Dwell), Fig2C (Transitions)
-- hierarchy: Fig3A/B (3-level dynamics)
-- attractors: Fig4 (PCA trajectories across hierarchy)
+- convergence: figs1 (convergence plots)
+- radar_plot: fig2a (network radar)
+- diagnostics: fig2b (dwell), fig2c (transitions)
+- hierarchy: fig3a/fig3b (3-level dynamics)
+- attractors: fig4 (PCA trajectories across hierarchy)
 """
 
 from viz import plotting_utils

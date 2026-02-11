@@ -9,13 +9,11 @@ from .markov_blankets import MarkovBlanketL2L3
 from utils.math_utils import clip_probability
 
 class Layer3Monitor(nn.Module):
-    """Metacognitive monitor: tracks meta-awareness from thoughtseeds."""
+    """Metacognitive monitor: computes meta-awareness from thoughtseeds."""
     
-    def __init__(self, experience_level: str = 'expert',
-                 blanket_l2l3: Optional[MarkovBlanketL2L3] = None):
+    def __init__(self, blanket_l2l3: Optional[MarkovBlanketL2L3] = None):
         super().__init__()
         
-        self.level = experience_level
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.0)
 
         # Meta-awareness EMA
@@ -27,7 +25,7 @@ class Layer3Monitor(nn.Module):
         self.blanket_l2l3.reset()
     
     def update_meta_awareness(self, current_state: str, z: torch.Tensor) -> float:
-        """Compute meta-awareness (A) from L2 thoughtseed activations."""
+        """Compute meta-awareness from L2 thoughtseed activations."""
         z_dict = {ts: z[i].item() for i, ts in enumerate(THOUGHTSEEDS)}
         raw = compute_meta_awareness(current_state, z_dict)
         

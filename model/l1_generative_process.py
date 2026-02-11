@@ -1,10 +1,10 @@
-"""Layer 1: Multivariate Ornstein-Uhlenbeck generative process for brain networks.
+"""Layer 1: MVOU generative process for brain networks (Eq. 1).
 
 Implements state-dependent attractor dynamics with:
 - 4 brain networks (DMN, VAN, DAN, FPN)
-- 4 meditation states (breath_focus, mind_wandering, meta_awareness, redirect_attention)
-- Coupling matrices (Theta) defining network interactions
-- State machine with dwell times and transition probabilities
+- 4 meditation states (BF, MW, MA, RA)
+- Coupling matrices Theta(s) defining network interactions
+- Dwell-based state machine with transition priors
 """
 
 import numpy as np
@@ -13,21 +13,18 @@ import torch.nn as nn
 from typing import Dict, Tuple, Optional
 
 from utils.config import (
-    NETWORKS, DEFAULTS, EPS,
+    NETWORKS, DEFAULTS, EPS, NOISE_LEVEL,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS
 )
 from utils.math_utils import clip_probability, to_float
 
 class Layer1Process(nn.Module):
-    """MVOU generative process for brain network dynamics."""
+    """MVOU generative process for brain network dynamics (Eq. 1)."""
     
     # MVOU integration constants
     MAX_STIFFNESS = 2.5
     N_SUBSTEPS = 2
     INIT_ACTIVATION = 0.5
-    
-    # Global noise variance (shared across phenotypes)
-    NOISE_LEVEL = 0.004
     
     def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None):
         super().__init__()
@@ -49,24 +46,24 @@ class Layer1Process(nn.Module):
         self.net_idx = {n: i for i, n in enumerate(NETWORKS)}
         
     def _sample_next_dwell(self) -> None:
-        """Sample dwell time for current state."""
+        """Sample dwell duration for current state from config ranges."""
         dwell_min, dwell_max = DWELL_TIMES[self.level][self.current_state]
         dwell_seconds = self.rng.uniform(dwell_min, dwell_max)
         self.current_max_dwell = int(dwell_seconds / self.dt)
         self.current_dwell = 0
         
     def _check_transition(self, policy_drive: float) -> str:
-        """Check if state should transition based on dwell + drive."""
+        """Check if state should transition based on dwell + policy drive."""
         self.current_dwell += 1
         
         # Dwell not elapsed: stay
         if self.current_dwell < self.current_max_dwell:
             return self.current_state
         
-        # Dwell elapsed: compute transition hazard
-        drive = clip_probability(policy_drive)
+        # Dwell elapsed: compute transition hazard (policy drive increases hazard)
+        policy_drive = clip_probability(policy_drive)
         base_hazard = 0.3
-        drive_boost = 0.5 * drive
+        drive_boost = 0.5 * policy_drive
         hazard = base_hazard + drive_boost
         
         if self.rng.rand() < hazard:
@@ -83,13 +80,13 @@ class Layer1Process(nn.Module):
         return self.current_state
     
     def _get_attractor(self, state: str) -> torch.Tensor:
-        """Get attractor mean for state."""
+        """Get attractor mean mu_x(s) for current state."""
         profile = NETWORK_PROFILES[state][self.level]
         mu_np = np.array([profile[n] for n in NETWORKS])
         return torch.tensor(mu_np, dtype=torch.float32, device=self.x.device)
     
     def _get_coupling(self, state: str) -> torch.Tensor:
-        """Build Theta coupling matrix for state."""
+        """Build Theta(s) coupling matrix for state (Eq. 1)."""
         # Start with diagonal (self-inhibition)
         base_diag = 0.50 if state == 'mind_wandering' else 0.15
         theta_np = np.eye(len(NETWORKS)) * base_diag
@@ -103,7 +100,7 @@ class Layer1Process(nn.Module):
         
         theta = torch.tensor(theta_np, dtype=torch.float32, device=self.x.device)
         
-        # Expert-specific modifications
+        # Expert-specific adjustments to Theta(s)
         if self.level == 'expert':
             if state == 'breath_focus':
                 # Stronger self-stabilization
@@ -124,7 +121,7 @@ class Layer1Process(nn.Module):
         return theta
     
     def _clamp_theta(self, theta: torch.Tensor) -> torch.Tensor:
-        """Prevent excessive stiffness in coupling matrix."""
+        """Prevent excessive stiffness in Theta(s)."""
         n = len(NETWORKS)
         device = theta.device
         off_diag_mask = 1.0 - torch.eye(n, device=device)
@@ -151,28 +148,28 @@ class Layer1Process(nn.Module):
         
         Args:
             active_states: Control from L2 via Markov blanket
-                - policy_drive: float (0-1) (transition urge)
-                - policy_confidence: float (0-1) (posterior confidence)
-                - precision_gain: float (0-1) (action precision gain)
-                - mu_x: Optional[torch.Tensor] (target network activations)
+                - policy_drive: float (0-1) transition drive
+                - policy_confidence: float (0-1) posterior confidence (used if drive absent)
+                - precision_gain: float (0-1) gain on L2 target influence
+                - mu_x: Optional[torch.Tensor] L2 target in network space
         
         Returns:
             network_acts: {network_name: activation}
             current_state: str
         """
         # Extract control signals
-        drive = active_states.get('policy_drive', active_states.get('policy_confidence', 0.0))
-        drive = to_float(drive)
+        policy_drive = active_states.get('policy_drive', active_states.get('policy_confidence', 0.0))
+        policy_drive = to_float(policy_drive)
         
         # Check for state transition
-        self.current_state = self._check_transition(drive)
+        self.current_state = self._check_transition(policy_drive)
         
         # Get dynamics for current state
         mu = self._get_attractor(self.current_state)
         theta = self._get_coupling(self.current_state)
         theta = self._clamp_theta(theta)
         
-        # Apply agent bias if present (L2 -> L1 active inference)
+        # Apply L2 target if present: mu blends with mu_x via precision_gain
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
             bias_strength = active_states.get('precision_gain', 0.0)
@@ -182,22 +179,22 @@ class Layer1Process(nn.Module):
                 mu_x = torch.tensor(mu_x, device=mu.device, dtype=torch.float32)
             mu = (1 - bias_strength) * mu + bias_strength * mu_x
         
-        # Expertise-dependent noise, modulated by L3 precision via L2
-        base_variance = self.NOISE_LEVEL
+        # Global process noise variance (Eq. 1), modulated by L2 precision gain
+        base_variance = NOISE_LEVEL
         noise_reduction = active_states.get('noise_reduction', 1.0)
-        variance = base_variance * to_float(noise_reduction)  # L3 precision reduces L1 noise
+        variance = base_variance * to_float(noise_reduction)
         sigma = np.sqrt(variance)
         
-        # MVOU integration (multiple substeps for stability)
+        # MVOU integration (Eq. 1) with substeps for stability
         dt_sub = self.dt / self.N_SUBSTEPS
         curr_x = self.x
         
         for _ in range(self.N_SUBSTEPS):
-            # dX = -Theta * (X - mu) * dt + sigma * dW
+            # dX = -Theta(s) · (X - mu) dt + sigma dW
             drift = -torch.matmul(theta, (curr_x - mu)) * dt_sub
             diffusion = torch.randn_like(curr_x) * sigma * np.sqrt(dt_sub)
             curr_x = curr_x + drift + diffusion
-            curr_x = torch.clamp(curr_x, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+            curr_x = torch.clamp(curr_x, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
         
         self.x = curr_x
         

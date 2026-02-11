@@ -1,7 +1,7 @@
 """Convergence diagnostic plots.
 
-Generates FigS1_Convergence_{Expert/Novice}.png:
-- Panel 1: Free energy stabilization (raw + smoothed)
+Generates FigS1_Convergence_{Expert/Novice}.pdf:
+- Panel 1: Total loss (raw + smoothed)
 - Panel 2: Cumulative state occupancy over training
 """
 
@@ -18,7 +18,7 @@ from viz.plotting_utils import (
     STATE_SHORT_NAMES
 )
 from utils.config import STATES
-from utils.analysis_utils import TAIL_STEPS
+from viz.analysis_utils import TAIL_STEPS
 
 
 def rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
@@ -67,20 +67,30 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
     
     # Extract data
     free_energy = np.asarray(results['free_energy_history'], dtype=float)
+    loss_history = np.asarray(results.get('loss_history', []), dtype=float)
     states = results['state_history']
     level = results['experience_level']
     
-    steps = np.arange(free_energy.size)
-    highlight_start = max(0, free_energy.size - tail_span)
+    use_loss = loss_history.size == free_energy.size and loss_history.size > 0
+    primary = loss_history if use_loss else free_energy
+
+    steps = np.arange(primary.size)
+    highlight_start = max(0, primary.size - tail_span)
     
     fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
     
     # Panel 1: Free energy trend
     ax = axes[0]
-    ax.plot(steps, free_energy, color="#cccccc", linewidth=1.0, label="Free energy (raw)")
+    ax.plot(
+        steps,
+        primary,
+        color="#cccccc",
+        linewidth=1.0,
+        label="Total loss (raw)" if use_loss else "Free energy (raw)"
+    )
     
-    fe_mean = rolling_mean(free_energy, window)
-    fe_std = rolling_std(free_energy, window)
+    fe_mean = rolling_mean(primary, window)
+    fe_std = rolling_std(primary, window)
     ax.plot(steps, fe_mean, color="#E74C3C", linewidth=2.0, label=f"Rolling mean (w={window})")
     
     valid = ~np.isnan(fe_mean)
@@ -89,8 +99,9 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
         upper = (fe_mean + fe_std)[valid]
         ax.fill_between(steps[valid], lower, upper, color="#E74C3C", alpha=0.18)
     
-    ax.set_ylabel("Free energy")
-    ax.set_title(f"Free-energy stabilisation ({level.title()})", fontsize=14, fontweight="bold")
+    ax.set_ylabel("Loss" if use_loss else "Free energy")
+    ax.set_title(f"{'Loss' if use_loss else 'Free energy'} convergence ({level.title()})",
+                 fontsize=14, fontweight="bold")
     ax.legend(loc="upper right", frameon=True)
     
     # Panel 2: Cumulative state occupancy
@@ -109,7 +120,7 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
     # Highlight tail window
     if highlight_start > 0:
         for ax in axes:
-            ax.axvspan(highlight_start, free_energy.size, color="#d0d0d0", alpha=0.7, label="Tail window")
+            ax.axvspan(highlight_start, primary.size, color="#d0d0d0", alpha=0.7, label="Tail window")
             handles, labels = ax.get_legend_handles_labels()
             dedup = {}
             for handle, label in zip(handles, labels):
@@ -123,6 +134,7 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
     plt.close(fig)
     
     # Log tail statistics
-    if free_energy.size and highlight_start < free_energy.size:
-        tail = free_energy[highlight_start:]
-        print(f"    {level.title()} tail (last {tail_span} steps): mean F={tail.mean():.4f}, std={tail.std(ddof=0):.4f}")
+    if primary.size and highlight_start < primary.size:
+        tail = primary[highlight_start:]
+        metric = "loss" if use_loss else "F"
+        print(f"    {level.title()} tail (last {tail_span} steps): mean {metric}={tail.mean():.4f}, std={tail.std(ddof=0):.4f}")

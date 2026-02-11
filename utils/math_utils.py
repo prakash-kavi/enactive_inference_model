@@ -16,22 +16,24 @@ def clip_probability(value: Union[float, int, torch.Tensor]) -> float:
     """Clamp scalar-like values to [0, 1]."""
     return float(np.clip(to_float(value), 0.0, 1.0))
 
-def precision_weight(value: Union[float, int, torch.Tensor]) -> float:
-    """Map a precision-like scalar to a bounded [0, 1] weight."""
-    return clip_probability(value)
+def precision_from_surprisal(
+    surprisal: Union[float, int, torch.Tensor],
+    eps: float = EPS,
+) -> float:
+    """Precision from surprisal via exponential mapping."""
+    s = max(0.0, to_float(surprisal))
+    return clip_probability(np.exp(-s))
 
-def precision_from_variance(variance: Union[float, int, torch.Tensor], eps: float = EPS) -> float:
-    """Precision as inverse variance (act-inf convention)."""
-    v = max(0.0, to_float(variance))
-    return float(1.0 / (v + eps))
-
-def ema_update(value: Union[float, int, torch.Tensor], mean: float, var: float, beta: float = 0.9) -> tuple[float, float]:
-    """Exponential moving mean/variance update."""
-    v = to_float(value)
-    new_mean = beta * mean + (1.0 - beta) * v
-    diff = v - new_mean
-    new_var = beta * var + (1.0 - beta) * (diff * diff)
-    return new_mean, new_var
+def fuse_precision_logit(
+    base_precision: Union[float, int, torch.Tensor],
+    meta_precision: Union[float, int, torch.Tensor],
+    eps: float = EPS,
+) -> float:
+    """Fuse two precision signals via logit-add (odds multiplication)."""
+    b = float(np.clip(to_float(base_precision), eps, 1.0 - eps))
+    m = float(np.clip(to_float(meta_precision), eps, 1.0 - eps))
+    logit = np.log(b / (1.0 - b)) + np.log(m / (1.0 - m))
+    return float(1.0 / (1.0 + np.exp(-logit)))
 
 def softmax(logits: np.ndarray) -> np.ndarray:
     """Stable softmax for 1D arrays."""
@@ -55,6 +57,17 @@ def policy_posterior(log_prior: np.ndarray, g_vals: np.ndarray, gamma: float) ->
     """Active-inference policy posterior: softmax(log_prior - gamma * G)."""
     return softmax(log_prior - gamma * g_vals)
 
+def policy_precision(pi: np.ndarray, eps: float = EPS) -> float:
+    """Policy precision from posterior entropy."""
+    if pi.size == 0:
+        return 0.0
+    if pi.size == 1:
+        return 1.0
+    denom = np.log(len(pi) + eps)
+    if denom <= eps:
+        return 0.0
+    return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
+
 def policy_confidence(pi: np.ndarray, eps: float = EPS) -> float:
     """Policy confidence = 1 - normalized entropy."""
     if pi.size == 0:
@@ -65,6 +78,15 @@ def policy_confidence(pi: np.ndarray, eps: float = EPS) -> float:
     if denom <= eps:
         return 0.0
     return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
+
+def normalize_scores(values: np.ndarray, eps: float = EPS) -> np.ndarray:
+    """Z-score normalize if variance is non-trivial."""
+    if values.size == 0:
+        return values
+    std = float(np.std(values))
+    if std <= eps:
+        return values
+    return (values - np.mean(values)) / (std + eps)
 
 def clamp_for_log(x: torch.Tensor, eps: float) -> torch.Tensor:
     """Clamp tensor to open interval used in log-probability terms."""
@@ -92,6 +114,18 @@ def bernoulli_entropy(p: torch.Tensor, eps: float) -> torch.Tensor:
     return torch.mean(
         -p_safe * torch.log(p_safe) - (1.0 - p_safe) * torch.log(1.0 - p_safe)
     )
+
+def bernoulli_nll(x_hat: torch.Tensor, x: torch.Tensor, eps: float) -> torch.Tensor:
+    """Bernoulli negative log-likelihood averaged over dimensions."""
+    x_hat_safe = clamp_for_log(x_hat, eps)
+    x_safe = torch.clamp(x, 0.0, 1.0)
+    return torch.mean(
+        -(x_safe * torch.log(x_hat_safe) + (1.0 - x_safe) * torch.log(1.0 - x_hat_safe))
+    )
+
+def mse_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Mean squared error averaged over dimensions."""
+    return torch.mean((x_hat - x) ** 2)
 
 
 def networks_to_tensor(

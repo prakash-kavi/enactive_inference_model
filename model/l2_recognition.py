@@ -1,10 +1,10 @@
 """Layer 2: Attentional agent with VAE, thoughtseeds, and forward dynamics.
 
-Implements perception-action loop:
-- Perception: Encode L1 networks -> thoughtseed activations (recognition model)
-- Dynamics: Update thoughtseeds via variational inference 
-- Action: Select policy via forward-informed EFE minimization
-- Forward model: Predict sensory consequences of actions (enactive)
+Perception-action loop (Eq. 2-8):
+- Perception: q_phi(z|x) encodes L1 networks -> thoughtseeds
+- Dynamics: fixed-step VI updates z (Eq. 3) under F(z) (Eq. 2)
+- Action: policy posterior via expected free energy (Eq. 6-7)
+- Forward model: predicts next networks for forward surprisal (Eq. 4)
 """
 
 import numpy as np
@@ -20,12 +20,14 @@ from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from utils.math_utils import (
     bernoulli_kl,
     bernoulli_entropy,
+    bernoulli_nll,
+    mse_error,
     clamp_activation,
     clip_probability,
-    entropy,
     policy_posterior,
+    policy_precision,
     policy_confidence,
-    precision_weight,
+    normalize_scores,
     to_float,
     networks_to_tensor,
 )
@@ -55,7 +57,7 @@ class MeditationVAE(nn.Module):
             nn.Sigmoid()
         )
         
-        # Forward model: (Networks, Thoughtseeds) -> Next Networks
+        # Forward model: (networks, thoughtseeds) -> next networks
         self.forward_net = nn.Sequential(
             nn.Linear(input_dim + latent_dim, hidden_dim),
             nn.ReLU(),
@@ -66,16 +68,16 @@ class MeditationVAE(nn.Module):
         )
     
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Networks -> Thoughtseed logits."""
+        """Encode networks to thoughtseed activations q_phi(z|x)."""
         logits = self.encoder(x)
         return torch.sigmoid(logits)  # Independent strengths (no softmax)
     
     def decode(self, z: torch.Tensor) -> torch.Tensor:
-        """Thoughtseeds -> Networks."""
+        """Decode thoughtseeds to networks p_theta(x|z)."""
         return self.decoder(z)
     
     def predict_next(self, x_t: torch.Tensor, z_t: torch.Tensor) -> torch.Tensor:
-        """Forward dynamics: predict next networks given current (x,z)."""
+        """Forward dynamics: predict next networks given (x_t, z_t)."""
         if x_t.dim() == 1:
             x_t = x_t.unsqueeze(0)
             z_t = z_t.unsqueeze(0)
@@ -87,7 +89,7 @@ class MeditationVAE(nn.Module):
 
 
 class Layer2Agent(nn.Module):
-    """Attentional agent: thoughtseeds + VAE + forward-informed action."""
+    """Attentional agent: thoughtseeds + VAE + EFE policy selection."""
     
     def __init__(self, experience_level: str = 'expert', 
                  blanket_l1l2: Optional[MarkovBlanketL1L2] = None,
@@ -108,36 +110,30 @@ class Layer2Agent(nn.Module):
             hidden_dim=32
         )
         
-        # Thoughtseed priors (state-dependent, FROZEN for both phenotypes)
+        # Thoughtseed priors mu_z(s) (state-dependent, frozen)
         self.mu_params = nn.ParameterDict()
         for state in STATES:
             priors = get_thoughtseed_priors(state)
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
-            # Prior beliefs are fixed structural knowledge (Goal State)
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
         
-        # Expert: Unfrozen VAE (Learns amortized inference)
-        # Novice: Unfrozen VAE (Weak/slow amortization via lower learning rate)
         
     
     def infer_z_from_x(self) -> torch.Tensor:
-        """Bottom-up inference: encode networks (x) -> posterior latent (z) aka thoughtseeds."""
+        """Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)."""
         network_acts = self.blanket_l1l2.sensory_states
         device = next(self.vae.parameters()).device
         
-        # Stack networks
         x = networks_to_tensor(network_acts, NETWORKS, device=device)
         
-        # Encode
-        # q(z|x): recognition density
         z = self.vae.encode(x.unsqueeze(0) if x.dim() == 1 else x)
         if z.dim() > 1:
             z = z.squeeze(0)
         
-        return clamp_activation(z, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+        return clamp_activation(z, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
     
     def decode_with_state(self, z: torch.Tensor) -> torch.Tensor:
-        """Top-down: Decode thoughtseeds -> networks."""
+        """Top-down: decode thoughtseeds -> networks."""
         if z.dim() == 1:
             z_in = z.unsqueeze(0)
             decoded = self.vae.decode(z_in).squeeze(0)
@@ -147,11 +143,11 @@ class Layer2Agent(nn.Module):
         return torch.clamp(decoded, 0.0, 1.0)
 
     def compute_vfe(self, state: str, z: torch.Tensor, observed_networks: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """Compute variational free energy F = reconstruction + KL(q||p)."""
+        """Compute VFE (Eq. 2): reconstruction surprisal + KL complexity."""
         recon_x = self.decode_with_state(z)
         observed_x = networks_to_tensor(observed_networks, NETWORKS, device=z.device, detach=True)
 
-        recon_loss = torch.nn.functional.mse_loss(recon_x, observed_x)
+        recon_loss = bernoulli_nll(recon_x, observed_x, EPS)
         prior = self.mu_params[state].detach()
         kl_div = bernoulli_kl(z, prior, EPS)
 
@@ -164,71 +160,75 @@ class Layer2Agent(nn.Module):
         observed_networks: Dict[str, torch.Tensor],
         z_recognition: torch.Tensor,
     ) -> torch.Tensor:
-        """Posterior update q(z): variational inference over thoughtseeds.
-
-        Fixed-step VI for stability; precision modulates sensory vs prior influence.
-        """
+        """Posterior update q(z): fixed-step VI (Eq. 3) over thoughtseeds."""
         device = activations.device
-        clip_min = DEFAULTS['ACTIVATION_CLIP_MIN']
-        clip_max = DEFAULTS['ACTIVATION_CLIP_MAX']
+        clip_min = DEFAULTS['CLIP_MIN']
+        clip_max = DEFAULTS['CLIP_MAX']
 
-        # Observed networks as tensor
         observed_vec = networks_to_tensor(observed_networks, NETWORKS, device=device)
         
         def clamp_z(t: torch.Tensor) -> torch.Tensor:
             return clamp_activation(t, clip_min, clip_max)
 
-        # Targets
         z_prev = clamp_z(activations.detach())
         sensory_target = clamp_z(z_recognition.detach())
         prior_target = clamp_z(self.mu_params[current_state].detach().clone())
         
-        # Sensory precision from L3 (bounded weight)
+        # Sensory precision lambda_sens (Eq. 4)
         precision = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
-        precision_weight_val = precision_weight(precision)
+        precision_weight_val = clip_probability(precision)
         
         # Initialization: blend previous and sensory target, then bias toward sensory when precision is high.
         z_init = 0.5 * z_prev + 0.5 * sensory_target
         z_init = precision_weight_val * z_init + (1.0 - precision_weight_val) * prior_target
         z_var = clamp_z(z_init).requires_grad_(True)
         
-        # Weights for F-energy terms
-        # High sensory precision -> trust sensory; low precision -> rely on temporal/prior
         sensory_w = precision_weight_val
         temporal_w = 1.0 - precision_weight_val
 
-        # Variational optimization loop (fixed-step VI for stability)
+        # Variational optimization loop (fixed-step VI)
         vi_steps = 2
         vi_lr = 0.2
         with torch.enable_grad():
             for _ in range(vi_steps):
-                # Decode to networks (Generative Model)
                 recon_x = self.decode_with_state(z_var)
                 
-                # Component Losses
-                recon_loss = torch.nn.functional.mse_loss(recon_x, observed_vec)
+                recon_loss = bernoulli_nll(recon_x, observed_vec, EPS)
                 kl_div = bernoulli_kl(z_var, prior_target, EPS)
-                sensory_loss = torch.nn.functional.mse_loss(z_var, sensory_target)
-                temporal_loss = torch.nn.functional.mse_loss(z_var, z_prev)
+                sensory_loss = mse_error(z_var, sensory_target)
+                temporal_loss = mse_error(z_var, z_prev)
                 
-                # Total Free Energy F(z)
                 loss = (recon_loss +
                         kl_div +
                         sensory_w * sensory_loss +
                         temporal_w * temporal_loss)
                 
-                # Gradient Descent
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
                 grad = torch.clamp(grad, -5.0, 5.0)
                 
                 z_var = clamp_z(z_var - vi_lr * grad)
                 z_var = z_var.detach().requires_grad_(True)
         
-        # Finalize
         return z_var.detach()
+
+    def infer_z_step(
+        self,
+        current_state: str,
+        activations: torch.Tensor,
+        observed_networks: Dict[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Infer recognition and VI-refined thoughtseeds for the current step."""
+        z_recognition = self.infer_z_from_x()
+        z_posterior = self.update_posterior_z(
+            current_state=current_state,
+            activations=activations,
+            observed_networks=observed_networks,
+            z_recognition=z_recognition,
+        )
+        return z_posterior, z_recognition
     
     def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
-        """Policy inference via softmax posterior over candidate policies.
+        """Policy inference via softmax posterior over candidate policies (Eq. 5-8).
         
         Returns dict with:
             - selected_action_mu: posterior-weighted thoughtseed target
@@ -239,7 +239,6 @@ class Layer2Agent(nn.Module):
         # Get current networks for forward prediction
         x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS, device=z.device)
         
-        # Candidate policies: stay + all other states
         candidates = [current_state] + [s for s in STATES if s != current_state]
         
         exit_probs = get_exit_transition_probs(self.level, current_state)
@@ -255,10 +254,8 @@ class Layer2Agent(nn.Module):
             for candidate_state in candidates:
                 mu_candidate = self.mu_params[candidate_state]
                 x_pred = self.vae.predict_next(x_current, mu_candidate)
-                # Preference profile C from generative model (self-consistent target)
                 x_pref = self.decode_with_state(mu_candidate)
                 
-                # Risk + Ambiguity for G(pi) (ActInf standard form)
                 risk = bernoulli_kl(x_pred, x_pref, EPS)
                 ambiguity = bernoulli_entropy(x_pred, EPS)
                 g_vals.append(float((risk + ambiguity).item()))
@@ -272,22 +269,11 @@ class Layer2Agent(nn.Module):
                 priors.append(max(EPS, float(prior)))
         
         log_prior = np.log(np.array(priors, dtype=float))
-        g_array = np.array(g_vals, dtype=float)
-        g_std = np.std(g_array)
-        if g_std > EPS:
-            g_array = (g_array - np.mean(g_array)) / (g_std + EPS)
+        g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
 
         gamma_prev = max(EPS, to_float(self.blanket_l2l3.active_states.get('policy_precision', 1.0)))
         q_pi = policy_posterior(log_prior, g_array, gamma_prev)
-        if q_pi.size <= 1:
-            gamma = gamma_prev
-        else:
-            pi_entropy = entropy(q_pi, EPS)
-            denom = np.log(q_pi.size + EPS)
-            if denom <= EPS:
-                gamma = gamma_prev
-            else:
-                gamma = float(np.clip(1.0 - (pi_entropy / denom), 0.0, 1.0))
+        gamma = policy_precision(q_pi, EPS)
         q_pi = policy_posterior(log_prior, g_array, gamma)
         pi_conf = policy_confidence(q_pi)
         policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
@@ -300,7 +286,7 @@ class Layer2Agent(nn.Module):
         mu_x = self.decode_with_state(selected_mu)
         
         precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
-        precision_gain = precision_weight(precision_sensory)
+        precision_gain = clip_probability(precision_sensory)
         self.blanket_l2l3.update_active_states({
             'policy_precision': gamma,
         })

@@ -54,7 +54,6 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     Sensory (L1 -> L2):
         - Network activations: {DMN, VAN, DAN, FPN}
-        - State burdens/costs (optional for lean model)
     
     Active (L2 -> L1):
         - mu_x: Target network activations (policy)
@@ -64,7 +63,6 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     def __init__(self, smoothing: float = 0.0):
         super().__init__(smoothing=smoothing)
-        # Initialize empty - will be populated by L1 process
         
 
 class MarkovBlanketL2L3(MarkovBlanket):
@@ -76,13 +74,12 @@ class MarkovBlanketL2L3(MarkovBlanket):
         - thoughtseed_activations: Dict[str, float] (for meta-awareness)
     
     Active (L3 -> L2):
-        - precision_sensory: float (0-1, precision surrogate)
+        - precision_sensory: float (0-1, sensory precision; Eq. 4)
         - policy_precision: float (>0, softmax inverse temperature)
     """
     
     def __init__(self, smoothing: float = 0.0):
         super().__init__(smoothing=smoothing)
-        # Initialize with defaults
         self.active_states['precision_sensory'] = 0.5
         self.active_states['policy_precision'] = 1.0
 

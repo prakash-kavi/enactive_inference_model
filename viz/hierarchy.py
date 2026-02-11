@@ -42,7 +42,7 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     ax1.plot(time_steps, meta_awareness, color='#4363d8', linewidth=2)
     ax1.fill_between(time_steps, meta_awareness, alpha=0.2, color='#4363d8')
     ax1.set_ylabel('Meta-Awareness Level', fontsize=12)
-    ax1.set_title('Level 3: Metacognition', fontsize=14, fontweight='bold')
+    ax1.set_title('Level 3: Metacognition', fontsize=14, fontweight='bold', loc='left')
     ax1.set_ylim(0, 1.05)
     ax1.grid(True, axis='y', linestyle='--', alpha=0.5)
     # Remove axis borders/spines for a cleaner look
@@ -77,7 +77,7 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     ax2.set_yticklabels(thoughtseeds)
     ax2.invert_yaxis()
     ax2.set_ylabel('Dominant Thoughtseed', fontsize=12)
-    ax2.set_title('Level 2: Dominant Thoughtseed', fontsize=14, fontweight='bold', pad=-15)
+    ax2.set_title('Level 2: Dominant Thoughtseed', fontsize=14, fontweight='bold', pad=-15, loc='left')
     ax2.grid(True, axis='y', linestyle='--', alpha=0.5)
     # Remove axis borders/spines for consistency
     for spine in ax2.spines.values():
@@ -128,14 +128,14 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     
     ax3.set_xlabel('Time (timesteps)', fontsize=12, labelpad=12)
     ax3.set_ylabel('Network Activation', fontsize=12)
-    ax3.set_title('Level 1: Network Dynamics', fontsize=14, fontweight='bold')
+    ax3.set_title('Level 1: Network Dynamics', fontsize=14, fontweight='bold', loc='left')
     ax3.legend(loc='upper right', fontsize=10)
     ax3.grid(True, linestyle='--', alpha=0.5)
     for spine in ax3.spines.values():
         spine.set_visible(False)
     ax3.patch.set_visible(False)
     
-    fig.suptitle(f'Hierarchical Dynamics ({level_name})', fontsize=16, fontweight='bold')
+    fig.suptitle(f'Hierarchical Dynamics ({level_name})', fontsize=16, fontweight='bold', x=0.06, ha='left')
     
     plt.tight_layout(rect=[0, 0.05, 1, 0.99])
     save_figure(fig, Path(save_path), f"Hierarchy_{level_name}")

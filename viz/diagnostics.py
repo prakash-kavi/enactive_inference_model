@@ -1,11 +1,10 @@
 """Diagnostic comparison plots.
 
-Combines free energy bars and dwell time bars in a 2-panel figure.
+Dwell time comparison (single-panel bar plot).
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 from pathlib import Path
 
 from viz.plotting_utils import (
@@ -14,7 +13,7 @@ from viz.plotting_utils import (
     save_figure,
     set_plot_style,
 )
-from utils.config import STATES, DEFAULTS
+from utils.config import STATES
 
 
 def get_dwell_times(stats):
@@ -66,8 +65,8 @@ def _add_significance_bracket(ax, x_start, x_end, y_start, y_end, text, color='b
         return 0.0
         
     # Calculate dimensions
-    h_bracket = (y_end - y_start) * 0.05 if (y_end - y_start) > 0 else 0.05 * y_end
-    if h_bracket == 0: h_bracket = 0.05 # Fallback
+    span = max(abs(y_end - y_start), max(y_start, y_end, 1.0))
+    h_bracket = 0.05 * span
     
     y_top = max(y_start, y_end) + h_bracket * 2
     y_text = y_top + h_bracket * 0.5
@@ -87,101 +86,20 @@ def _add_significance_bracket(ax, x_start, x_end, y_start, y_end, text, color='b
 
 def plot_fe_and_dwell(novice_data: dict, expert_data: dict, save_path: str):
     """
-    Combined 2-panel plot: Free Energy + Dwell Times with Stats Brackets
+    Dwell time comparison with significance brackets.
     """
     set_plot_style()
-    
-    fig = plt.figure(figsize=(16, 7))  # Increased height for brackets
-    gs = GridSpec(1, 2, figure=fig, wspace=0.25)
-    
-    # ===== Panel A: Free Energy Bar Chart =====
-    ax1 = fig.add_subplot(gs[0])
-    
-    def _collect_fe_by_state(stats):
-        states = stats.get("state_history", [])
-        fe = stats.get("free_energy_history", [])
-        by_state = {s: [] for s in STATES}
-        for s, f in zip(states, fe):
-            if s in by_state:
-                try:
-                    by_state[s].append(float(f))
-                except Exception:
-                    pass
-        return by_state
 
-    nov_by_state = _collect_fe_by_state(novice_data)
-    exp_by_state = _collect_fe_by_state(expert_data)
+    fig, ax2 = plt.subplots(1, 1, figsize=(10, 5), constrained_layout=True)
 
     x = np.arange(len(STATES))
-    width = 0.35
+    width = 0.28
 
-    # Calculate stats
-    nov_means, exp_means = [], []
-    nov_stds, exp_stds = [], []
-    nov_ns, exp_ns = [], []
-    
-    for s in STATES:
-        # Novice stats
-        vals = nov_by_state[s]
-        nov_means.append(np.mean(vals) if vals else 0.0)
-        nov_stds.append(np.std(vals) if vals else 0.0)
-        nov_ns.append(len(vals))
-        
-        # Expert stats
-        vals = exp_by_state[s]
-        exp_means.append(np.mean(vals) if vals else 0.0)
-        exp_stds.append(np.std(vals) if vals else 0.0)
-        exp_ns.append(len(vals))
-
-    # Novice: Hatched, Alpha 0.4
-    nov_bars = ax1.bar(x - width/2, nov_means, width, yerr=nov_stds, capsize=4,
-                      label='Novice', color=[STATE_COLORS[s] for s in STATES], alpha=0.4,
-                      hatch='//', edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
-    # Expert: Solid, Alpha 0.7
-    exp_bars = ax1.bar(x + width/2, exp_means, width, yerr=exp_stds, capsize=4,
-                      label='Expert', color=[STATE_COLORS[s] for s in STATES], alpha=0.7,
-                      edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
-
-    # Add brackets
-    max_y_used = 0
-    current_max_y = max([m + s for m, s in zip(nov_means+exp_means, nov_stds+exp_stds)]) if nov_means else 1.0
-    
-    for i in range(len(STATES)):
-        sig = _calc_significance(nov_means[i], nov_stds[i], nov_ns[i],
-                               exp_means[i], exp_stds[i], exp_ns[i])
-        
-        if sig:
-            # Bar tops
-            y1 = nov_means[i] + nov_stds[i]
-            y2 = exp_means[i] + exp_stds[i]
-            
-            # Draw bracket
-            top_y = _add_significance_bracket(ax1, 
-                                            x[i] - width/2, 
-                                            x[i] + width/2, 
-                                            y1, y2, sig)
-            max_y_used = max(max_y_used, top_y)
-
-    # Auto-scale Y with headroom
-    top_limit = max(current_max_y, max_y_used) * 1.15
-    ax1.set_ylim(0, top_limit)
-
-    ax1.set_ylabel('Free Energy', fontsize=12, fontweight='bold')
-    ax1.set_title('Free Energy: Mean ± STD', fontsize=14, fontweight='bold')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels([STATE_DISPLAY_NAMES[s] for s in STATES], fontsize=11)
-    ax1.legend(fontsize=11, loc='upper left')
-    ax1.grid(True, axis='y', linestyle='--', alpha=0.3)
-    ax1.set_axisbelow(True)
-    
-    # ===== Panel B: Dwell Times Bar Chart =====
-    ax2 = fig.add_subplot(gs[1])
-    
     nov_dwells = get_dwell_times(novice_data)
     exp_dwells = get_dwell_times(expert_data)
 
-    dt = DEFAULTS['DEFAULT_DT']
-    
+    # Dwell times already measured in timesteps
+
     # Calculate stats
     nov_means, exp_means = [], []
     nov_stds, exp_stds = [], []
@@ -189,63 +107,65 @@ def plot_fe_and_dwell(novice_data: dict, expert_data: dict, save_path: str):
 
     for s in STATES:
         # Novice
-        vals = [v * dt for v in nov_dwells[s]]
+        vals = nov_dwells[s]
         nov_means.append(np.mean(vals) if vals else 0)
         nov_stds.append(np.std(vals) if vals else 0)
         nov_ns.append(len(vals))
-        
+
         # Expert
-        vals = [v * dt for v in exp_dwells[s]]
+        vals = exp_dwells[s]
         exp_means.append(np.mean(vals) if vals else 0)
         exp_stds.append(np.std(vals) if vals else 0)
         exp_ns.append(len(vals))
 
-    # Plot Bars (SWAPPED STYLES)
-    nov_bars = ax2.bar(x - width/2, nov_means, width, yerr=nov_stds, capsize=4, label='Novice', 
-                      color=[STATE_COLORS[s] for s in STATES], alpha=0.4, hatch='//', edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
-    exp_bars = ax2.bar(x + width/2, exp_means, width, yerr=exp_stds, capsize=4, label='Expert', 
-                      color=[STATE_COLORS[s] for s in STATES], alpha=0.7, edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
+    # Plot Bars
+    ax2.bar(x - width/2, nov_means, width, yerr=nov_stds, capsize=4, label='Novice',
+            color=[STATE_COLORS[s] for s in STATES], alpha=0.4, hatch='//', edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
+    ax2.bar(x + width/2, exp_means, width, yerr=exp_stds, capsize=4, label='Expert',
+            color=[STATE_COLORS[s] for s in STATES], alpha=0.7, edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
 
     # Add brackets
     max_y_used = 0
-    current_max_y = max([m + s for m, s in zip(nov_means+exp_means, nov_stds+exp_stds)]) if nov_means else 1.0
+    current_max_y = max([m + s for m, s in zip(nov_means + exp_means, nov_stds + exp_stds)]) if nov_means else 1.0
 
     for i in range(len(STATES)):
         sig = _calc_significance(nov_means[i], nov_stds[i], nov_ns[i],
-                               exp_means[i], exp_stds[i], exp_ns[i])
-        
+                                 exp_means[i], exp_stds[i], exp_ns[i])
+
         if sig:
             # Bar tops
             y1 = nov_means[i] + nov_stds[i]
             y2 = exp_means[i] + exp_stds[i]
-            
-            top_y = _add_significance_bracket(ax2, 
-                                            x[i] - width/2, 
-                                            x[i] + width/2, 
-                                            y1, y2, sig)
+
+            top_y = _add_significance_bracket(
+                ax2,
+                x[i] - width / 2,
+                x[i] + width / 2,
+                y1,
+                y2,
+                sig,
+            )
             max_y_used = max(max_y_used, top_y)
 
     # Auto-scale Y with headroom
     top_limit = max(current_max_y, max_y_used) * 1.15
     ax2.set_ylim(0, top_limit)
 
-    ax2.set_ylabel('Average Dwell Time (Seconds)', fontsize=12, fontweight='bold')
-    ax2.set_title('Dwell Time: Mean ± STD', fontsize=14, fontweight='bold')
+    ax2.set_ylabel('Average Dwell Time (Timesteps)', fontsize=12, fontweight='bold')
+    ax2.set_title('Dwell Times', fontsize=14, fontweight='bold')
     ax2.set_xticks(x)
     ax2.set_xticklabels([STATE_DISPLAY_NAMES[s] for s in STATES], fontsize=11)
     ax2.legend()
     ax2.grid(True, axis='y', linestyle='--', alpha=0.3)
     ax2.set_axisbelow(True)
-    
-    plt.tight_layout()
-    save_figure(fig, Path(save_path), "FE and Dwell")
+
+    save_figure(fig, Path(save_path), "Fig2B_Dwell")
     plt.close(fig)
 
 
 def plot_transitions(novice_data: dict, expert_data: dict, save_path: str):
     """
     Transition dynamics comparison: 2 heatmaps side-by-side (Novice | Expert)
-    EXACT style from analysis.py plot_training_summary()
     """
     set_plot_style()
     
@@ -270,9 +190,9 @@ def plot_transitions(novice_data: dict, expert_data: dict, save_path: str):
     ax1.set_yticks(range(len(STATES)))
     ax1.set_xticklabels([s.replace('_', '\n') for s in STATES], fontsize=8)
     ax1.set_yticklabels([s.replace('_', ' ').title() for s in STATES], fontsize=8)
-    ax1.set_xlabel('To State')
-    ax1.set_ylabel('From State')
-    ax1.set_title('Novice Transition Dynamics')
+    ax1.set_xlabel('To State', fontweight='bold')
+    ax1.set_ylabel('From State', fontweight='bold')
+    ax1.set_title('Novice Transition Dynamics', fontsize=13, fontweight='bold')
     
     # Add text annotations
     for i in range(len(STATES)):
@@ -292,9 +212,9 @@ def plot_transitions(novice_data: dict, expert_data: dict, save_path: str):
     ax2.set_yticks(range(len(STATES)))
     ax2.set_xticklabels([s.replace('_', '\n') for s in STATES], fontsize=8)
     ax2.set_yticklabels([s.replace('_', ' ').title() for s in STATES], fontsize=8)
-    ax2.set_xlabel('To State')
-    ax2.set_ylabel('From State')
-    ax2.set_title('Expert Transition Dynamics')
+    ax2.set_xlabel('To State', fontweight='bold')
+    ax2.set_ylabel('From State', fontweight='bold')
+    ax2.set_title('Expert Transition Dynamics', fontsize=13, fontweight='bold')
     
     # Add text annotations
     for i in range(len(STATES)):

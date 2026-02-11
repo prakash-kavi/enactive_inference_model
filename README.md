@@ -14,7 +14,7 @@
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
                | Sensory: meta_awareness
-               | Active:  precision_sensory, policy_precision
+               | Active:  lambda_sens, policy_precision
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
@@ -82,11 +82,6 @@ python run_enactive_inference.py run
 
 This trains both expert and novice models for 10,000 timesteps (default), saves results to `data/`, and generates all plots.
 
-**Options:**
-```bash
-python run_enactive_inference.py run --timesteps 10000  # Custom training length
-```
-
 ### Generate Plots from Existing Data
 
 ```bash
@@ -112,23 +107,23 @@ Each contains:
 - Action prediction error summaries
 
 ### Plots
-Generated in `plots/`:
+Generated in `figures/`:
 
 **Convergence:**
-- `FigS1_Convergence_Expert.png` - Free energy stabilization, state occupancy
-- `FigS1_Convergence_Novice.png`
+- `FigS1_Convergence_Expert.pdf` - Free energy stabilization, state occupancy
+- `FigS1_Convergence_Novice.pdf`
 
 **Comparison:**
-- `Fig2A_Network_Radar.png` - Network profiles across states (Expert vs Novice)
-- `Fig2B_FE_and_Dwell.png` - Free energy and dwell times per state
-- `Fig2C_Transitions.png` - State transition probability matrices
+- `fig2a.pdf` - Network profiles across states (Expert vs Novice)
+- `fig2b.pdf` - Dwell times per state (timesteps)
+- `fig2c.pdf` - State transition probability matrices
 
 **Dynamics:**
-- `Fig3A_Hierarchy_Novice.png` - 3-layer hierarchical dynamics over time
-- `Fig3B_Hierarchy_Expert.png`
+- `fig3a.pdf` - 3-layer hierarchical dynamics over time
+- `fig3b.pdf`
 
 **State Space:**
-- `Fig4_PCA_Trajectories.png` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
+- `fig4.pdf` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
 
 ---
 
@@ -175,7 +170,7 @@ Backpropagation Through Time optimizes:
 **Behavioral Signatures (run-dependent):**
 - Expert typically shows lower free energy and a more stable breath-focus basin
 - Novice shows broader excursions and shallower basins
-- See `data/` and `plots/` for the current run's quantitative summaries
+- See `data/` and `figures/` for the current run's quantitative summaries
 
 ---
 
@@ -195,7 +190,7 @@ Backpropagation Through Time optimizes:
 |   +-- math_utils.py          # Tensor/math operations
 |   +-- analysis_utils.py      # Metrics computation
 +-- data/                      # Training results (JSON)
-+-- plots/                     # Generated figures (PNG)
++-- figures/                   # Generated figures (PDF)
 +-- viz/                       # Plotting modules
     +-- analysis.py
     +-- attractors.py
@@ -228,36 +223,39 @@ with `sigma^2 = NOISE_LEVEL`. Euler integration is used with state-specific `The
 ### Layer 2: Recognition + Variational Inference (VAE)
 VAE components:
 - **Encoder**: `q(z|x)` (networks -> thoughtseeds)
-- **Decoder**: `p(x|z)` (reconstruction)
+- **Decoder**: `p(x|z)` (likelihood / surprisal)
 - **Forward model**: `f(x, z)` predicts next networks
 
 Per-step VFE:
 ```
-F(z) = MSE(decode(z), x) + KL_Bernoulli(z || mu_z(s))
+F(z) = Surprisal_NLL_Bernoulli(decode(z), x) + KL_Bernoulli(z || mu_z(s))
 ```
 
 Fixed-step VI (2 steps, lr=0.2) optimizes:
 ```
-L(z) = recon_loss + KL
-     + precision_w * MSE(z, z_rec)
-     + (1 - precision_w) * MSE(z, z_prev)
+L(z) = surprisal + KL
+     + pi_w * MSE(z, z_rec)
+     + (1 - pi_w) * MSE(z, z_prev)
 ```
 Initialization:
 ```
 z_init = 0.5 * z_prev + 0.5 * z_rec
-z_init = precision_w * z_init + (1 - precision_w) * mu_z(s)
+z_init = pi_w * z_init + (1 - pi_w) * mu_z(s)
 ```
-where `precision_w = clip(precision_sensory)` in [0, 1].
+where `pi_w = clip(lambda_sens)` in [0, 1].
 
-### Sensory Precision (from prediction error)
-Forward prediction:
+### Sensory Precision (from forward surprisal)
+Forward prediction and surprisal (S_forward):
 ```
 x_pred = f(x_{t-1}, a_{t-1})
-epsilon_fwd = mean((x_t - x_pred)^2)
+S_forward = Surprisal_NLL_Bernoulli(x_pred, x_t)
 ```
-Precision update:
+We map forward surprisal to sensory precision (lambda_sens), so higher surprise implies lower precision.
+Precision update (Option A, Act-Inf aligned):
 ```
-precision_sensory = NOISE_LEVEL / (NOISE_LEVEL + epsilon_fwd + eps)
+lambda_sens = exp(-S_forward)
+lambda_sens = clip(lambda_sens, CLIP_MIN, CLIP_MAX)
+lambda_sens = fuse_logit(lambda_sens, meta)
 ```
 
 ### Layer 3: Meta-Awareness
@@ -301,11 +299,11 @@ mu_x = decode(mu)
 ### Learning Objective
 Auto-balanced forward weight:
 ```
-w_fwd = sum_t F_t / (sum_t epsilon_fwd + eps)
+w_fwd = EMA(F_t) / (EMA(S_forward) + eps)
 ```
 Total loss:
 ```
-L_total = F + w_fwd * epsilon_fwd + alpha_rec * L_rec
+L_total = F + w_fwd * S_forward + alpha_rec * L_rec
 ```
 where `L_rec = MSE(encode(x), z*)`. Experts use `alpha_rec = 1`. Novices use a weak
 weight tied to learning rate: `alpha_rec = lr_novice / lr_expert`.

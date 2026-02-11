@@ -1,9 +1,9 @@
 """Training orchestrator: BPTT loop with hierarchical free energy minimization.
 
-Implements the "awareness as hyperparameter optimization" framework:
-- L2 minimizes VFE (F): reconstruction + KL divergence + forward prediction error
-- L3 tracks meta-awareness from thoughtseed content
-- Forward model trains on action-conditioned prediction
+Key equation references:
+- Eq. (2): VFE = reconstruction surprisal + KL complexity
+- Eq. (4): forward surprisal drives sensory precision
+- L3 computes meta-awareness and modulates L2 precision
 """
 
 import numpy as np
@@ -22,7 +22,13 @@ from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
 from .l3_metacognition import Layer3Monitor
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from utils.math_utils import networks_to_tensor
+from utils.math_utils import (
+    networks_to_tensor,
+    precision_from_surprisal,
+    fuse_precision_logit,
+    bernoulli_nll,
+    mse_error,
+)
 
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
@@ -36,30 +42,22 @@ class MeditationTrainer:
         if self.debug_anomaly:
             torch.autograd.set_detect_anomaly(True)
         
-        # Set seeds
         torch.manual_seed(seed)
         np.random.seed(seed)
         
-        # Markov blankets
         self.blanket_l1l2 = MarkovBlanketL1L2(smoothing=0.0)
         self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.0)
         
-        # Hierarchical layers
         self.process = Layer1Process(experience_level=experience_level, seed=seed)
         self.agent = Layer2Agent(
             experience_level=experience_level,
             blanket_l1l2=self.blanket_l1l2,
             blanket_l2l3=self.blanket_l2l3
         )
-        self.monitor = Layer3Monitor(
-            experience_level=experience_level,
-            blanket_l2l3=self.blanket_l2l3
-        )
+        self.monitor = Layer3Monitor(blanket_l2l3=self.blanket_l2l3)
         
-        # Optimizer
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.params['learning_rate'])
         
-        # History tracking (Initialized in reset)
         self.history = {}
         self._last_x_actual = None
         self._loss_balance = {}
@@ -102,23 +100,20 @@ class MeditationTrainer:
                 self._last_x_actual['x'],
                 self._last_x_actual['action']
             )
-            forward_prediction_error = torch.mean((x_current.detach() - x_pred) ** 2)
+            # Forward surprisal (NLL under predicted likelihood)
+            forward_prediction_error = bernoulli_nll(x_pred, x_current.detach(), EPS)
             forward_prediction_error_val = forward_prediction_error.item()
-            base_variance = float(self.process.NOISE_LEVEL)
-            base_precision = base_variance / (base_variance + forward_prediction_error_val + EPS)
+            base_precision = precision_from_surprisal(forward_prediction_error_val, EPS)
             self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
         # ===== Layer 2: Attentional Agent =====
-        # Perception: Encode networks -> thoughtseeds
-        z_recognition = self.agent.infer_z_from_x()
-
-        # Variational inference: Update thoughtseed dynamics
-        activations = self.agent.update_posterior_z(
+        # Perception + VI refinement: encode + fixed-step posterior update
+        activations, _ = self.agent.infer_z_step(
             current_state=new_state,
             activations=activations,
             observed_networks=network_acts,
-            z_recognition=z_recognition
-        ).detach()  # VI not part of BPTT gradient flow
+        )
+        activations = activations.detach()  # VI not part of BPTT gradient flow
 
         # Compute VFE (L2's free energy)
         free_energy = self.agent.compute_vfe(
@@ -130,8 +125,11 @@ class MeditationTrainer:
         meta_awareness = self.monitor.update_meta_awareness(new_state, activations)
 
         # Meta-awareness modulates sensory precision (L3 -> L2)
-        precision_sensory = 0.5 * (base_precision + float(meta_awareness))
-        precision_sensory = max(0.0, min(1.0, precision_sensory))
+        clip_min = DEFAULTS['CLIP_MIN']
+        clip_max = DEFAULTS['CLIP_MAX']
+        base_precision = float(np.clip(base_precision, clip_min, clip_max))
+        meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
+        precision_sensory = fuse_precision_logit(base_precision, meta_awareness, EPS)
         self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
 
         # ===== Policy Inference =====
@@ -145,12 +143,20 @@ class MeditationTrainer:
         step_loss = free_energy
 
         if forward_prediction_error is not None:
-            self._loss_balance['fe_sum'] += float(free_energy.detach().item())
-            self._loss_balance['fpe_sum'] += float(forward_prediction_error_val)
-            if self._loss_balance['fpe_sum'] > EPS:
-                forward_weight = self._loss_balance['fe_sum'] / (self._loss_balance['fpe_sum'] + EPS)
+            fe_val = float(free_energy.detach().item())
+            fpe_val = float(forward_prediction_error_val)
+            beta = self._loss_balance['ema_beta']
+            self._loss_balance['fe_ema'] = beta * self._loss_balance['fe_ema'] + (1.0 - beta) * fe_val
+            self._loss_balance['fpe_ema'] = beta * self._loss_balance['fpe_ema'] + (1.0 - beta) * fpe_val
+            if self._loss_balance['fpe_ema'] > EPS:
+                ratio = self._loss_balance['fe_ema'] / (self._loss_balance['fpe_ema'] + EPS)
             else:
-                forward_weight = 1.0
+                ratio = 1.0
+
+            self._loss_balance['ratio_ema'] = beta * self._loss_balance['ratio_ema'] + (1.0 - beta) * ratio
+            forward_weight = float(np.clip(self._loss_balance['ratio_ema'],
+                                           self._loss_balance['fw_min'],
+                                           self._loss_balance['fw_max']))
 
             # Combined loss
             step_loss = free_energy + forward_weight * forward_prediction_error
@@ -169,7 +175,7 @@ class MeditationTrainer:
 
                     # Target is the optimized z from VFE loop (which is detached)
                     # Recognition loss = MSE(Encoder(x), VI_Optimized_z)
-                    rec_loss = torch.nn.functional.mse_loss(z_recognition, activations.detach())
+                    rec_loss = mse_error(z_recognition, activations.detach())
 
                     # Add to total loss (weighted)
                     step_loss = step_loss + rec_scale * rec_loss
@@ -204,6 +210,7 @@ class MeditationTrainer:
         metrics = {
             'timestamp': t,
             'free_energy': free_energy.detach().item(),
+            'loss': float(step_loss.detach().item()),
             'meta_awareness': meta_awareness,
             'action_error': forward_prediction_error_val,
             'network_activations': network_acts_serializable,
@@ -248,7 +255,7 @@ class MeditationTrainer:
         priors = get_thoughtseed_priors(current_state)
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
         activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
-        activations = torch.clamp(activations, DEFAULTS['ACTIVATION_CLIP_MIN'], DEFAULTS['ACTIVATION_CLIP_MAX'])
+        activations = torch.clamp(activations, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
         
         # Initialize blankets
         self.blanket_l1l2.update_active_states({
@@ -325,6 +332,7 @@ class MeditationTrainer:
         """Append per-timestep metrics to training history."""
         self.history['states'].append(current_state)
         self.history['free_energy'].append(metrics['free_energy'])
+        self.history['loss'].append(metrics['loss'])
         self.history['meta_awareness'].append(metrics['meta_awareness'])
         self.history['action_errors'].append(metrics['action_error'])
         self.history['network_activations'].append(metrics['network_activations'])
@@ -382,6 +390,7 @@ class MeditationTrainer:
             'seed': self.seed,
             'timesteps': len(self.history['states']),
             'free_energy_history': self.history['free_energy'],
+            'loss_history': self.history['loss'],
             'meta_awareness_history': self.history['meta_awareness'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
             'transitions': self.history['transitions'],
@@ -389,6 +398,7 @@ class MeditationTrainer:
             'transition_matrix': trans_matrix,
             'avg_action_errors': avg_action_errors,
             'final_free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0,
+            'final_loss': self.history['loss'][-1] if self.history['loss'] else 0.0,
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
             'dominant_ts_history': self.history['dominant_thoughtseed'],
@@ -400,6 +410,7 @@ class MeditationTrainer:
         self.history = {
             'states': [],
             'free_energy': [],
+            'loss': [],
             'meta_awareness': [],
             'transitions': [],
             'action_errors': [],
@@ -408,7 +419,14 @@ class MeditationTrainer:
             'dominant_thoughtseed': []
         }
         self._last_x_actual = None
-        self._loss_balance = {'fe_sum': 0.0, 'fpe_sum': 0.0}
+        self._loss_balance = {
+            'fe_ema': 0.0,
+            'fpe_ema': 0.0,
+            'ema_beta': 0.99,
+            'ratio_ema': 1.0,
+            'fw_min': 0.5,
+            'fw_max': 2.0,
+        }
         self.blanket_l1l2.reset()
         self.monitor.reset()
 

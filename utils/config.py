@@ -13,8 +13,8 @@ NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
 DEFAULTS = {
-    'ACTIVATION_CLIP_MIN': 0.05,
-    'ACTIVATION_CLIP_MAX': 0.9,
+    'CLIP_MIN': 0.05,
+    'CLIP_MAX': 0.9,
     'DEFAULT_DT': 0.2,
 }
 
@@ -23,6 +23,9 @@ EPS = 1e-6
 # =============================================================================
 # Layer 1: MVOU Generative Process
 # =============================================================================
+
+# Global process noise variance (used in L1 MVOU; Eq. 1)
+NOISE_LEVEL = 0.002
 
 # Multivariate Ornstein-Uhlenbeck coupling (dX = -Theta * dt)
 # Positive = inhibition, Negative = synergy
