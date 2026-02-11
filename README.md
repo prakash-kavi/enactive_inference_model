@@ -5,7 +5,7 @@
 ---
 
 ## Architecture
-![Thoughtseeds Framework](Thoughtseeds_Framework.jpg)
+![Thoughtseeds Framework](fig1.jpg)
 ```
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |
