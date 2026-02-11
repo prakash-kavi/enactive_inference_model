@@ -48,6 +48,10 @@ Thumbs.db
 *.synctex.gz
 *.toc
 
+# Manuscript sources (excluded from repo)
+*.tex
+README_head.txt
+
 # Coverage
 .coverage
 htmlcov/
