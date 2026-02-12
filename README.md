@@ -148,14 +148,14 @@ Backpropagation Through Time optimizes:
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
-- **Unfrozen Encoder:** Learns "Amortized Inference" (fast, intuitive state recognition).
-- **Phenotype priors:** Uses expert priors for dwell ranges and transition probabilities.
-- **Physiology:** Stronger FPN activation, longer BF dwell times.
+- Learns "Amortized Inference" (fast, intuitive state recognition).
+- Uses expert priors for dwell ranges and transition probabilities.
+- Stronger FPN activation, longer BF dwell times.
 
 **Novice:**
-- **Weak Amortized Inference:** Learns more slowly due to lower learning rate, so recognition is less reliable.
-- **Phenotype priors:** Uses novice priors for dwell ranges and transition probabilities.
-- **Physiology:** DMN-dominant profile, shorter BF dwell times.
+- Weak Amortized Inference: Learns more slowly due to lower learning rate, so recognition is less reliable.
+- Uses novice priors for dwell ranges and transition probabilities.
+- DMN-dominant profile, shorter BF dwell times.
 
 ---
 
