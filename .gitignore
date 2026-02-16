@@ -50,6 +50,7 @@ Thumbs.db
 
 # Manuscript sources (excluded from repo)
 *.tex
+rsa.tex
 README_head.txt
 
 # Coverage

@@ -131,7 +131,6 @@ def mse_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 def networks_to_tensor(
     network_values: Dict[str, Union[float, torch.Tensor]],
     networks: Iterable[str],
-    device: torch.device = None,
     default: float = 0.0,
     detach: bool = False,
 ) -> torch.Tensor:
@@ -140,11 +139,11 @@ def networks_to_tensor(
     for net in networks:
         value = network_values.get(net)
         if value is None:
-            tensor = torch.tensor(default, dtype=torch.float32, device=device)
+            tensor = torch.tensor(default, dtype=torch.float32)
         elif isinstance(value, torch.Tensor):
-            tensor = value.to(device) if device is not None else value
+            tensor = value
         else:
-            tensor = torch.tensor(value, dtype=torch.float32, device=device)
+            tensor = torch.tensor(value, dtype=torch.float32)
 
         if detach:
             tensor = tensor.detach()

@@ -47,7 +47,7 @@ class MeditationTrainer:
         
         self.blanket_l1l2 = MarkovBlanketL1L2(smoothing=0.0)
         self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.0)
-        
+
         self.process = Layer1Process(experience_level=experience_level, seed=seed)
         self.agent = Layer2Agent(
             experience_level=experience_level,
@@ -55,7 +55,7 @@ class MeditationTrainer:
             blanket_l2l3=self.blanket_l2l3
         )
         self.monitor = Layer3Monitor(blanket_l2l3=self.blanket_l2l3)
-        
+
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.params['learning_rate'])
         
         self.history = {}
@@ -141,6 +141,7 @@ class MeditationTrainer:
 
         # Forward model loss calculation
         step_loss = free_energy
+        forward_weight = 0.0  # used in diagnostic print when fpe is None
 
         if forward_prediction_error is not None:
             fe_val = float(free_energy.detach().item())
@@ -251,10 +252,9 @@ class MeditationTrainer:
         current_state = self.process.current_state
         
         # Initial thoughtseed activations
-        device = next(self.agent.parameters()).device
         priors = get_thoughtseed_priors(current_state)
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
-        activations = torch.tensor(activations_np, dtype=torch.float32, device=device)
+        activations = torch.tensor(activations_np, dtype=torch.float32)
         activations = torch.clamp(activations, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
         
         # Initialize blankets

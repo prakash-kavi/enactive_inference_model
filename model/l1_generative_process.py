@@ -20,19 +20,19 @@ from utils.math_utils import clip_probability, to_float
 
 class Layer1Process(nn.Module):
     """MVOU generative process for brain network dynamics (Eq. 1)."""
-    
+
     # MVOU integration constants
     MAX_STIFFNESS = 2.5
     N_SUBSTEPS = 2
     INIT_ACTIVATION = 0.5
-    
+
     def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None):
         super().__init__()
-        
+
         self.level = experience_level
         self.dt = DEFAULTS['DEFAULT_DT']
         self.rng = np.random.RandomState(seed)
-        
+
         # Network state
         self.x = torch.full((len(NETWORKS),), self.INIT_ACTIVATION, dtype=torch.float32)
         
@@ -83,7 +83,7 @@ class Layer1Process(nn.Module):
         """Get attractor mean mu_x(s) for current state."""
         profile = NETWORK_PROFILES[state][self.level]
         mu_np = np.array([profile[n] for n in NETWORKS])
-        return torch.tensor(mu_np, dtype=torch.float32, device=self.x.device)
+        return torch.tensor(mu_np, dtype=torch.float32)
     
     def _get_coupling(self, state: str) -> torch.Tensor:
         """Build Theta(s) coupling matrix for state (Eq. 1)."""
@@ -98,13 +98,13 @@ class Layer1Process(nn.Module):
             c_idx = self.net_idx[col_net]
             theta_np[r_idx, c_idx] = value
         
-        theta = torch.tensor(theta_np, dtype=torch.float32, device=self.x.device)
-        
+        theta = torch.tensor(theta_np, dtype=torch.float32)
+
         # Expert-specific adjustments to Theta(s)
         if self.level == 'expert':
             if state == 'breath_focus':
                 # Stronger self-stabilization
-                theta = theta + torch.eye(len(NETWORKS), device=self.x.device) * 0.4
+                theta = theta + torch.eye(len(NETWORKS)) * 0.4
             elif state == 'redirect_attention':
                 # Amplify DMN-DAN inhibition
                 r, c = self.net_idx['DMN'], self.net_idx['DAN']
@@ -123,12 +123,11 @@ class Layer1Process(nn.Module):
     def _clamp_theta(self, theta: torch.Tensor) -> torch.Tensor:
         """Prevent excessive stiffness in Theta(s)."""
         n = len(NETWORKS)
-        device = theta.device
-        off_diag_mask = 1.0 - torch.eye(n, device=device)
+        off_diag_mask = 1.0 - torch.eye(n)
         off_diag_sum = torch.sum(torch.abs(theta) * off_diag_mask, dim=1)
-        
+
         # Scale down rows with high volatility
-        scaling = torch.ones(n, device=device)
+        scaling = torch.ones(n)
         high_mask = off_diag_sum > (self.MAX_STIFFNESS - 0.1)
         if torch.any(high_mask):
             target = self.MAX_STIFFNESS - 0.1
@@ -176,7 +175,7 @@ class Layer1Process(nn.Module):
             bias_strength = 0.5 * clip_probability(bias_strength)
             
             if not isinstance(mu_x, torch.Tensor):
-                mu_x = torch.tensor(mu_x, device=mu.device, dtype=torch.float32)
+                mu_x = torch.tensor(mu_x, dtype=torch.float32)
             mu = (1 - bias_strength) * mu + bias_strength * mu_x
         
         # Global process noise variance (Eq. 1), modulated by L2 precision gain

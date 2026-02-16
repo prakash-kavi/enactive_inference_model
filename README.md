@@ -3,7 +3,7 @@
 ---
 
 ## Architecture
-![Thoughtseeds Framework](figures/fig1.jpg)
+![Thoughtseeds Framework](figures/fig1a.jpg) ![Thoughtseeds Framework](figures/fig1b.jpg)
 ```
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |
@@ -66,6 +66,7 @@ pip install -r requirements.txt
 **Requirements:**
 - Python 3.9+
 - See `requirements.txt`
+- Runs on CPU only; no GPU required or used.
 
 ---
 

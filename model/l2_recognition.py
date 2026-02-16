@@ -122,9 +122,7 @@ class Layer2Agent(nn.Module):
     def infer_z_from_x(self) -> torch.Tensor:
         """Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)."""
         network_acts = self.blanket_l1l2.sensory_states
-        device = next(self.vae.parameters()).device
-        
-        x = networks_to_tensor(network_acts, NETWORKS, device=device)
+        x = networks_to_tensor(network_acts, NETWORKS)
         
         z = self.vae.encode(x.unsqueeze(0) if x.dim() == 1 else x)
         if z.dim() > 1:
@@ -145,7 +143,7 @@ class Layer2Agent(nn.Module):
     def compute_vfe(self, state: str, z: torch.Tensor, observed_networks: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Compute VFE (Eq. 2): reconstruction surprisal + KL complexity."""
         recon_x = self.decode_with_state(z)
-        observed_x = networks_to_tensor(observed_networks, NETWORKS, device=z.device, detach=True)
+        observed_x = networks_to_tensor(observed_networks, NETWORKS, detach=True)
 
         recon_loss = bernoulli_nll(recon_x, observed_x, EPS)
         prior = self.mu_params[state].detach()
@@ -161,11 +159,10 @@ class Layer2Agent(nn.Module):
         z_recognition: torch.Tensor,
     ) -> torch.Tensor:
         """Posterior update q(z): fixed-step VI (Eq. 3) over thoughtseeds."""
-        device = activations.device
         clip_min = DEFAULTS['CLIP_MIN']
         clip_max = DEFAULTS['CLIP_MAX']
 
-        observed_vec = networks_to_tensor(observed_networks, NETWORKS, device=device)
+        observed_vec = networks_to_tensor(observed_networks, NETWORKS)
         
         def clamp_z(t: torch.Tensor) -> torch.Tensor:
             return clamp_activation(t, clip_min, clip_max)
@@ -237,7 +234,7 @@ class Layer2Agent(nn.Module):
             - policy_confidence: 1 - normalized entropy of q(pi)
         """
         # Get current networks for forward prediction
-        x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS, device=z.device)
+        x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         
         candidates = [current_state] + [s for s in STATES if s != current_state]
         
@@ -278,7 +275,7 @@ class Layer2Agent(nn.Module):
         pi_conf = policy_confidence(q_pi)
         policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
         
-        weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype, device=mu_candidates[0].device)
+        weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype)
         mu_stack = torch.stack(mu_candidates, dim=0)
         selected_mu = torch.sum(weights.unsqueeze(-1) * mu_stack, dim=0)
         mu_current = self.mu_params[current_state].detach()
