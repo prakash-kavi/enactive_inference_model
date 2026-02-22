@@ -14,7 +14,8 @@ from typing import Dict, Tuple, Optional
 
 from utils.config import (
     NETWORKS, DEFAULTS, EPS, NOISE_LEVEL,
-    THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS
+    THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS,
+    L1_BASE_HAZARD,
 )
 from utils.math_utils import clip_probability, to_float
 
@@ -60,11 +61,10 @@ class Layer1Process(nn.Module):
         if self.current_dwell < self.current_max_dwell:
             return self.current_state
         
-        # Dwell elapsed: compute transition hazard (policy drive increases hazard)
+        # Dwell elapsed: compute transition hazard (policy drive increases hazard; Eq. 5)
         policy_drive = clip_probability(policy_drive)
-        base_hazard = 0.3
         drive_boost = 0.5 * policy_drive
-        hazard = base_hazard + drive_boost
+        hazard = L1_BASE_HAZARD + drive_boost
         
         if self.rng.rand() < hazard:
             # Transition: sample next state

@@ -112,16 +112,16 @@ Generated in `figures/`:
 - `FigS1_Convergence_Novice.pdf`
 
 **Comparison:**
-- `fig2a.pdf` - Network profiles across states (Expert vs Novice)
-- `fig2b.pdf` - Dwell times per state (timesteps)
-- `fig2c.pdf` - State transition probability matrices
+- `fig3a.pdf` - Network profiles across states (Expert vs Novice)
+- `fig3b.pdf` - Dwell times per state (timesteps)
+- `fig3c.pdf` - State transition probability matrices
 
 **Dynamics:**
-- `fig3a.pdf` - 3-layer hierarchical dynamics over time
-- `fig3b.pdf`
+- `fig4a.pdf` - 3-layer hierarchical dynamics over time
+- `fig4b.pdf`
 
 **State Space:**
-- `fig4.pdf` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
+- `fig5.pdf` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
 
 ---
 

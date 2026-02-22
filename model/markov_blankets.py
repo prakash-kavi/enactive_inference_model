@@ -22,13 +22,14 @@ class MarkovBlanket:
         self.active_states: Dict[str, Any] = {}
         
     def update_sensory_states(self, new_states: Dict[str, Any]) -> None:
-        """Update sensory states with optional EMA smoothing."""
+        """Update sensory states. Numeric/Tensor: EMA smoothing. Other (str, dict): overwrite."""
         for key, new_val in new_states.items():
-            if key not in self.sensory_states:
-                # First observation: initialize directly
+            if isinstance(new_val, (str, dict)):
+                # Non-numeric: overwrite (e.g. current_state, thoughtseed_activations)
+                self.sensory_states[key] = new_val
+            elif key not in self.sensory_states:
                 self.sensory_states[key] = new_val
             else:
-                # EMA update
                 old_val = self.sensory_states[key]
                 if isinstance(new_val, torch.Tensor):
                     self.sensory_states[key] = (
@@ -76,15 +77,18 @@ class MarkovBlanketL2L3(MarkovBlanket):
     Active (L3 -> L2):
         - precision_sensory: float (0-1, sensory precision; Eq. 4)
         - policy_precision: float (>0, softmax inverse temperature)
+        - policy_prior: list of 4 floats (log prior adjustment per candidate; L3 writes, L2 reads)
     """
     
     def __init__(self, smoothing: float = 0.0):
         super().__init__(smoothing=smoothing)
         self.active_states['precision_sensory'] = 0.5
         self.active_states['policy_precision'] = 1.0
+        self.active_states['policy_prior'] = None  # neutral until L3 writes
 
     def reset(self) -> None:
         """Reset state and restore defaults."""
         super().reset()
         self.active_states['precision_sensory'] = 0.5
         self.active_states['policy_precision'] = 1.0
+        self.active_states['policy_prior'] = None

@@ -86,6 +86,10 @@ DWELL_TIMES = {
     }
 }
 
+# L1 state transition: once dwell has elapsed, hazard = L1_BASE_HAZARD + drive_boost.
+# Set to 0 for strictly dwell- and policy-driven transitions (paper Eq. 5); >0 adds baseline hazard.
+L1_BASE_HAZARD = 0.3
+
 # Exit transition probabilities priors (exclude self-transitions)
 STATE_TRANSITION_PROBS = {
     'expert': {
@@ -171,20 +175,15 @@ LEARNING_RATES = {
     "expert": 0.02,
 }
 
+# Layer 3: learned policy tendencies
+L3_POLICY_LR = 0.05       # EMA learning rate for L3 policy prior update
+L3_POLICY_STRENGTH = 0.5  # Scale for L3 prior influence on L2 (0 = neutral, 1 = full)
+
 
 # =============================================================================
 # Utility Functions
 # =============================================================================
 
-def get_params(experience_level):
-    """Get all parameters for experience level."""
-    # Only learning rate is phenotype-specific in the current configuration.
-    params = {"learning_rate": LEARNING_RATES[experience_level]}
-    return params
-
-def get_thoughtseed_priors(state): 
-    """Get thoughtseed prior activations for state (Universal)."""
-    return THOUGHTSEED_STATE_PRIORS[state].copy()
 
 def compute_meta_awareness(state, thoughtseed_activations):
     """Compute meta-awareness from weighted thoughtseeds."""
@@ -194,8 +193,13 @@ def compute_meta_awareness(state, thoughtseed_activations):
     meta = weighted_sum / weight_total if weight_total > 0.0 else 0.0
     return float(max(0.0, min(1.0, meta)))
 
+def get_policy_candidate_order(current_state: str):
+    """Return policy candidate order: [current_state, ...others in STATES order].
+    L2 and L3 both use this order for the 4 policy candidates (stay, then switch options).
+    """
+    return [current_state] + [s for s in STATES if s != current_state]
+
+
 def get_exit_transition_probs(experience_level, current_state):
-    """Get normalized exit probabilities (exclude self-transition)."""
-    probs = STATE_TRANSITION_PROBS[experience_level][current_state]
-    total = sum(probs.values())
-    return {s: p / total for s, p in probs.items()} if total else {s: 1.0 / len(probs) for s in probs}
+    """Return exit transition probabilities for the given state (rows sum to 1.0)."""
+    return dict(STATE_TRANSITION_PROBS[experience_level][current_state])

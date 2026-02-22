@@ -110,23 +110,23 @@ def generate_plots(expert_results, novice_results):
     print("  - FigS1_Convergence_Novice.pdf")
     plot_convergence(novice_results, str(PLOT_DIR / "FigS1_Convergence_Novice.pdf"))
 
-    print("  - fig2a.pdf")
-    plot_comparison(novice_tail, expert_tail, str(PLOT_DIR / "fig2a.pdf"))
-
-    print("  - fig2b.pdf")
-    plot_fe_and_dwell(novice_tail, expert_tail, str(PLOT_DIR / "fig2b.pdf"))
-
-    print("  - fig2c.pdf")
-    plot_transitions(novice_tail, expert_tail, str(PLOT_DIR / "fig2c.pdf"))
-
     print("  - fig3a.pdf")
-    plot_hierarchy(novice_tail, str(PLOT_DIR / "fig3a.pdf"), "Novice")
+    plot_comparison(novice_tail, expert_tail, str(PLOT_DIR / "fig3a.pdf"))
 
     print("  - fig3b.pdf")
-    plot_hierarchy(expert_tail, str(PLOT_DIR / "fig3b.pdf"), "Expert")
+    plot_fe_and_dwell(novice_tail, expert_tail, str(PLOT_DIR / "fig3b.pdf"))
 
-    print("  - fig4.pdf")
-    plot_attractor_pca(novice_tail, expert_tail, str(PLOT_DIR / "fig4.pdf"))
+    print("  - fig3c.pdf")
+    plot_transitions(novice_tail, expert_tail, str(PLOT_DIR / "fig3c.pdf"))
+
+    print("  - fig4a.pdf")
+    plot_hierarchy(novice_tail, str(PLOT_DIR / "fig4a.pdf"), "Novice")
+
+    print("  - fig4b.pdf")
+    plot_hierarchy(expert_tail, str(PLOT_DIR / "fig4b.pdf"), "Expert")
+
+    print("  - fig5.pdf")
+    plot_attractor_pca(novice_tail, expert_tail, str(PLOT_DIR / "fig5.pdf"))
 
     print("\n" + "=" * 70)
     print("PLOTTING COMPLETE")

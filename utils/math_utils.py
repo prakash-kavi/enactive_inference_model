@@ -24,12 +24,14 @@ def precision_from_surprisal(
     s = max(0.0, to_float(surprisal))
     return clip_probability(np.exp(-s))
 
-def fuse_precision_logit(
+def integrate_precision_logit(
     base_precision: Union[float, int, torch.Tensor],
     meta_precision: Union[float, int, torch.Tensor],
     eps: float = EPS,
 ) -> float:
-    """Fuse two precision signals via logit-add (odds multiplication)."""
+    """Integrate two precision signals via logit-add (odds multiplication).
+    Eq. 4: lambda_sens = integrate(base, m_t). Base from forward surprisal;
+    meta from L3 meta-awareness. Yields a single sensory precision in [0,1]."""
     b = float(np.clip(to_float(base_precision), eps, 1.0 - eps))
     m = float(np.clip(to_float(meta_precision), eps, 1.0 - eps))
     logit = np.log(b / (1.0 - b)) + np.log(m / (1.0 - m))
@@ -68,16 +70,6 @@ def policy_precision(pi: np.ndarray, eps: float = EPS) -> float:
         return 0.0
     return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
 
-def policy_confidence(pi: np.ndarray, eps: float = EPS) -> float:
-    """Policy confidence = 1 - normalized entropy."""
-    if pi.size == 0:
-        return 0.0
-    if pi.size == 1:
-        return 1.0
-    denom = np.log(len(pi) + eps)
-    if denom <= eps:
-        return 0.0
-    return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
 
 def normalize_scores(values: np.ndarray, eps: float = EPS) -> np.ndarray:
     """Z-score normalize if variance is non-trivial."""

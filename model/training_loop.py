@@ -2,8 +2,8 @@
 
 Key equation references:
 - Eq. (2): VFE = reconstruction surprisal + KL complexity
-- Eq. (4): forward surprisal drives sensory precision
-- L3 computes meta-awareness and modulates L2 precision
+- Eq. (4): lambda_sens integrates base (forward surprisal) and meta-awareness m_t
+- L3: meta-awareness m_t, learned policy prior
 """
 
 import numpy as np
@@ -15,8 +15,7 @@ from pathlib import Path
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    LEARNING_RATES,
-    get_params, get_thoughtseed_priors
+    LEARNING_RATES, THOUGHTSEED_STATE_PRIORS,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
@@ -25,7 +24,7 @@ from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from utils.math_utils import (
     networks_to_tensor,
     precision_from_surprisal,
-    fuse_precision_logit,
+    integrate_precision_logit,
     bernoulli_nll,
     mse_error,
 )
@@ -33,15 +32,11 @@ from utils.math_utils import (
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
     
-    def __init__(self, experience_level: str = 'expert', seed: int = 42, debug_anomaly: bool = False):
+    def __init__(self, experience_level: str = 'expert', seed: int = 42):
         self.level = experience_level
         self.seed = seed
-        self.params = get_params(experience_level)
-        self.debug_anomaly = debug_anomaly
-        
-        if self.debug_anomaly:
-            torch.autograd.set_detect_anomaly(True)
-        
+        self.params = {'learning_rate': LEARNING_RATES[experience_level]}
+
         torch.manual_seed(seed)
         np.random.seed(seed)
         
@@ -121,27 +116,39 @@ class MeditationTrainer:
         )
 
         # ===== Layer 3: Metacognitive Monitor =====
-        # Update meta-awareness using new state
-        meta_awareness = self.monitor.update_meta_awareness(new_state, activations)
+        # Populate L2->L3 blanket sensory (paper's Markov blanket interface)
+        thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
+        self.blanket_l2l3.update_sensory_states({
+            'current_state': new_state,
+            'dwell_progress': dwell_progress,
+            'thoughtseed_activations': thoughtseed_dict,
+        })
+        # Update meta-awareness (L3 reads state/thoughtseeds from blanket)
+        meta_awareness = self.monitor.update_meta_awareness()
 
-        # Meta-awareness modulates sensory precision (L3 -> L2)
+        # Precision: integrate base (forward surprisal) and meta-awareness (Eq. 4)
         clip_min = DEFAULTS['CLIP_MIN']
         clip_max = DEFAULTS['CLIP_MAX']
         base_precision = float(np.clip(base_precision, clip_min, clip_max))
         meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
-        precision_sensory = fuse_precision_logit(base_precision, meta_awareness, EPS)
+        precision_sensory = integrate_precision_logit(base_precision, meta_awareness, EPS)
         self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
+
+        # L3 writes learned policy prior to blanket so L2 can use it in infer_pi
+        self.monitor.write_policy_prior(new_state)
 
         # ===== Policy Inference =====
         prescription = self.agent.infer_pi(activations, new_state)
         selected_action_mu = prescription['selected_action_mu']
+
+        # L3 updates learned policy state from this step's outcome (dependently originated)
+        self.monitor.update_policy_state(new_state, prescription['q_pi'])
 
         # Update L2->L1 active states (action policy)
         self.blanket_l1l2.update_active_states(prescription)
 
         # Forward model loss calculation
         step_loss = free_energy
-        forward_weight = 0.0  # used in diagnostic print when fpe is None
 
         if forward_prediction_error is not None:
             fe_val = float(free_energy.detach().item())
@@ -180,17 +187,6 @@ class MeditationTrainer:
 
                     # Add to total loss (weighted)
                     step_loss = step_loss + rec_scale * rec_loss
-            
-        if t % 500 == 0:
-            fw = forward_weight if forward_prediction_error is not None else 0.0
-            print(
-                f"[diag t={t}] gamma={prescription.get('policy_precision', 0.0):.4f} "
-                f"precision_sensory={prescription.get('precision_sensory', 0.0):.4f} "
-                f"policy_confidence={prescription['policy_confidence']:.4f} "
-                f"policy_drive={prescription.get('policy_drive', 0.0):.4f} "
-                f"forward_pe={forward_prediction_error_val:.6f} "
-                f"forward_w={fw:.4f}"
-            )
 
         # Store for next iteration
         self._last_x_actual = {
@@ -252,7 +248,7 @@ class MeditationTrainer:
         current_state = self.process.current_state
         
         # Initial thoughtseed activations
-        priors = get_thoughtseed_priors(current_state)
+        priors = THOUGHTSEED_STATE_PRIORS[current_state].copy()
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
         activations = torch.tensor(activations_np, dtype=torch.float32)
         activations = torch.clamp(activations, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
@@ -266,15 +262,19 @@ class MeditationTrainer:
             'policy_drive': 0.0
         })
         self.blanket_l2l3.reset()
-        
-        # Update meta-awareness
-        self.monitor.update_meta_awareness(current_state, activations)
-        
+        # Seed L2->L3 blanket so L3 reads from it (consistent interface)
+        thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
+        self.blanket_l2l3.update_sensory_states({
+            'current_state': current_state,
+            'dwell_progress': 0.0,
+            'thoughtseed_activations': thoughtseed_dict,
+        })
+        self.monitor.update_meta_awareness()
         # BPTT windowing
         bptt_steps = 50
         
         for t_start in range(0, timesteps, bptt_steps):
-            # Clear blanket history (BPTT window boundary)
+            # BPTT window boundary: clear sensory only (window-local). L1/L2 hidden state and active_states carry across.
             self.blanket_l1l2.sensory_states.clear()
             self.blanket_l2l3.sensory_states.clear()
             
@@ -312,7 +312,14 @@ class MeditationTrainer:
                         window_loss = step_loss if window_loss is None else (window_loss + step_loss)
                     
                     # Record history
-                    self._append_history(current_state, metrics)
+                    self.history['states'].append(current_state)
+                    self.history['free_energy'].append(metrics['free_energy'])
+                    self.history['loss'].append(metrics['loss'])
+                    self.history['meta_awareness'].append(metrics['meta_awareness'])
+                    self.history['action_errors'].append(metrics['action_error'])
+                    self.history['network_activations'].append(metrics['network_activations'])
+                    self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+                    self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
             
             # Gradient step (after accumulating gradients from all steps in window)
             if enable_learning:
@@ -328,16 +335,7 @@ class MeditationTrainer:
         
         return self._package_results()
     
-    def _append_history(self, current_state: str, metrics: Dict) -> None:
-        """Append per-timestep metrics to training history."""
-        self.history['states'].append(current_state)
-        self.history['free_energy'].append(metrics['free_energy'])
-        self.history['loss'].append(metrics['loss'])
-        self.history['meta_awareness'].append(metrics['meta_awareness'])
-        self.history['action_errors'].append(metrics['action_error'])
-        self.history['network_activations'].append(metrics['network_activations'])
-        self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
-        self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
+
 
     
     def _package_results(self) -> Dict:
@@ -454,7 +452,6 @@ def train_meditation(
     experience_level: str = 'expert',
     timesteps: int = 10000,
     seed: int = 42,
-    debug_anomaly: bool = False,
     reseed_rng: bool = False,
     run_seed: Optional[int] = None,
     save_results: bool = True,
@@ -464,7 +461,6 @@ def train_meditation(
     trainer = MeditationTrainer(
         experience_level=experience_level,
         seed=seed,
-        debug_anomaly=debug_anomaly,
     )
     results = trainer.train(
         timesteps=timesteps,

@@ -14,7 +14,8 @@ from typing import Dict, Optional
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    get_params, get_thoughtseed_priors, get_exit_transition_probs
+    LEARNING_RATES, THOUGHTSEED_STATE_PRIORS,
+    get_exit_transition_probs, get_policy_candidate_order,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from utils.math_utils import (
@@ -26,7 +27,6 @@ from utils.math_utils import (
     clip_probability,
     policy_posterior,
     policy_precision,
-    policy_confidence,
     normalize_scores,
     to_float,
     networks_to_tensor,
@@ -97,7 +97,7 @@ class Layer2Agent(nn.Module):
         super().__init__()
         
         self.level = experience_level
-        self.params = get_params(experience_level)
+        self.params = {'learning_rate': LEARNING_RATES[experience_level]}
         
         # Markov blankets
         self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.0)
@@ -113,22 +113,10 @@ class Layer2Agent(nn.Module):
         # Thoughtseed priors mu_z(s) (state-dependent, frozen)
         self.mu_params = nn.ParameterDict()
         for state in STATES:
-            priors = get_thoughtseed_priors(state)
+            priors = THOUGHTSEED_STATE_PRIORS[state].copy()
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
         
-        
-    
-    def infer_z_from_x(self) -> torch.Tensor:
-        """Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)."""
-        network_acts = self.blanket_l1l2.sensory_states
-        x = networks_to_tensor(network_acts, NETWORKS)
-        
-        z = self.vae.encode(x.unsqueeze(0) if x.dim() == 1 else x)
-        if z.dim() > 1:
-            z = z.squeeze(0)
-        
-        return clamp_activation(z, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
     
     def decode_with_state(self, z: torch.Tensor) -> torch.Tensor:
         """Top-down: decode thoughtseeds -> networks."""
@@ -215,7 +203,14 @@ class Layer2Agent(nn.Module):
         observed_networks: Dict[str, torch.Tensor],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Infer recognition and VI-refined thoughtseeds for the current step."""
-        z_recognition = self.infer_z_from_x()
+        # Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)
+        network_acts = self.blanket_l1l2.sensory_states
+        x = networks_to_tensor(network_acts, NETWORKS)
+        z = self.vae.encode(x.unsqueeze(0) if x.dim() == 1 else x)
+        if z.dim() > 1:
+            z = z.squeeze(0)
+        z_recognition = clamp_activation(z, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
+
         z_posterior = self.update_posterior_z(
             current_state=current_state,
             activations=activations,
@@ -235,8 +230,7 @@ class Layer2Agent(nn.Module):
         """
         # Get current networks for forward prediction
         x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
-        
-        candidates = [current_state] + [s for s in STATES if s != current_state]
+        candidates = get_policy_candidate_order(current_state)
         
         exit_probs = get_exit_transition_probs(self.level, current_state)
         avg_exit = (sum(exit_probs.values()) / len(exit_probs)) if exit_probs else (1.0 / max(len(candidates), 1))
@@ -266,13 +260,17 @@ class Layer2Agent(nn.Module):
                 priors.append(max(EPS, float(prior)))
         
         log_prior = np.log(np.array(priors, dtype=float))
+        # L3 policy prior: bias log_prior from learned tendencies (L3 writes, L2 reads)
+        policy_prior = self.blanket_l2l3.active_states.get('policy_prior')
+        if policy_prior is not None and len(policy_prior) == len(log_prior):
+            log_prior = log_prior + np.array(policy_prior, dtype=float)
         g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
 
         gamma_prev = max(EPS, to_float(self.blanket_l2l3.active_states.get('policy_precision', 1.0)))
         q_pi = policy_posterior(log_prior, g_array, gamma_prev)
         gamma = policy_precision(q_pi, EPS)
         q_pi = policy_posterior(log_prior, g_array, gamma)
-        pi_conf = policy_confidence(q_pi)
+        pi_conf = policy_precision(q_pi)
         policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
         
         weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype)
@@ -284,6 +282,7 @@ class Layer2Agent(nn.Module):
         
         precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
         precision_gain = clip_probability(precision_sensory)
+        # L2 writes policy_precision into L2<->L3 blanket (L2 owns this signal; L3 could modulate later).
         self.blanket_l2l3.update_active_states({
             'policy_precision': gamma,
         })
@@ -297,4 +296,5 @@ class Layer2Agent(nn.Module):
             'policy_drive': policy_drive,
             'policy_precision': gamma,
             'precision_sensory': precision_sensory,
+            'q_pi': np.array(q_pi, dtype=np.float64),
         }
