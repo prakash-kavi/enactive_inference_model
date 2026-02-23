@@ -97,7 +97,6 @@ class Layer2Agent(nn.Module):
 
         self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
         self.level = self.phenotype.level   # used for config table lookups
-        self.params = {'learning_rate': self.phenotype.learning_rate}
         
         # Markov blankets
         self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.0)
@@ -143,14 +142,13 @@ class Layer2Agent(nn.Module):
         self,
         current_state: str,
         activations: torch.Tensor,
-        observed_networks: Dict[str, torch.Tensor],
         z_recognition: torch.Tensor,
     ) -> torch.Tensor:
         """Posterior update q(z): fixed-step VI (Eq. 3) over thoughtseeds."""
         clip_min = DEFAULTS['CLIP_MIN']
         clip_max = DEFAULTS['CLIP_MAX']
 
-        observed_vec = networks_to_tensor(observed_networks, NETWORKS)
+        observed_vec = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         
         def clamp_z(t: torch.Tensor) -> torch.Tensor:
             return clamp_activation(t, clip_min, clip_max)
@@ -200,7 +198,6 @@ class Layer2Agent(nn.Module):
         self,
         current_state: str,
         activations: torch.Tensor,
-        observed_networks: Dict[str, torch.Tensor],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Infer recognition and VI-refined thoughtseeds for the current step."""
         # Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)
@@ -214,7 +211,6 @@ class Layer2Agent(nn.Module):
         z_posterior = self.update_posterior_z(
             current_state=current_state,
             activations=activations,
-            observed_networks=observed_networks,
             z_recognition=z_recognition,
         )
         return z_posterior, z_recognition
@@ -305,6 +301,5 @@ class Layer2Agent(nn.Module):
             'selected_action_mu': selected_mu,
             'mu_x':               mu_x,
             'policy_drive':       pol_drive,
-            'policy_precision':   gamma,
             'q_pi':               np.array(q_pi, dtype=np.float64),
         }

@@ -48,28 +48,9 @@ def softmax(logits: np.ndarray) -> np.ndarray:
         return np.full_like(exp, 1.0 / max(exp.size, 1))
     return exp / exp_sum
 
-def entropy(probabilities: np.ndarray, eps: float = EPS) -> float:
-    """Shannon entropy for a probability vector."""
-    if probabilities.size == 0:
-        return 0.0
-    p = np.clip(probabilities, eps, 1.0)
-    return float(-np.sum(p * np.log(p)))
-
 def policy_posterior(log_prior: np.ndarray, g_vals: np.ndarray, gamma: float) -> np.ndarray:
     """Active-inference policy posterior: softmax(log_prior - gamma * G)."""
     return softmax(log_prior - gamma * g_vals)
-
-def policy_precision(pi: np.ndarray, eps: float = EPS) -> float:
-    """Policy precision from posterior entropy."""
-    if pi.size == 0:
-        return 0.0
-    if pi.size == 1:
-        return 1.0
-    denom = np.log(len(pi) + eps)
-    if denom <= eps:
-        return 0.0
-    return float(np.clip(1.0 - (entropy(pi, eps) / denom), 0.0, 1.0))
-
 
 def normalize_scores(values: np.ndarray, eps: float = EPS) -> np.ndarray:
     """Z-score normalize if variance is non-trivial."""
@@ -99,13 +80,6 @@ def bernoulli_kl(q: torch.Tensor, p: torch.Tensor, eps: float) -> torch.Tensor:
         + (1.0 - q_safe) * torch.log((1.0 - q_safe) / (1.0 - p_safe))
     )
 
-
-def bernoulli_entropy(p: torch.Tensor, eps: float) -> torch.Tensor:
-    """Elementwise Bernoulli entropy averaged over dimensions."""
-    p_safe = clamp_for_log(p, eps)
-    return torch.mean(
-        -p_safe * torch.log(p_safe) - (1.0 - p_safe) * torch.log(1.0 - p_safe)
-    )
 
 def bernoulli_nll(x_hat: torch.Tensor, x: torch.Tensor, eps: float) -> torch.Tensor:
     """Bernoulli negative log-likelihood averaged over dimensions."""

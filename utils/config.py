@@ -183,8 +183,6 @@ L3_POLICY_STRENGTH = 0.5  # Scale for L3 prior influence on L2 (0 = neutral, 1 =
 # =============================================================================
 # Utility Functions
 # =============================================================================
-
-
 def compute_meta_awareness(state, thoughtseed_activations):
     """Compute meta-awareness from weighted thoughtseeds."""
     weights = META_THOUGHTSEED_WEIGHTS.get(state, {})
@@ -195,7 +193,6 @@ def compute_meta_awareness(state, thoughtseed_activations):
 
 def get_policy_candidate_order(current_state: str):
     """Return policy candidate order: [current_state, ...others in STATES order].
-    L2 and L3 both use this order for the 4 policy candidates (stay, then switch options).
     """
     return [current_state] + [s for s in STATES if s != current_state]
 

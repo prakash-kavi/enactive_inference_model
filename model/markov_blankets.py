@@ -75,19 +75,16 @@ class MarkovBlanketL2L3(MarkovBlanket):
     
     Active (L3 -> L2):
         - precision_sensory: float (0-1, sensory precision; Eq. 4)
-        - policy_precision: float (>0, softmax inverse temperature)
         - policy_prior: list of 4 floats (log prior adjustment per candidate; L3 writes, L2 reads)
     """
     
     def __init__(self, smoothing: float = 0.0):
         super().__init__(smoothing=smoothing)
         self.active_states['precision_sensory'] = 0.5
-        self.active_states['policy_precision'] = 1.0
         self.active_states['policy_prior'] = None  # neutral until L3 writes
 
     def reset(self) -> None:
         """Reset state and restore defaults."""
         super().reset()
         self.active_states['precision_sensory'] = 0.5
-        self.active_states['policy_precision'] = 1.0
         self.active_states['policy_prior'] = None

@@ -37,6 +37,25 @@ def get_dwell_times(stats):
     return dwells
 
 
+def get_transition_matrix(stats):
+    """Compute transition matrix from state history (state changes only)."""
+    state_history = stats.get("state_history", [])
+    trans_matrix = {fs: {ts: 0 for ts in STATES} for fs in STATES}
+    if not state_history:
+        return trans_matrix
+
+    for i in range(len(state_history) - 1):
+        fs, ts = state_history[i], state_history[i + 1]
+        if fs != ts:
+            trans_matrix[fs][ts] += 1
+
+    for fs in STATES:
+        total = sum(trans_matrix[fs].values())
+        if total > 0:
+            trans_matrix[fs] = {ts: c / total for ts, c in trans_matrix[fs].items()}
+    return trans_matrix
+
+
 def _calc_significance(mean1, std1, n1, mean2, std2, n2):
     """Calculate statistical significance using Welch's t-test approximation."""
     if n1 <= 1 or n2 <= 1 or (std1 == 0 and std2 == 0):
@@ -171,9 +190,9 @@ def plot_transitions(novice_data: dict, expert_data: dict, save_path: str):
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
-    # Get transition matrices
-    nov_trans = novice_data.get('transition_matrix', {})
-    exp_trans = expert_data.get('transition_matrix', {})
+    # Get transition matrices from history
+    nov_trans = get_transition_matrix(novice_data)
+    exp_trans = get_transition_matrix(expert_data)
     
     # Build matrix arrays
     nov_matrix = np.zeros((len(STATES), len(STATES)))

@@ -7,7 +7,7 @@ Timescale separation (Dempster et al., 1977; Friston et al., 2019):
 Key equation references:
 - Eq. (2): VFE = reconstruction surprisal + KL complexity
 - Eq. (4): lambda_sens integrates base (forward surprisal) and meta-awareness m_t
-- Eq. (9): L = VFE + S_fwd + alpha_rec * L_rec  (M-step loss)
+- Eq. (9): L = VFE + S_fwd + alpha_rec * L_rec  (M-step loss; alpha_rec = RECOGNITION_LOSS_ALPHA)
 - L3: meta-awareness m_t, learned policy prior
 """
 
@@ -26,7 +26,7 @@ from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
 from .l3_metacognition import Layer3Monitor
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
+from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, RECOGNITION_LOSS_ALPHA
 from utils.math_utils import (
     networks_to_tensor,
     precision_from_surprisal,
@@ -42,7 +42,6 @@ class MeditationTrainer:
         self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
         self.level = self.phenotype.level
         self.seed = seed
-        self.params = {'learning_rate': self.phenotype.learning_rate}
 
         torch.manual_seed(seed)
         np.random.seed(seed)
@@ -62,7 +61,6 @@ class MeditationTrainer:
         
         self.history = {}
         self._last_x_actual = None
-        self._loss_balance = {}
     
     # ------------------------------------------------------------------
     # E-step: perceptual inference and action (no parameter gradients)
@@ -109,7 +107,6 @@ class MeditationTrainer:
             activations, _ = self.agent.infer_z_step(
                 current_state=new_state,
                 activations=activations,
-                observed_networks=network_acts,
             )
             activations = activations.detach()  # z* fixed; VI not part of BPTT
 
@@ -206,7 +203,7 @@ class MeditationTrainer:
                 step_loss = step_loss + bernoulli_nll(x_pred, entry['x_curr'], EPS)
 
             # ── Recognition loss: encoder gradient (phi) — Eq. 9 ─────────────
-            rec_scale = self.phenotype.alpha_rec
+            rec_scale = RECOGNITION_LOSS_ALPHA
             if rec_scale > 0.0:
                 z_enc     = self.agent.vae.encode(entry['x_curr'])
                 step_loss = step_loss + rec_scale * mse_error(z_enc, entry['z_star'])
@@ -214,6 +211,52 @@ class MeditationTrainer:
             window_loss = step_loss if window_loss is None else (window_loss + step_loss)
 
         return window_loss
+
+    def _run_e_step_window(
+        self,
+        t_start: int,
+        steps_to_run: int,
+        activations: torch.Tensor,
+        current_state: str,
+    ) -> tuple[List[Dict], torch.Tensor, str]:
+        """Run the E-step loop for one window and record history."""
+        e_step_buffer: List[Dict] = []
+        for t_sub in range(steps_to_run):
+            t = t_start + t_sub
+
+            buf, new_state, activations, metrics = self._e_step(t, activations)
+            e_step_buffer.append(buf)
+
+            if new_state != current_state:
+                self.history['transitions'].append({
+                    'timestamp':   t,
+                    'from':        current_state,
+                    'to':          new_state,
+                    'free_energy': metrics['free_energy'],
+                })
+                current_state = new_state
+
+            self.history['states'].append(current_state)
+            self.history['free_energy'].append(metrics['free_energy'])
+            self.history['loss'].append(metrics['loss'])
+            self.history['meta_awareness'].append(metrics['meta_awareness'])
+            self.history['action_errors'].append(metrics['action_error'])
+            self.history['network_activations'].append(metrics['network_activations'])
+            self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+            self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
+
+        return e_step_buffer, activations, current_state
+
+    def _run_m_step_window(self, buffer: List[Dict], enable_learning: bool) -> None:
+        """Run the M-step update for one window."""
+        if not enable_learning:
+            return
+        self.optimizer.zero_grad()
+        window_loss = self._m_step(buffer)
+        if window_loss is not None and window_loss.requires_grad:
+            window_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_norm=1.0)
+            self.optimizer.step()
 
     def train(
         self,
@@ -242,7 +285,7 @@ class MeditationTrainer:
 
         print(f"PHENOTYPE: {self.phenotype.label} "
               f"(lr={self.phenotype.learning_rate:.4f}, "
-              f"α_rec={self.phenotype.alpha_rec:.3f})")
+              f"alpha_rec={RECOGNITION_LOSS_ALPHA:.3f})")
 
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
@@ -275,43 +318,14 @@ class MeditationTrainer:
             self.blanket_l2l3.sensory_states.clear()
 
             steps_to_run = min(bptt_steps, timesteps - t_start)
-            e_step_buffer: List[Dict] = []
 
-            # ── E-step loop (no gradient accumulation) ───────────────────────
-            for t_sub in range(steps_to_run):
-                t = t_start + t_sub
+            # E-step loop (no gradient accumulation)
+            e_step_buffer, activations, current_state = self._run_e_step_window(
+                t_start, steps_to_run, activations, current_state
+            )
 
-                buf, new_state, activations, metrics = self._e_step(t, activations)
-                e_step_buffer.append(buf)
-
-                # Record state transitions
-                if new_state != current_state:
-                    self.history['transitions'].append({
-                        'timestamp':   t,
-                        'from':        current_state,
-                        'to':          new_state,
-                        'free_energy': metrics['free_energy'],
-                    })
-                    current_state = new_state
-
-                # Record history
-                self.history['states'].append(current_state)
-                self.history['free_energy'].append(metrics['free_energy'])
-                self.history['loss'].append(metrics['loss'])
-                self.history['meta_awareness'].append(metrics['meta_awareness'])
-                self.history['action_errors'].append(metrics['action_error'])
-                self.history['network_activations'].append(metrics['network_activations'])
-                self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
-                self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
-
-            # ── M-step: gradient update over window ──────────────────────────
-            if enable_learning:
-                self.optimizer.zero_grad()
-                window_loss = self._m_step(e_step_buffer)
-                if window_loss is not None and window_loss.requires_grad:
-                    window_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_norm=1.0)
-                    self.optimizer.step()
+            # M-step: gradient update over window
+            self._run_m_step_window(e_step_buffer, enable_learning)
 
             # BPTT boundary detach (activations already detached from E-step)
             with torch.no_grad():
@@ -323,38 +337,6 @@ class MeditationTrainer:
     
     def _package_results(self) -> Dict:
         """Package training results for analysis."""
-        # Compute dwell times directly from contiguous state runs.
-        dwell_times = {state: [] for state in STATES}
-        state_sequence = self.history['states']
-        if state_sequence:
-            run_state = state_sequence[0]
-            run_len = 1
-            for state in state_sequence[1:]:
-                if state == run_state:
-                    run_len += 1
-                else:
-                    dwell_times[run_state].append(run_len)
-                    run_state = state
-                    run_len = 1
-            dwell_times[run_state].append(run_len)
-        
-        avg_dwell = {state: np.mean(dwells) if dwells else 0.0 
-                     for state, dwells in dwell_times.items()}
-        
-        # Compute transition matrix
-        trans_matrix = {s: {t: 0 for t in STATES} for s in STATES}
-        for trans in self.history['transitions']:
-            trans_matrix[trans['from']][trans['to']] += 1
-        
-        # Normalize to probabilities
-        for from_state in trans_matrix:
-            total = sum(trans_matrix[from_state].values())
-            if total > 0:
-                trans_matrix[from_state] = {
-                    to_state: count / total 
-                    for to_state, count in trans_matrix[from_state].items()
-                }
-        
         # Action prediction errors by state
         action_errors_by_state = {state: [] for state in STATES}
         for i, state in enumerate(self.history['states']):
@@ -375,8 +357,6 @@ class MeditationTrainer:
             'meta_awareness_history': self.history['meta_awareness'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
             'transitions': self.history['transitions'],
-            'avg_dwell_times': avg_dwell,
-            'transition_matrix': trans_matrix,
             'avg_action_errors': avg_action_errors,
             'final_free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0,
             'final_loss': self.history['loss'][-1] if self.history['loss'] else 0.0,
@@ -400,7 +380,6 @@ class MeditationTrainer:
             'dominant_thoughtseed': []
         }
         self._last_x_actual = None
-        self._loss_balance = {}
         self.blanket_l1l2.reset()
         self.monitor.reset()
 
