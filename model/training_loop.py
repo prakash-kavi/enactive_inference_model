@@ -1,15 +1,20 @@
-"""Training orchestrator: BPTT loop with hierarchical free energy minimization.
+"""Training orchestrator: variational EM loop for hierarchical free energy minimisation.
+
+Timescale separation (Dempster et al., 1977; Friston et al., 2019):
+- E-step (every t): perceptual inference via VI + policy selection (Eqs. 5-8).  No parameter gradients.
+- M-step (every T=50 steps): parameter update via BPTT over the accumulated buffer (Eq. 9).
 
 Key equation references:
 - Eq. (2): VFE = reconstruction surprisal + KL complexity
 - Eq. (4): lambda_sens integrates base (forward surprisal) and meta-awareness m_t
+- Eq. (9): L = VFE + S_fwd + alpha_rec * L_rec  (M-step loss)
 - L3: meta-awareness m_t, learned policy prior
 """
 
 import numpy as np
 import torch
 import torch.optim as optim
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import json
 from pathlib import Path
 
@@ -59,149 +64,156 @@ class MeditationTrainer:
         self._last_x_actual = None
         self._loss_balance = {}
     
-    def step(self, t: int, activations: torch.Tensor, enable_learning: bool = True) -> tuple[torch.Tensor, str, torch.Tensor, Dict]:
-        """Execute a single simulation step.
-        
-        Args:
-            t: Current timestep
-            activations: Current thoughtseed activations (L2 hidden state)
-            enable_learning: Whether to track gradients
-            
-        Returns:
-            step_loss: Loss for this step (F + forward prediction error)
-            new_state: Updated state
-            activations: Updated thoughtseed activations
-            metrics: Dict of step metrics for history
+    # ------------------------------------------------------------------
+    # E-step: perceptual inference and action (no parameter gradients)
+    # ------------------------------------------------------------------
+    def _e_step(
+        self, t: int, activations: torch.Tensor
+    ) -> tuple[Dict, str, torch.Tensor, Dict]:
+        """E-step: forward inference over one timestep (Eqs. 1-8).
+
+        Runs entirely under torch.no_grad(). Infers z* via VI (Eq. 3),
+        selects action via EFE (Eqs. 5-8), and steps L1. Returns a buffer
+        entry containing the detached tensors the M-step will re-run
+        differentiable passes over.
         """
-        # ===== Layer 1: Generative Process =====
-        # Update L1 state based on previous active states (action)
-        network_acts, new_state = self.process.update(self.blanket_l1l2.active_states)
-        
-        # Update L1->L2 sensory states (observations + dwell progress)
-        dwell_progress = 0.0
-        if self.process.current_max_dwell > 0:
-            dwell_progress = min(1.0, self.process.current_dwell / self.process.current_max_dwell)
-        sensory_payload = dict(network_acts)
-        sensory_payload['dwell_progress'] = float(dwell_progress)
-        self.blanket_l1l2.update_sensory_states(sensory_payload)
-        
-        # Current observation (for forward model + precision update)
-        x_current = networks_to_tensor(network_acts, NETWORKS)
-        forward_prediction_error = None
-        forward_prediction_error_val = 0.0
-        base_precision = float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
+        with torch.no_grad():
+            # Cache (x_{t-1}, a_{t-1}) for M-step forward surprisal
+            x_prev     = self._last_x_actual['x'].clone()      if self._last_x_actual is not None else None
+            action_prev = self._last_x_actual['action'].clone() if self._last_x_actual is not None else None
 
-        if self._last_x_actual is not None:
-            # Predict current observation from previous (x, action)
-            x_pred = self.agent.vae.predict_next(
-                self._last_x_actual['x'],
-                self._last_x_actual['action']
+            # ===== Layer 1: Generative Process =====
+            network_acts, new_state = self.process.update(self.blanket_l1l2.active_states)
+
+            dwell_progress = 0.0
+            if self.process.current_max_dwell > 0:
+                dwell_progress = min(1.0, self.process.current_dwell / self.process.current_max_dwell)
+            sensory_payload = dict(network_acts)
+            sensory_payload['dwell_progress'] = float(dwell_progress)
+            self.blanket_l1l2.update_sensory_states(sensory_payload)
+
+            x_current = networks_to_tensor(network_acts, NETWORKS)
+
+            # Forward prediction error — float for precision update
+            # (gradient-tracked version is recomputed in M-step)
+            forward_prediction_error_val = 0.0
+            base_precision = float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
+            if x_prev is not None:
+                x_pred = self.agent.vae.predict_next(x_prev, action_prev)
+                fwd_err_val = bernoulli_nll(x_pred, x_current, EPS)
+                forward_prediction_error_val = float(fwd_err_val.item())
+                base_precision = precision_from_surprisal(forward_prediction_error_val, EPS)
+                self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
+
+            # ===== Layer 2: Attentional Agent =====
+            activations, _ = self.agent.infer_z_step(
+                current_state=new_state,
+                activations=activations,
+                observed_networks=network_acts,
             )
-            # Forward surprisal (NLL under predicted likelihood)
-            forward_prediction_error = bernoulli_nll(x_pred, x_current.detach(), EPS)
-            forward_prediction_error_val = forward_prediction_error.item()
-            base_precision = precision_from_surprisal(forward_prediction_error_val, EPS)
-            self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
+            activations = activations.detach()  # z* fixed; VI not part of BPTT
 
-        # ===== Layer 2: Attentional Agent =====
-        # Perception + VI refinement: encode + fixed-step posterior update
-        activations, _ = self.agent.infer_z_step(
-            current_state=new_state,
-            activations=activations,
-            observed_networks=network_acts,
-        )
-        activations = activations.detach()  # VI not part of BPTT gradient flow
+            # VFE as scalar metric (M-step will recompute with grad)
+            free_energy_val = float(
+                self.agent.compute_vfe(new_state, activations, network_acts).item()
+            )
 
-        # Compute VFE (L2's free energy)
-        free_energy = self.agent.compute_vfe(
-            new_state, activations, network_acts
-        )
+            # ===== Layer 3: Metacognitive Monitor =====
+            thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
+            self.blanket_l2l3.update_sensory_states({
+                'current_state':          new_state,
+                'dwell_progress':         dwell_progress,
+                'thoughtseed_activations': thoughtseed_dict,
+            })
+            meta_awareness = self.monitor.update_meta_awareness()
 
-        # ===== Layer 3: Metacognitive Monitor =====
-        # Populate L2->L3 blanket sensory (paper's Markov blanket interface)
-        thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
-        self.blanket_l2l3.update_sensory_states({
-            'current_state': new_state,
-            'dwell_progress': dwell_progress,
-            'thoughtseed_activations': thoughtseed_dict,
-        })
-        # Update meta-awareness (L3 reads state/thoughtseeds from blanket)
-        meta_awareness = self.monitor.update_meta_awareness()
+            clip_min = DEFAULTS['CLIP_MIN']
+            clip_max = DEFAULTS['CLIP_MAX']
+            base_precision = float(np.clip(base_precision, clip_min, clip_max))
+            meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
+            precision_sensory = integrate_precision_logit(base_precision, meta_awareness, EPS)
+            self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
+            self.monitor.write_policy_prior(new_state)
 
-        # Precision: integrate base (forward surprisal) and meta-awareness (Eq. 4)
-        clip_min = DEFAULTS['CLIP_MIN']
-        clip_max = DEFAULTS['CLIP_MAX']
-        base_precision = float(np.clip(base_precision, clip_min, clip_max))
-        meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
-        precision_sensory = integrate_precision_logit(base_precision, meta_awareness, EPS)
-        self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
+            # ===== Policy Inference =====
+            prescription      = self.agent.infer_pi(activations, new_state)
+            selected_action_mu = prescription['selected_action_mu']
+            self.monitor.update_policy_state(new_state, prescription['q_pi'])
+            self.blanket_l1l2.update_active_states(prescription)
 
-        # L3 writes learned policy prior to blanket so L2 can use it in infer_pi
-        self.monitor.write_policy_prior(new_state)
+            # Update rolling store for next E-step
+            self._last_x_actual = {
+                'x':      x_current.detach(),
+                'action': selected_action_mu.detach(),
+            }
 
-        # ===== Policy Inference =====
-        prescription = self.agent.infer_pi(activations, new_state)
-        selected_action_mu = prescription['selected_action_mu']
+            # Buffer entry — all tensors detached; M-step re-runs grad passes
+            buf: Dict = {
+                'x_prev':      x_prev,
+                'action_prev': action_prev,
+                'x_curr':      x_current.detach(),
+                'z_star':      activations,          # already detached by VI
+                'network_acts': network_acts,
+                'state':       new_state,
+            }
 
-        # L3 updates learned policy state from this step's outcome (dependently originated)
-        self.monitor.update_policy_state(new_state, prescription['q_pi'])
+            # Metrics (float approximation of per-step loss for diagnostics)
+            network_acts_serializable = {
+                net: float(val.detach().item()) if isinstance(val, torch.Tensor) else float(val)
+                for net, val in network_acts.items()
+            }
+            ts_acts      = activations.cpu().numpy().tolist()
+            dominant_idx = int(np.argmax(ts_acts))
+            metrics = {
+                'timestamp':               t,
+                'free_energy':             free_energy_val,
+                'loss':                    free_energy_val + forward_prediction_error_val,
+                'meta_awareness':          meta_awareness,
+                'action_error':            forward_prediction_error_val,
+                'network_activations':     network_acts_serializable,
+                'thoughtseed_activations': ts_acts,
+                'dominant_thoughtseed':    THOUGHTSEEDS[dominant_idx],
+            }
 
-        # Update L2->L1 active states (action policy)
-        self.blanket_l1l2.update_active_states(prescription)
+        return buf, new_state, activations, metrics
 
-        # Forward model loss: fixed weight w_fwd=1 (Eq. 9). No EMA scaling needed.
-        if forward_prediction_error is not None:
-            step_loss = free_energy + forward_prediction_error
-        else:
-            step_loss = free_energy
+    # ------------------------------------------------------------------
+    # M-step: parameter update over one BPTT window (Eq. 9)
+    # ------------------------------------------------------------------
+    def _m_step(self, buffer: List[Dict]) -> Optional[torch.Tensor]:
+        """M-step: update (phi, theta, psi) from accumulated E-step buffer (Eq. 9).
 
-            # Recognition Loss (Amortized Inference)
-            # Train encoder to predict the optimized thoughtseeds (z) from observations (x)
-            # Experts use full weight; novices use a weak weight tied to the LR ratio.
-            if enable_learning:
-                # Recognition loss: alpha_rec from PhenotypeConfig (Eq. 9).
-                # Expert=1.0 (full amortised inference); novice uses a weaker scale.
-                rec_scale = self.phenotype.alpha_rec
+        Re-runs only the three differentiable forward passes over the stored
+        detached (z*, x) pairs — no VI, no blanket I/O:
+          - VFE   : decoder theta  (reconstruction surprisal + KL)
+          - S_fwd : forward model psi  (next-step prediction error)
+          - L_rec : encoder phi        (amortised inference alignment)
 
-                if rec_scale > 0.0:
-                    # Re-run encoder on current observation
-                    z_recognition = self.agent.vae.encode(x_current.detach())
+        This is the variational EM M-step; beliefs z* are fixed from the E-step.
+        Friston et al. (2019); Dempster, Laird & Rubin (1977).
+        """
+        window_loss: Optional[torch.Tensor] = None
+        for entry in buffer:
+            # ── VFE: decoder gradient (theta) ────────────────────────────────
+            vfe = self.agent.compute_vfe(
+                entry['state'], entry['z_star'], entry['network_acts']
+            )
+            step_loss = vfe
 
-                    # Target is the optimized z from VFE loop (which is detached)
-                    # Recognition loss = MSE(Encoder(x), VI_Optimized_z)
-                    rec_loss = mse_error(z_recognition, activations.detach())
+            # ── Forward surprisal: forward-model gradient (psi) ──────────────
+            if entry['x_prev'] is not None:
+                x_pred = self.agent.vae.predict_next(entry['x_prev'], entry['action_prev'])
+                step_loss = step_loss + bernoulli_nll(x_pred, entry['x_curr'], EPS)
 
-                    # Add to total loss (weighted)
-                    step_loss = step_loss + rec_scale * rec_loss
+            # ── Recognition loss: encoder gradient (phi) — Eq. 9 ─────────────
+            rec_scale = self.phenotype.alpha_rec
+            if rec_scale > 0.0:
+                z_enc     = self.agent.vae.encode(entry['x_curr'])
+                step_loss = step_loss + rec_scale * mse_error(z_enc, entry['z_star'])
 
-        # Store for next iteration
-        self._last_x_actual = {
-            'x': x_current.detach(),
-            'action': selected_action_mu.detach()
-        }
-        
-        # Collect metrics
-        # Convert network activations tensors to floats for JSON serialization
-        network_acts_serializable = {
-            net: float(val.detach().item()) if isinstance(val, torch.Tensor) else float(val)
-            for net, val in network_acts.items()
-        }
-        
-        ts_acts = activations.detach().cpu().numpy().tolist()
-        dominant_idx = int(np.argmax(ts_acts))
-        
-        metrics = {
-            'timestamp': t,
-            'free_energy': free_energy.detach().item(),
-            'loss': float(step_loss.detach().item()),
-            'meta_awareness': meta_awareness,
-            'action_error': forward_prediction_error_val,
-            'network_activations': network_acts_serializable,
-            'thoughtseed_activations': ts_acts,
-            'dominant_thoughtseed': THOUGHTSEEDS[dominant_idx]
-        }
-        
-        return step_loss, new_state, activations, metrics
+            window_loss = step_loss if window_loss is None else (window_loss + step_loss)
+
+        return window_loss
 
     def train(
         self,
@@ -210,43 +222,44 @@ class MeditationTrainer:
         reseed_rng: bool = False,
         run_seed: Optional[int] = None,
     ) -> Dict:
-        """Run BPTT training.
-        
+        """Run variational EM training.
+
+        Each BPTT window T runs:
+          1. E-step loop  — T calls to _e_step(), no parameter gradients.
+          2. M-step once  — _m_step(buffer) re-runs differentiable passes and
+                            backprops through (phi, theta, psi).
+
         Args:
-            timesteps: Total simulation steps
-            enable_learning: Whether to update weights
-            reseed_rng: Reinitialize random generators for an isolated/reproducible run
-            run_seed: Optional per-run seed override (used only when reseed_rng=True)
-        
+            timesteps:     Total simulation steps
+            enable_learning: Whether to update weights (M-step)
+            reseed_rng:    Reinitialise random generators for reproducibility
+            run_seed:      Per-run seed override (used only with reseed_rng)
+
         Returns:
             Training results dict
         """
-        # Initialize run state
         self._reset_run_state(reseed_rng=reseed_rng, run_seed=run_seed)
-        
-        # Log Phenotype status
+
         print(f"PHENOTYPE: {self.phenotype.label} "
               f"(lr={self.phenotype.learning_rate:.4f}, "
               f"α_rec={self.phenotype.alpha_rec:.3f})")
 
-
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
-        
+
         # Initial thoughtseed activations
         priors = THOUGHTSEED_STATE_PRIORS[current_state].copy()
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
         activations = torch.tensor(activations_np, dtype=torch.float32)
         activations = torch.clamp(activations, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
-        
-        # Initialize blankets
+
+        # Initialise blankets
         self.blanket_l1l2.update_active_states({
             'mu_x': None,
             'policy_confidence': 0.0,
             'policy_drive': 0.0
         })
         self.blanket_l2l3.reset()
-        # Seed L2->L3 blanket so L3 reads from it (consistent interface)
         thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
         self.blanket_l2l3.update_sensory_states({
             'current_state': current_state,
@@ -254,69 +267,58 @@ class MeditationTrainer:
             'thoughtseed_activations': thoughtseed_dict,
         })
         self.monitor.update_meta_awareness()
-        # BPTT windowing
+
         bptt_steps = 50
-        
+
         for t_start in range(0, timesteps, bptt_steps):
-            # BPTT window boundary: clear sensory only (window-local). L1/L2 hidden state and active_states carry across.
+            # Window boundary: clear sensory states (hidden state carries across)
             self.blanket_l1l2.sensory_states.clear()
             self.blanket_l2l3.sensory_states.clear()
-            
-            # Zero gradients at window start
+
+            steps_to_run = min(bptt_steps, timesteps - t_start)
+            e_step_buffer: List[Dict] = []
+
+            # ── E-step loop (no gradient accumulation) ───────────────────────
+            for t_sub in range(steps_to_run):
+                t = t_start + t_sub
+
+                buf, new_state, activations, metrics = self._e_step(t, activations)
+                e_step_buffer.append(buf)
+
+                # Record state transitions
+                if new_state != current_state:
+                    self.history['transitions'].append({
+                        'timestamp':   t,
+                        'from':        current_state,
+                        'to':          new_state,
+                        'free_energy': metrics['free_energy'],
+                    })
+                    current_state = new_state
+
+                # Record history
+                self.history['states'].append(current_state)
+                self.history['free_energy'].append(metrics['free_energy'])
+                self.history['loss'].append(metrics['loss'])
+                self.history['meta_awareness'].append(metrics['meta_awareness'])
+                self.history['action_errors'].append(metrics['action_error'])
+                self.history['network_activations'].append(metrics['network_activations'])
+                self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+                self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
+
+            # ── M-step: gradient update over window ──────────────────────────
             if enable_learning:
                 self.optimizer.zero_grad()
-                window_loss = None
-            
-            steps_to_run = min(bptt_steps, timesteps - t_start)
-            
-            # Control autograd context (disable for inference-only runs to save memory/compute)
-            with torch.set_grad_enabled(enable_learning):
-                for t_sub in range(steps_to_run):
-                    t = t_start + t_sub
-                    
-                    # Execute step
-                    step_loss, new_state, activations, metrics = self.step(
-                        t=t,
-                        activations=activations,
-                        enable_learning=enable_learning
-                    )
-                    
-                    # Record state transitions
-                    if new_state != current_state:
-                        self.history['transitions'].append({
-                            'timestamp': t,
-                            'from': current_state,
-                            'to': new_state,
-                            'free_energy': metrics['free_energy']
-                        })
-                        current_state = new_state
-                    
-                    # Accumulate loss
-                    if enable_learning and step_loss.requires_grad:
-                        window_loss = step_loss if window_loss is None else (window_loss + step_loss)
-                    
-                    # Record history
-                    self.history['states'].append(current_state)
-                    self.history['free_energy'].append(metrics['free_energy'])
-                    self.history['loss'].append(metrics['loss'])
-                    self.history['meta_awareness'].append(metrics['meta_awareness'])
-                    self.history['action_errors'].append(metrics['action_error'])
-                    self.history['network_activations'].append(metrics['network_activations'])
-                    self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
-                    self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
-            
-            # Gradient step (after accumulating gradients from all steps in window)
-            if enable_learning:
+                window_loss = self._m_step(e_step_buffer)
                 if window_loss is not None and window_loss.requires_grad:
                     window_loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_norm=1.0)
                     self.optimizer.step()
-            
-            # Detach states (BPTT boundary)
+
+            # BPTT boundary detach (activations already detached from E-step)
             with torch.no_grad():
                 self.process.x = self.process.x.detach()
                 activations = activations.detach()
-        
+
         return self._package_results()
 
     
