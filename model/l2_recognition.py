@@ -14,13 +14,13 @@ from typing import Dict, Optional
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    LEARNING_RATES, THOUGHTSEED_STATE_PRIORS,
+    THOUGHTSEED_STATE_PRIORS,
     get_exit_transition_probs, get_policy_candidate_order,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
+from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 from utils.math_utils import (
     bernoulli_kl,
-    bernoulli_entropy,
     bernoulli_nll,
     mse_error,
     clamp_activation,
@@ -91,13 +91,14 @@ class MeditationVAE(nn.Module):
 class Layer2Agent(nn.Module):
     """Attentional agent: thoughtseeds + VAE + EFE policy selection."""
     
-    def __init__(self, experience_level: str = 'expert', 
+    def __init__(self, phenotype: PhenotypeConfig = None,
                  blanket_l1l2: Optional[MarkovBlanketL1L2] = None,
                  blanket_l2l3: Optional[MarkovBlanketL2L3] = None):
         super().__init__()
-        
-        self.level = experience_level
-        self.params = {'learning_rate': LEARNING_RATES[experience_level]}
+
+        self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
+        self.level = self.phenotype.level   # used for config table lookups
+        self.params = {'learning_rate': self.phenotype.learning_rate}
         
         # Markov blankets
         self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.0)
@@ -219,82 +220,103 @@ class Layer2Agent(nn.Module):
         )
         return z_posterior, z_recognition
     
-    def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
-        """Policy inference via softmax posterior over candidate policies (Eq. 5-8).
-        
-        Returns dict with:
-            - selected_action_mu: posterior-weighted thoughtseed target
-            - mu_x: posterior-weighted network target for L1
-            - precision_gain: Precision modulation (weight)
-            - policy_confidence: 1 - normalized entropy of q(pi)
+    # ------------------------------------------------------------------
+    # Policy inference sub-steps (Eqs. 5–8)
+    # ------------------------------------------------------------------
+
+    def _compute_dwell_prior(self, current_state: str, candidates: list,
+                             hazard: float, exit_probs: dict) -> list:
+        """Eq. 5 — Dwell-aware prior E(π) over candidate policies.
+
+        Stay-prior = 1-h; exit-prior distributed over transition probabilities.
+        h = dwell_progress² (quadratic hazard). Returns list of prior floats.
         """
-        # Get current networks for forward prediction
-        x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
-        candidates = get_policy_candidate_order(current_state)
-        
-        exit_probs = get_exit_transition_probs(self.level, current_state)
-        avg_exit = (sum(exit_probs.values()) / len(exit_probs)) if exit_probs else (1.0 / max(len(candidates), 1))
-        dwell_progress = to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0))
-        hazard = clip_probability(dwell_progress ** 2)
-        
+        avg_exit = (sum(exit_probs.values()) / len(exit_probs)) if exit_probs else (
+            1.0 / max(len(candidates), 1))
         priors = []
-        g_vals = []
-        mu_candidates = []
-        
+        for s in candidates:
+            if s == current_state:
+                priors.append(max(EPS, 1.0 - hazard))
+            else:
+                priors.append(max(EPS, hazard * exit_probs.get(s, avg_exit)))
+        return priors
+
+    def _evaluate_efe(self, x_current: torch.Tensor,
+                      candidates: list):
+        """Eq. 6 — Risk-only EFE G(π) = D_KL(x̂_π ‖ C_{s_π}) per policy.
+
+        FA meditation is convergent: ambiguity term omitted.
+        Returns (g_vals: list[float], mu_candidates: list[Tensor]).
+        """
+        g_vals, mu_candidates = [], []
         with torch.no_grad():
-            for candidate_state in candidates:
-                mu_candidate = self.mu_params[candidate_state]
-                x_pred = self.vae.predict_next(x_current, mu_candidate)
-                x_pref = self.decode_with_state(mu_candidate)
-                
-                risk = bernoulli_kl(x_pred, x_pref, EPS)
-                ambiguity = bernoulli_entropy(x_pred, EPS)
-                g_vals.append(float((risk + ambiguity).item()))
-                
-                mu_candidates.append(mu_candidate)
-                
-                if candidate_state == current_state:
-                    prior = 1.0 - hazard
-                else:
-                    prior = hazard * exit_probs.get(candidate_state, avg_exit)
-                priors.append(max(EPS, float(prior)))
-        
+            for s in candidates:
+                mu_c = self.mu_params[s]
+                x_pred = self.vae.predict_next(x_current, mu_c)
+                x_pref = self.decode_with_state(mu_c)
+                g_vals.append(float(bernoulli_kl(x_pred, x_pref, EPS).item()))
+                mu_candidates.append(mu_c)
+        return g_vals, mu_candidates
+
+    def _compute_posterior(self, priors: list, g_vals: list):
+        """Eq. 7 — Policy precision γ and softmax posterior q(π).
+
+        γ = 1 - H(E(π)) / log|Π| computed from prior entropy (no iteration).
+        L3 learned log-prior ℓ_π(s) is added to log E(π) if available.
+        Returns (q_pi, gamma, pi_conf, policy_drive).
+        """
         log_prior = np.log(np.array(priors, dtype=float))
-        # L3 policy prior: bias log_prior from learned tendencies (L3 writes, L2 reads)
-        policy_prior = self.blanket_l2l3.active_states.get('policy_prior')
-        if policy_prior is not None and len(policy_prior) == len(log_prior):
-            log_prior = log_prior + np.array(policy_prior, dtype=float)
+        l3_prior = self.blanket_l2l3.active_states.get('policy_prior')
+        if l3_prior is not None and len(l3_prior) == len(log_prior):
+            log_prior = log_prior + np.array(l3_prior, dtype=float)
+
         g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
 
-        gamma_prev = max(EPS, to_float(self.blanket_l2l3.active_states.get('policy_precision', 1.0)))
-        q_pi = policy_posterior(log_prior, g_array, gamma_prev)
-        gamma = policy_precision(q_pi, EPS)
+        prior_arr = np.array(priors, dtype=float)
+        prior_arr = prior_arr / (prior_arr.sum() + EPS)
+        prior_entropy = float(-np.sum(prior_arr * np.log(prior_arr + EPS)))
+        gamma = float(np.clip(
+            1.0 - prior_entropy / np.log(max(len(priors), 2)), 0.0, 1.0))
+
         q_pi = policy_posterior(log_prior, g_array, gamma)
         pi_conf = policy_precision(q_pi)
         policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
-        
+        return q_pi, gamma, pi_conf, policy_drive
+
+    def _select_attractor(self, q_pi, mu_candidates: list,
+                          current_state: str, hazard: float):
+        """Eq. 8 — Posterior-weighted latent target with dwell blending.
+
+        μ = Σ_π q(π) μ_z(s_π)
+        μ_sel = (1-h) μ_z(s_t) + h μ  — graded transition, preserves stochasticity.
+        Returns (selected_mu, mu_x).
+        """
         weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype)
-        mu_stack = torch.stack(mu_candidates, dim=0)
-        selected_mu = torch.sum(weights.unsqueeze(-1) * mu_stack, dim=0)
+        mu = torch.sum(weights.unsqueeze(-1) * torch.stack(mu_candidates, 0), dim=0)
         mu_current = self.mu_params[current_state].detach()
-        selected_mu = (1.0 - hazard) * mu_current + hazard * selected_mu
-        mu_x = self.decode_with_state(selected_mu)
-        
-        precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
-        precision_gain = clip_probability(precision_sensory)
-        # L2 writes policy_precision into L2<->L3 blanket (L2 owns this signal; L3 could modulate later).
-        self.blanket_l2l3.update_active_states({
-            'policy_precision': gamma,
-        })
-        
+        selected_mu = (1.0 - hazard) * mu_current + hazard * mu
+        return selected_mu, self.decode_with_state(selected_mu)
+
+    # ------------------------------------------------------------------
+
+    def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
+        """Policy inference — orchestrates Eqs. 5 → 6 → 7 → 8."""
+        x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
+        candidates = get_policy_candidate_order(current_state)
+        exit_probs = get_exit_transition_probs(self.level, current_state)
+        hazard     = clip_probability(
+            to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0)) ** 2)
+
+        priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # Eq. 5
+        g_vals, mu_candidates            = self._evaluate_efe(x_current, candidates)                                 # Eq. 6
+        q_pi, gamma, pi_conf, pol_drive  = self._compute_posterior(priors, g_vals)                                   # Eq. 7
+        selected_mu, mu_x                = self._select_attractor(q_pi, mu_candidates, current_state, hazard)        # Eq. 8
+
         return {
             'selected_action_mu': selected_mu,
-            'mu_x': mu_x,
-            'precision_gain': precision_gain,
-            'noise_reduction': float(np.clip(1.0 - 0.6 * precision_gain, 0.4, 1.0)),
-            'policy_confidence': pi_conf,
-            'policy_drive': policy_drive,
-            'policy_precision': gamma,
-            'precision_sensory': precision_sensory,
-            'q_pi': np.array(q_pi, dtype=np.float64),
+            'mu_x':               mu_x,
+            'policy_confidence':  pi_conf,
+            'policy_drive':       pol_drive,
+            'policy_precision':   gamma,
+            'q_pi':               np.array(q_pi, dtype=np.float64),
         }

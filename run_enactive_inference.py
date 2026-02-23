@@ -9,6 +9,7 @@ import argparse
 from pathlib import Path
 
 from model.training_loop import train_meditation
+from model.phenotype import EXPERT_PHENOTYPE, NOVICE_PHENOTYPE
 from viz.analysis import print_summary
 from viz.analysis_utils import (
     get_tail_window,
@@ -41,7 +42,7 @@ def run_training_and_simulation(timesteps: int):
     print("PHASE 1: TRAINING EXPERT PHENOTYPE")
     print("=" * 70)
     expert_results = train_meditation(
-        experience_level="expert",
+        phenotype=EXPERT_PHENOTYPE,
         timesteps=timesteps,
         seed=SEED,
         save_results=True,
@@ -53,7 +54,7 @@ def run_training_and_simulation(timesteps: int):
     print("PHASE 2: TRAINING NOVICE PHENOTYPE")
     print("=" * 70)
     novice_results = train_meditation(
-        experience_level="novice",
+        phenotype=NOVICE_PHENOTYPE,
         timesteps=timesteps,
         seed=SEED,
         save_results=True,

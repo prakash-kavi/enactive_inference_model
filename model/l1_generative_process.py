@@ -18,6 +18,7 @@ from utils.config import (
     L1_BASE_HAZARD,
 )
 from utils.math_utils import clip_probability, to_float
+from model.phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 
 class Layer1Process(nn.Module):
     """MVOU generative process for brain network dynamics (Eq. 1)."""
@@ -27,10 +28,11 @@ class Layer1Process(nn.Module):
     N_SUBSTEPS = 2
     INIT_ACTIVATION = 0.5
 
-    def __init__(self, experience_level: str = 'expert', seed: Optional[int] = None):
+    def __init__(self, phenotype: PhenotypeConfig = None, seed: Optional[int] = None):
         super().__init__()
 
-        self.level = experience_level
+        self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
+        self.level = self.phenotype.level   # used for config table lookups
         self.dt = DEFAULTS['DEFAULT_DT']
         self.rng = np.random.RandomState(seed)
 
@@ -100,8 +102,9 @@ class Layer1Process(nn.Module):
         
         theta = torch.tensor(theta_np, dtype=torch.float32)
 
-        # Expert-specific adjustments to Theta(s)
-        if self.level == 'expert':
+        # Phenotype-specific adjustments to Theta(s): experts have stronger
+        # self-stabilisation and inter-network coupling. (theta_boost flag)
+        if self.phenotype.theta_boost:
             if state == 'breath_focus':
                 # Stronger self-stabilization
                 theta = theta + torch.eye(len(NETWORKS)) * 0.4
@@ -168,21 +171,16 @@ class Layer1Process(nn.Module):
         theta = self._get_coupling(self.current_state)
         theta = self._clamp_theta(theta)
         
-        # Apply L2 target if present: mu blends with mu_x via precision_gain
+        # Apply L2 attractor target mu_x directly (fixed bias_strength=0.5). (Eq. 1)
+        # L2->L1 active state is mu_x only; precision_gain/noise_reduction removed.
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
-            bias_strength = active_states.get('precision_gain', 0.0)
-            bias_strength = 0.5 * clip_probability(bias_strength)
-            
             if not isinstance(mu_x, torch.Tensor):
                 mu_x = torch.tensor(mu_x, dtype=torch.float32)
-            mu = (1 - bias_strength) * mu + bias_strength * mu_x
-        
-        # Global process noise variance (Eq. 1), modulated by L2 precision gain
-        base_variance = NOISE_LEVEL
-        noise_reduction = active_states.get('noise_reduction', 1.0)
-        variance = base_variance * to_float(noise_reduction)
-        sigma = np.sqrt(variance)
+            mu = 0.5 * mu + 0.5 * mu_x
+
+        # Global process noise variance (Eq. 1) — fixed, not modulated by L2.
+        sigma = np.sqrt(NOISE_LEVEL)
         
         # MVOU integration (Eq. 1) with substeps for stability
         dt_sub = self.dt / self.N_SUBSTEPS

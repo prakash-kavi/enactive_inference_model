@@ -15,12 +15,13 @@ from pathlib import Path
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
-    LEARNING_RATES, THOUGHTSEED_STATE_PRIORS,
+    THOUGHTSEED_STATE_PRIORS,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
 from .l3_metacognition import Layer3Monitor
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
+from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 from utils.math_utils import (
     networks_to_tensor,
     precision_from_surprisal,
@@ -32,26 +33,27 @@ from utils.math_utils import (
 class MeditationTrainer:
     """BPTT training for hierarchical meditation model."""
     
-    def __init__(self, experience_level: str = 'expert', seed: int = 42):
-        self.level = experience_level
+    def __init__(self, phenotype: PhenotypeConfig = None, seed: int = 42):
+        self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
+        self.level = self.phenotype.level
         self.seed = seed
-        self.params = {'learning_rate': LEARNING_RATES[experience_level]}
+        self.params = {'learning_rate': self.phenotype.learning_rate}
 
         torch.manual_seed(seed)
         np.random.seed(seed)
-        
+
         self.blanket_l1l2 = MarkovBlanketL1L2(smoothing=0.0)
         self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.0)
 
-        self.process = Layer1Process(experience_level=experience_level, seed=seed)
+        self.process = Layer1Process(phenotype=self.phenotype, seed=seed)
         self.agent = Layer2Agent(
-            experience_level=experience_level,
+            phenotype=self.phenotype,
             blanket_l1l2=self.blanket_l1l2,
             blanket_l2l3=self.blanket_l2l3
         )
         self.monitor = Layer3Monitor(blanket_l2l3=self.blanket_l2l3)
 
-        self.optimizer = optim.Adam(self.agent.parameters(), lr=self.params['learning_rate'])
+        self.optimizer = optim.Adam(self.agent.parameters(), lr=self.phenotype.learning_rate)
         
         self.history = {}
         self._last_x_actual = None
@@ -147,35 +149,19 @@ class MeditationTrainer:
         # Update L2->L1 active states (action policy)
         self.blanket_l1l2.update_active_states(prescription)
 
-        # Forward model loss calculation
-        step_loss = free_energy
-
+        # Forward model loss: fixed weight w_fwd=1 (Eq. 9). No EMA scaling needed.
         if forward_prediction_error is not None:
-            fe_val = float(free_energy.detach().item())
-            fpe_val = float(forward_prediction_error_val)
-            beta = self._loss_balance['ema_beta']
-            self._loss_balance['fe_ema'] = beta * self._loss_balance['fe_ema'] + (1.0 - beta) * fe_val
-            self._loss_balance['fpe_ema'] = beta * self._loss_balance['fpe_ema'] + (1.0 - beta) * fpe_val
-            if self._loss_balance['fpe_ema'] > EPS:
-                ratio = self._loss_balance['fe_ema'] / (self._loss_balance['fpe_ema'] + EPS)
-            else:
-                ratio = 1.0
-
-            self._loss_balance['ratio_ema'] = beta * self._loss_balance['ratio_ema'] + (1.0 - beta) * ratio
-            forward_weight = float(np.clip(self._loss_balance['ratio_ema'],
-                                           self._loss_balance['fw_min'],
-                                           self._loss_balance['fw_max']))
-
-            # Combined loss
-            step_loss = free_energy + forward_weight * forward_prediction_error
+            step_loss = free_energy + forward_prediction_error
+        else:
+            step_loss = free_energy
 
             # Recognition Loss (Amortized Inference)
             # Train encoder to predict the optimized thoughtseeds (z) from observations (x)
             # Experts use full weight; novices use a weak weight tied to the LR ratio.
             if enable_learning:
-                rec_scale = 1.0
-                if self.level == 'novice':
-                    rec_scale = self.params['learning_rate'] / max(LEARNING_RATES['expert'], EPS)
+                # Recognition loss: alpha_rec from PhenotypeConfig (Eq. 9).
+                # Expert=1.0 (full amortised inference); novice uses a weaker scale.
+                rec_scale = self.phenotype.alpha_rec
 
                 if rec_scale > 0.0:
                     # Re-run encoder on current observation
@@ -239,10 +225,10 @@ class MeditationTrainer:
         self._reset_run_state(reseed_rng=reseed_rng, run_seed=run_seed)
         
         # Log Phenotype status
-        if self.level == 'novice':
-            print(f"PHENOTYPE: NOVICE (Encoder Unfrozen - Weak/Slow Amortized Inference Learning)")
-        else:
-            print(f"PHENOTYPE: EXPERT (Encoder Unfrozen - Amortized Inference Learning Active)")
+        print(f"PHENOTYPE: {self.phenotype.label} "
+              f"(lr={self.phenotype.learning_rate:.4f}, "
+              f"α_rec={self.phenotype.alpha_rec:.3f})")
+
 
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
@@ -256,8 +242,6 @@ class MeditationTrainer:
         # Initialize blankets
         self.blanket_l1l2.update_active_states({
             'mu_x': None,
-            'precision_gain': 0.0,
-            'noise_reduction': 1.0,
             'policy_confidence': 0.0,
             'policy_drive': 0.0
         })
@@ -334,8 +318,6 @@ class MeditationTrainer:
                 activations = activations.detach()
         
         return self._package_results()
-    
-
 
     
     def _package_results(self) -> Dict:
@@ -417,14 +399,7 @@ class MeditationTrainer:
             'dominant_thoughtseed': []
         }
         self._last_x_actual = None
-        self._loss_balance = {
-            'fe_ema': 0.0,
-            'fpe_ema': 0.0,
-            'ema_beta': 0.99,
-            'ratio_ema': 1.0,
-            'fw_min': 0.5,
-            'fw_max': 2.0,
-        }
+        self._loss_balance = {}
         self.blanket_l1l2.reset()
         self.monitor.reset()
 
@@ -449,7 +424,7 @@ class MeditationTrainer:
         print(f"Results saved to {filepath}")
 
 def train_meditation(
-    experience_level: str = 'expert',
+    phenotype: PhenotypeConfig = None,
     timesteps: int = 10000,
     seed: int = 42,
     reseed_rng: bool = False,
@@ -457,9 +432,13 @@ def train_meditation(
     save_results: bool = True,
     output_dir: str = 'data/lean_results',
 ) -> Dict:
-    """Convenience wrapper for MeditationTrainer."""
+    """Convenience wrapper for MeditationTrainer.
+
+    Pass ``phenotype=EXPERT_PHENOTYPE`` or ``phenotype=NOVICE_PHENOTYPE``.
+    Defaults to EXPERT_PHENOTYPE if omitted.
+    """
     trainer = MeditationTrainer(
-        experience_level=experience_level,
+        phenotype=phenotype,
         seed=seed,
     )
     results = trainer.train(
