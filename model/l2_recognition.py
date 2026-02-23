@@ -18,7 +18,7 @@ from utils.config import (
     get_exit_transition_probs, get_policy_candidate_order,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
+from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, POLICY_GAMMA
 from utils.math_utils import (
     bernoulli_kl,
     bernoulli_nll,
@@ -26,7 +26,6 @@ from utils.math_utils import (
     clamp_activation,
     clip_probability,
     policy_posterior,
-    policy_precision,
     normalize_scores,
     to_float,
     networks_to_tensor,
@@ -259,11 +258,11 @@ class Layer2Agent(nn.Module):
         return g_vals, mu_candidates
 
     def _compute_posterior(self, priors: list, g_vals: list):
-        """Eq. 7 — Policy precision γ and softmax posterior q(π).
+        """Eq. 7 - Fixed policy precision gamma and softmax posterior q(pi).
 
-        γ = 1 - H(E(π)) / log|Π| computed from prior entropy (no iteration).
-        L3 learned log-prior ℓ_π(s) is added to log E(π) if available.
-        Returns (q_pi, gamma, pi_conf, policy_drive).
+        Gamma is a fixed scalar (POLICY_GAMMA). L3 learned log-prior is added
+        to log E(pi) if available.
+        Returns (q_pi, gamma, policy_drive).
         """
         log_prior = np.log(np.array(priors, dtype=float))
         l3_prior = self.blanket_l2l3.active_states.get('policy_prior')
@@ -272,30 +271,20 @@ class Layer2Agent(nn.Module):
 
         g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
 
-        prior_arr = np.array(priors, dtype=float)
-        prior_arr = prior_arr / (prior_arr.sum() + EPS)
-        prior_entropy = float(-np.sum(prior_arr * np.log(prior_arr + EPS)))
-        gamma = float(np.clip(
-            1.0 - prior_entropy / np.log(max(len(priors), 2)), 0.0, 1.0))
-
+        gamma = max(EPS, float(POLICY_GAMMA))
         q_pi = policy_posterior(log_prior, g_array, gamma)
-        pi_conf = policy_precision(q_pi)
         policy_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
-        return q_pi, gamma, pi_conf, policy_drive
+        return q_pi, gamma, policy_drive
 
-    def _select_attractor(self, q_pi, mu_candidates: list,
-                          current_state: str, hazard: float):
-        """Eq. 8 — Posterior-weighted latent target with dwell blending.
+    def _select_attractor(self, q_pi, mu_candidates: list):
+        """Eq. 8 - Posterior-weighted latent target.
 
-        μ = Σ_π q(π) μ_z(s_π)
-        μ_sel = (1-h) μ_z(s_t) + h μ  — graded transition, preserves stochasticity.
+        mu = sum_pi q(pi) mu_z(s_pi)
         Returns (selected_mu, mu_x).
         """
         weights = torch.tensor(q_pi, dtype=mu_candidates[0].dtype)
         mu = torch.sum(weights.unsqueeze(-1) * torch.stack(mu_candidates, 0), dim=0)
-        mu_current = self.mu_params[current_state].detach()
-        selected_mu = (1.0 - hazard) * mu_current + hazard * mu
-        return selected_mu, self.decode_with_state(selected_mu)
+        return mu, self.decode_with_state(mu)
 
     # ------------------------------------------------------------------
 
@@ -309,13 +298,12 @@ class Layer2Agent(nn.Module):
 
         priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # Eq. 5
         g_vals, mu_candidates            = self._evaluate_efe(x_current, candidates)                                 # Eq. 6
-        q_pi, gamma, pi_conf, pol_drive  = self._compute_posterior(priors, g_vals)                                   # Eq. 7
-        selected_mu, mu_x                = self._select_attractor(q_pi, mu_candidates, current_state, hazard)        # Eq. 8
+        q_pi, gamma, pol_drive  = self._compute_posterior(priors, g_vals)                                   # Eq. 7
+        selected_mu, mu_x       = self._select_attractor(q_pi, mu_candidates)        # Eq. 8
 
         return {
             'selected_action_mu': selected_mu,
             'mu_x':               mu_x,
-            'policy_confidence':  pi_conf,
             'policy_drive':       pol_drive,
             'policy_precision':   gamma,
             'q_pi':               np.array(q_pi, dtype=np.float64),

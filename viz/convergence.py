@@ -99,10 +99,12 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
         upper = (fe_mean + fe_std)[valid]
         ax.fill_between(steps[valid], lower, upper, color="#E74C3C", alpha=0.18)
     
-    ax.set_ylabel("Loss" if use_loss else "Free energy")
+    ax.set_ylabel("Loss" if use_loss else "Free energy", fontweight="bold")
     ax.set_title(f"{'Loss' if use_loss else 'Free energy'} convergence ({level.title()})",
                  fontsize=14, fontweight="bold")
     ax.legend(loc="upper right", frameon=True)
+    if use_loss:
+        ax.set_ylim(1.0, 1.6)
     
     # Panel 2: Cumulative state occupancy
     ax = axes[1]
@@ -111,8 +113,8 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
         ax.plot(steps, fractions[state], color=STATE_COLORS[state], 
                linewidth=1.8, label=STATE_SHORT_NAMES[state])
     
-    ax.set_ylabel("Cumulative fraction")
-    ax.set_xlabel("Timestep")
+    ax.set_ylabel("Cumulative fraction", fontweight="bold")
+    ax.set_xlabel("Timestep", fontweight="bold")
     ax.set_ylim(0.0, 1.0)
     ax.set_title("Cumulative state occupancy", fontsize=14, fontweight="bold")
     ax.legend(loc="lower right", frameon=True)

@@ -256,7 +256,6 @@ class MeditationTrainer:
         # Initialise blankets
         self.blanket_l1l2.update_active_states({
             'mu_x': None,
-            'policy_confidence': 0.0,
             'policy_drive': 0.0
         })
         self.blanket_l2l3.reset()

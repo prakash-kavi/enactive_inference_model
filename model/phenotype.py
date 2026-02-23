@@ -8,6 +8,9 @@ branching on a string label.
 from dataclasses import dataclass
 from utils.config import LEARNING_RATES, EPS
 
+# Fixed policy precision (Eq. 7). Kept here for centralized tuning.
+POLICY_GAMMA = 1.0
+
 
 @dataclass(frozen=True)
 class PhenotypeConfig:

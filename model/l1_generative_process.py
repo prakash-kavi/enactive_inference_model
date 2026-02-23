@@ -151,7 +151,6 @@ class Layer1Process(nn.Module):
         Args:
             active_states: Control from L2 via Markov blanket
                 - policy_drive: float (0-1) transition drive
-                - policy_confidence: float (0-1) posterior confidence (used if drive absent)
                 - precision_gain: float (0-1) gain on L2 target influence
                 - mu_x: Optional[torch.Tensor] L2 target in network space
         
@@ -160,7 +159,7 @@ class Layer1Process(nn.Module):
             current_state: str
         """
         # Extract control signals
-        policy_drive = active_states.get('policy_drive', active_states.get('policy_confidence', 0.0))
+        policy_drive = active_states.get('policy_drive', 0.0)
         policy_drive = to_float(policy_drive)
         
         # Check for state transition

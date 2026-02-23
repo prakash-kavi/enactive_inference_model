@@ -59,7 +59,6 @@ class MarkovBlanketL1L2(MarkovBlanket):
     Active (L2 -> L1):
         - mu_x: Target network activations (policy)
         - policy_drive: L2 transition urge
-        - policy_confidence: L2 policy confidence (posterior)
     """
     
     def __init__(self, smoothing: float = 0.0):

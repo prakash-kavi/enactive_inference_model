@@ -27,8 +27,8 @@ def plot_hierarchy(data, save_path: str, level_name: str):
             print(f"ERROR: Required data '{field}' missing for hierarchy plot")
             return
     
-    dt = DEFAULTS['DEFAULT_DT']
-    time_steps = np.arange(len(data['state_history'])) * dt
+    n_steps = len(data['state_history'])
+    time_steps = np.arange(n_steps) if n_steps > 0 else np.array([0.0])
     
     set_plot_style()
     
@@ -41,7 +41,7 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     
     ax1.plot(time_steps, meta_awareness, color='#4363d8', linewidth=2)
     ax1.fill_between(time_steps, meta_awareness, alpha=0.2, color='#4363d8')
-    ax1.set_ylabel('Meta-Awareness Level', fontsize=12)
+    ax1.set_ylabel('Meta-Awareness Level', fontsize=12, fontweight='bold')
     ax1.set_title('Level 3: Metacognition', fontsize=14, fontweight='bold', loc='left')
     ax1.set_ylim(0, 1.05)
     ax1.grid(True, axis='y', linestyle='--', alpha=0.5)
@@ -76,8 +76,8 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     ax2.set_yticks(range(len(thoughtseeds)))
     ax2.set_yticklabels(thoughtseeds)
     ax2.invert_yaxis()
-    ax2.set_ylabel('Dominant Thoughtseed', fontsize=12)
-    ax2.set_title('Level 2: Dominant Thoughtseed', fontsize=14, fontweight='bold', pad=-15, loc='left')
+    ax2.set_ylabel('Dominant Thoughtseed', fontsize=12, fontweight='bold')
+    ax2.set_title('Level 2: Dominant Thoughtseed', fontsize=14, fontweight='bold', pad=8, loc='left')
     ax2.grid(True, axis='y', linestyle='--', alpha=0.5)
     # Remove axis borders/spines for consistency
     for spine in ax2.spines.values():
@@ -126,8 +126,9 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     state_legend = fig.legend(handles=state_legend_elements, loc='lower center', 
                             fontsize=10, frameon=False, ncol=4, bbox_to_anchor=(0.5, 0.02))
     
-    ax3.set_xlabel('Time (timesteps)', fontsize=12, labelpad=12)
-    ax3.set_ylabel('Network Activation', fontsize=12)
+    ax3.set_xlabel('Time (timesteps)', fontsize=12, fontweight='bold', labelpad=12)
+    ax3.set_ylabel('Network Activation', fontsize=12, fontweight='bold')
+    ax3.set_ylim(0.0, 1.0)
     ax3.set_title('Level 1: Network Dynamics', fontsize=14, fontweight='bold', loc='left')
     ax3.legend(loc='upper right', fontsize=10)
     ax3.grid(True, linestyle='--', alpha=0.5)
@@ -135,7 +136,7 @@ def plot_hierarchy(data, save_path: str, level_name: str):
         spine.set_visible(False)
     ax3.patch.set_visible(False)
     
-    fig.suptitle(f'Hierarchical Dynamics ({level_name})', fontsize=16, fontweight='bold', x=0.06, ha='left')
+    fig.suptitle(f'Hierarchical Dynamics ({level_name})', fontsize=16, fontweight='bold', x=0.5, ha='center')
     
     plt.tight_layout(rect=[0, 0.05, 1, 0.99])
     save_figure(fig, Path(save_path), f"Hierarchy_{level_name}")
