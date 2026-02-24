@@ -16,6 +16,7 @@ from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
     THOUGHTSEED_STATE_PRIORS,
     get_exit_transition_probs, get_policy_candidate_order,
+    VI_STEPS, VI_LR,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, POLICY_GAMMA
@@ -170,8 +171,8 @@ class Layer2Agent(nn.Module):
         temporal_w = 1.0 - precision_weight_val
 
         # Variational optimization loop (fixed-step VI)
-        vi_steps = 2
-        vi_lr = 0.2
+        vi_steps = int(VI_STEPS)
+        vi_lr = float(VI_LR)
         with torch.enable_grad():
             for _ in range(vi_steps):
                 recon_x = self.decode_with_state(z_var)

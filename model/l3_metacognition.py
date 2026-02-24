@@ -15,6 +15,7 @@ from utils.config import (
     compute_meta_awareness,
     L3_POLICY_LR,
     L3_POLICY_STRENGTH,
+    L3_META_EMA_ALPHA,
 )
 from .markov_blankets import MarkovBlanketL2L3
 from utils.math_utils import clip_probability
@@ -88,7 +89,8 @@ class Layer3Monitor(nn.Module):
         if self.meta_awareness_ema is None:
             self.meta_awareness_ema = raw
         else:
-            self.meta_awareness_ema = 0.9 * self.meta_awareness_ema + 0.1 * raw
+            alpha = float(L3_META_EMA_ALPHA)
+            self.meta_awareness_ema = (1.0 - alpha) * self.meta_awareness_ema + alpha * raw
         meta = clip_probability(self.meta_awareness_ema)
         return meta
 

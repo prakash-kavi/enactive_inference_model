@@ -110,6 +110,10 @@ STATE_TRANSITION_PROBS = {
 # Layer 2: Thoughtseeds + VAE
 # =============================================================================
 
+# Fixed-step VI hyperparameters (L2)
+VI_STEPS = 2
+VI_LR = 0.2
+
 # Thoughtseed priors (state-dependent activation baselines)
 THOUGHTSEED_STATE_PRIORS = {
     "breath_focus": {
@@ -178,6 +182,7 @@ LEARNING_RATES = {
 # Layer 3: learned policy tendencies
 L3_POLICY_LR = 0.05       # EMA learning rate for L3 policy prior update
 L3_POLICY_STRENGTH = 0.5  # Scale for L3 prior influence on L2 (0 = neutral, 1 = full)
+L3_META_EMA_ALPHA = 0.1   # EMA rate for meta-awareness smoothing
 
 
 # =============================================================================

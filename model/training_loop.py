@@ -103,6 +103,16 @@ class MeditationTrainer:
                 base_precision = precision_from_surprisal(forward_prediction_error_val, EPS)
                 self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
+            # ===== Layer 3: Metacognitive Monitor (precision update) =====
+            meta_awareness = self.monitor.update_meta_awareness()
+
+            clip_min = DEFAULTS['CLIP_MIN']
+            clip_max = DEFAULTS['CLIP_MAX']
+            base_precision = float(np.clip(base_precision, clip_min, clip_max))
+            meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
+            precision_sensory = integrate_precision_logit(base_precision, meta_awareness, EPS)
+            self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
+
             # ===== Layer 2: Attentional Agent =====
             activations, _ = self.agent.infer_z_step(
                 current_state=new_state,
@@ -115,21 +125,13 @@ class MeditationTrainer:
                 self.agent.compute_vfe(new_state, activations, network_acts).item()
             )
 
-            # ===== Layer 3: Metacognitive Monitor =====
+            # Update L2->L3 sensory interface for next step
             thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
             self.blanket_l2l3.update_sensory_states({
                 'current_state':          new_state,
                 'dwell_progress':         dwell_progress,
                 'thoughtseed_activations': thoughtseed_dict,
             })
-            meta_awareness = self.monitor.update_meta_awareness()
-
-            clip_min = DEFAULTS['CLIP_MIN']
-            clip_max = DEFAULTS['CLIP_MAX']
-            base_precision = float(np.clip(base_precision, clip_min, clip_max))
-            meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
-            precision_sensory = integrate_precision_logit(base_precision, meta_awareness, EPS)
-            self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
             self.monitor.write_policy_prior(new_state)
 
             # ===== Policy Inference =====
@@ -311,7 +313,6 @@ class MeditationTrainer:
             'dwell_progress': 0.0,
             'thoughtseed_activations': thoughtseed_dict,
         })
-        self.monitor.update_meta_awareness()
 
         bptt_steps = 50
 
