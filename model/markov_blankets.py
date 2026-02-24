@@ -1,29 +1,50 @@
 """Markov blankets: sensory/active state interfaces between hierarchical levels.
 
-Each blanket enforces clean separation between levels:
-- Sensory states: Read-only observations (bottom-up)
-- Active states: Control signals (top-down)
-- Optional EMA smoothing on sensory states
+Minimal nested interpretation (Russian-doll semantics):
+L1↔L2 and L2↔L3 are separate blankets, but all cross-layer exchange is
+strictly adjacent (L3 never reads L1 directly; L1 never reads L3 directly).
+This enforces bottom-up emergence and top-down causation via L2.
 """
 
 import torch
 from typing import Dict, Any
 
 class MarkovBlanket:
-    """Base class for Markov blanket interfaces."""
-    
-    def __init__(self, smoothing: float = 0.0):
+    """Base class for Markov blanket interfaces with strict key contracts."""
+
+    allowed_sensory: set[str] = set()
+    allowed_active: set[str] = set()
+
+    def __init__(self, smoothing: float = 0.0, strict: bool = True):
         """
         Args:
             smoothing: EMA coefficient (0=no memory, 1=no update)
+            strict: If True, reject unknown keys on update
         """
         self.smoothing = float(max(0.0, min(1.0, smoothing)))
+        self.strict = bool(strict)
         self.sensory_states: Dict[str, Any] = {}
         self.active_states: Dict[str, Any] = {}
+
+    def _detach_value(self, value: Any) -> Any:
+        if isinstance(value, torch.Tensor):
+            return value.detach()
+        if isinstance(value, dict):
+            return {k: self._detach_value(v) for k, v in value.items()}
+        return value
+
+    def _validate_keys(self, new_states: Dict[str, Any], allowed: set[str], kind: str) -> None:
+        if not self.strict:
+            return
+        extra = set(new_states.keys()) - allowed
+        if extra:
+            raise KeyError(f"Unknown {kind} keys for {self.__class__.__name__}: {sorted(extra)}")
         
     def update_sensory_states(self, new_states: Dict[str, Any]) -> None:
         """Update sensory states. Numeric/Tensor: EMA smoothing. Other (str, dict): overwrite."""
+        self._validate_keys(new_states, self.allowed_sensory, "sensory")
         for key, new_val in new_states.items():
+            new_val = self._detach_value(new_val)
             if isinstance(new_val, (str, dict)):
                 # Non-numeric: overwrite (e.g. current_state, thoughtseed_activations)
                 self.sensory_states[key] = new_val
@@ -42,7 +63,9 @@ class MarkovBlanket:
     
     def update_active_states(self, new_states: Dict[str, Any]) -> None:
         """Update active states (top-down control)."""
-        self.active_states.update(new_states)
+        self._validate_keys(new_states, self.allowed_active, "active")
+        detached = {k: self._detach_value(v) for k, v in new_states.items()}
+        self.active_states.update(detached)
     
     def reset(self) -> None:
         """Clear all states."""
@@ -55,6 +78,7 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     Sensory (L1 -> L2):
         - Network activations: {DMN, VAN, DAN, FPN}
+        - dwell_progress: float (0-1, how long in current state)
     
     Active (L2 -> L1):
         - mu_x: Target network activations (policy)
@@ -62,7 +86,9 @@ class MarkovBlanketL1L2(MarkovBlanket):
     """
     
     def __init__(self, smoothing: float = 0.0):
-        super().__init__(smoothing=smoothing)
+        self.allowed_sensory = {"DMN", "VAN", "DAN", "FPN", "dwell_progress"}
+        self.allowed_active = {"mu_x", "policy_drive"}
+        super().__init__(smoothing=smoothing, strict=True)
         
 
 class MarkovBlanketL2L3(MarkovBlanket):
@@ -79,7 +105,9 @@ class MarkovBlanketL2L3(MarkovBlanket):
     """
     
     def __init__(self, smoothing: float = 0.0):
-        super().__init__(smoothing=smoothing)
+        self.allowed_sensory = {"current_state", "dwell_progress", "thoughtseed_activations"}
+        self.allowed_active = {"precision_sensory", "policy_prior"}
+        super().__init__(smoothing=smoothing, strict=True)
         self.active_states['precision_sensory'] = 0.5
         self.active_states['policy_prior'] = None  # neutral until L3 writes
 

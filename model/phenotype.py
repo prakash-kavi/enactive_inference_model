@@ -34,11 +34,6 @@ class PhenotypeConfig:
     theta_boost:   bool
     label:         str
 
-
-# ---------------------------------------------------------------------------
-# Pre-built configs — import these rather than constructing ad-hoc strings
-# ---------------------------------------------------------------------------
-
 EXPERT_PHENOTYPE = PhenotypeConfig(
     level='expert',
     learning_rate=LEARNING_RATES['expert'],
@@ -52,8 +47,6 @@ NOVICE_PHENOTYPE = PhenotypeConfig(
     theta_boost=False,
     label='NOVICE',
 )
-
-# ---------------------------------------------------------------------------
 
 def phenotype_from_str(level: str) -> PhenotypeConfig:
     """Convenience: resolve a level string to the matching PhenotypeConfig."""

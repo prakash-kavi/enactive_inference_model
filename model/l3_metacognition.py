@@ -90,6 +90,5 @@ class Layer3Monitor(nn.Module):
         else:
             self.meta_awareness_ema = 0.9 * self.meta_awareness_ema + 0.1 * raw
         meta = clip_probability(self.meta_awareness_ema)
-        self.blanket_l2l3.update_sensory_states({'meta_awareness': meta})
         return meta
 

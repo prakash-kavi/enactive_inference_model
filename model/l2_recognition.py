@@ -284,8 +284,8 @@ class Layer2Agent(nn.Module):
 
     # ------------------------------------------------------------------
 
-    def infer_pi(self, z: torch.Tensor, current_state: str) -> Dict:
-        """Policy inference — orchestrates Eqs. 5 → 6 → 7 → 8."""
+    def infer_pi(self, current_state: str) -> Dict:
+        """Policy inference — orchestrates Eqs. 5 → 6 → 7 → 8. Reads x_t and dwell from L1->L2 blanket."""
         x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         candidates = get_policy_candidate_order(current_state)
         exit_probs = get_exit_transition_probs(self.level, current_state)

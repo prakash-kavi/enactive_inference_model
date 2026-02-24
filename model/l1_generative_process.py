@@ -151,7 +151,6 @@ class Layer1Process(nn.Module):
         Args:
             active_states: Control from L2 via Markov blanket
                 - policy_drive: float (0-1) transition drive
-                - precision_gain: float (0-1) gain on L2 target influence
                 - mu_x: Optional[torch.Tensor] L2 target in network space
         
         Returns:

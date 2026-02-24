@@ -133,10 +133,13 @@ class MeditationTrainer:
             self.monitor.write_policy_prior(new_state)
 
             # ===== Policy Inference =====
-            prescription      = self.agent.infer_pi(activations, new_state)
+            prescription      = self.agent.infer_pi(new_state)
             selected_action_mu = prescription['selected_action_mu']
             self.monitor.update_policy_state(new_state, prescription['q_pi'])
-            self.blanket_l1l2.update_active_states(prescription)
+            self.blanket_l1l2.update_active_states({
+                'mu_x': prescription['mu_x'],
+                'policy_drive': prescription['policy_drive'],
+            })
 
             # Update rolling store for next E-step
             self._last_x_actual = {
