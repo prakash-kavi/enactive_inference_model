@@ -1,9 +1,9 @@
 """Layer 2: Attentional agent with VAE, thoughtseeds, and forward dynamics.
 
-Perception-action loop (Eq. 2-8):
+Perception-action loop (Eqs. 2-8; dwell prior heuristic is unnumbered):
 - Perception: q_phi(z|x) encodes L1 networks -> thoughtseeds
 - Dynamics: fixed-step VI updates z (Eq. 3) under F(z) (Eq. 2)
-- Action: policy posterior via expected free energy (Eq. 6-7)
+- Action: policy posterior via expected free energy (Eqs. 5-6)
 - Forward model: predicts next networks for forward surprisal (Eq. 4)
 """
 
@@ -217,15 +217,15 @@ class Layer2Agent(nn.Module):
         return z_posterior, z_recognition
     
     # ------------------------------------------------------------------
-    # Policy inference sub-steps (Eqs. 5–8)
+    # Policy inference sub-steps (Eqs. 5-6, 8; L3 prior update is Eq. 7)
     # ------------------------------------------------------------------
 
     def _compute_dwell_prior(self, current_state: str, candidates: list,
                              hazard: float, exit_probs: dict) -> list:
-        """Eq. 5 — Dwell-aware prior E(π) over candidate policies.
+        """Dwell-aware prior E(pi) over candidate policies (heuristic; no paper equation).
 
         Stay-prior = 1-h; exit-prior distributed over transition probabilities.
-        h = dwell_progress² (quadratic hazard). Returns list of prior floats.
+        h = dwell_progress^2 (quadratic hazard). Returns list of prior floats.
         """
         avg_exit = (sum(exit_probs.values()) / len(exit_probs)) if exit_probs else (
             1.0 / max(len(candidates), 1))
@@ -239,7 +239,7 @@ class Layer2Agent(nn.Module):
 
     def _evaluate_efe(self, x_current: torch.Tensor,
                       candidates: list):
-        """Eq. 6 — Risk-only EFE G(π) = D_KL(x̂_π ‖ C_{s_π}) per policy.
+        """Eq. 5 - Risk-only EFE G(pi) = D_KL(x_hat_pi || C_{s_pi}) per policy.
 
         FA meditation is convergent: ambiguity term omitted.
         Returns (g_vals: list[float], mu_candidates: list[Tensor]).
@@ -255,7 +255,7 @@ class Layer2Agent(nn.Module):
         return g_vals, mu_candidates
 
     def _compute_posterior(self, priors: list, g_vals: list):
-        """Eq. 7 - Fixed policy precision gamma and softmax posterior q(pi).
+        """Eq. 6 - Fixed policy precision gamma and softmax posterior q(pi).
 
         Gamma is a fixed scalar (POLICY_GAMMA). L3 learned log-prior is added
         to log E(pi) if available.
@@ -286,17 +286,17 @@ class Layer2Agent(nn.Module):
     # ------------------------------------------------------------------
 
     def infer_pi(self, current_state: str) -> Dict:
-        """Policy inference — orchestrates Eqs. 5 → 6 → 7 → 8. Reads x_t and dwell from L1->L2 blanket."""
+        """Policy inference - orchestrates Eqs. 5 -> 6 -> 8 (L3 prior update is Eq. 7)."""
         x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         candidates = get_policy_candidate_order(current_state)
         exit_probs = get_exit_transition_probs(self.level, current_state)
         hazard     = clip_probability(
             to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0)) ** 2)
 
-        priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # Eq. 5
-        g_vals, mu_candidates            = self._evaluate_efe(x_current, candidates)                                 # Eq. 6
-        q_pi, gamma, pol_drive  = self._compute_posterior(priors, g_vals)                                   # Eq. 7
-        selected_mu, mu_x       = self._select_attractor(q_pi, mu_candidates)        # Eq. 8
+        priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # dwell prior (heuristic)
+        g_vals, mu_candidates            = self._evaluate_efe(x_current, candidates)  # Eq. 5
+        q_pi, gamma, pol_drive  = self._compute_posterior(priors, g_vals)  # Eq. 6
+        selected_mu, mu_x       = self._select_attractor(q_pi, mu_candidates)  # Eq. 8
 
         return {
             'selected_action_mu': selected_mu,

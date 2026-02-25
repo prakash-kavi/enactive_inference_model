@@ -8,7 +8,7 @@ branching on a string label.
 from dataclasses import dataclass
 from utils.config import LEARNING_RATES, EPS
 
-POLICY_GAMMA = 1.0  # Eq. 7. Fixed policy precision; >1 sharpens, <1 softens.
+POLICY_GAMMA = 1.0  # Eq. 6. Fixed policy precision; >1 sharpens, <1 softens.
 RECOGNITION_LOSS_ALPHA = 1.0  # Eq. 9. Fixed recognition loss weight; lower values weaken amortization.
 
 @dataclass(frozen=True)

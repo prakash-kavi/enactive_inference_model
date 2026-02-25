@@ -63,7 +63,7 @@ class Layer1Process(nn.Module):
         if self.current_dwell < self.current_max_dwell:
             return self.current_state
         
-        # Dwell elapsed: compute transition hazard (policy drive increases hazard; Eq. 5)
+        # Dwell elapsed: compute transition hazard (policy drive increases hazard)
         policy_drive = clip_probability(policy_drive)
         drive_boost = 0.5 * policy_drive
         hazard = L1_BASE_HAZARD + drive_boost

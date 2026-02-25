@@ -87,7 +87,7 @@ DWELL_TIMES = {
 }
 
 # L1 state transition: once dwell has elapsed, hazard = L1_BASE_HAZARD + drive_boost.
-# Set to 0 for strictly dwell- and policy-driven transitions (paper Eq. 5); >0 adds baseline hazard.
+# Set to 0 for strictly dwell- and policy-driven transitions; >0 adds baseline hazard.
 L1_BASE_HAZARD = 0.3
 
 # Exit transition probabilities priors (exclude self-transitions)
