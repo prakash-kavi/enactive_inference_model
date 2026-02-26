@@ -103,8 +103,13 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
     ax.set_title(f"{'Loss' if use_loss else 'Free energy'} convergence ({level.title()})",
                  fontsize=14, fontweight="bold")
     ax.legend(loc="upper right", frameon=True)
-    if use_loss:
-        ax.set_ylim(1.0, 1.6)
+    if use_loss and primary.size:
+        y_min = np.nanmin(primary)
+        y_max = np.nanmax(primary)
+        if np.isfinite(y_min) and np.isfinite(y_max):
+            span = y_max - y_min
+            pad = 0.05 * span if span > 0 else 0.05 * max(abs(y_max), 1.0)
+            ax.set_ylim(y_min - pad, y_max + pad)
     
     # Panel 2: Cumulative state occupancy
     ax = axes[1]

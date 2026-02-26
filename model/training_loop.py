@@ -1,14 +1,8 @@
 """Training orchestrator: variational EM loop for hierarchical free energy minimisation.
 
 Timescale separation (Dempster et al., 1977; Friston et al., 2019):
-- E-step (every t): perceptual inference via VI + policy selection (Eqs. 5-8).  No parameter gradients.
-- M-step (every T=50 steps): parameter update via BPTT over the accumulated buffer (Eq. 9).
-
-Key equation references:
-- Eq. (2): VFE = reconstruction surprisal + KL complexity
-- Eq. (4): lambda_sens integrates base (forward surprisal) and meta-awareness m_t
-- Eq. (9): L = VFE + S_fwd + alpha_rec * L_rec  (M-step loss; alpha_rec = RECOGNITION_LOSS_ALPHA)
-- L3: meta-awareness m_t, learned policy prior
+- E-step (every t): perceptual inference via VI + policy selection. No parameter gradients.
+- M-step (every T=50 steps): parameter update via BPTT over the accumulated buffer.
 """
 
 import numpy as np
@@ -30,9 +24,11 @@ from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, RECOGNITION_LOSS_ALPHA
 from utils.math_utils import (
     networks_to_tensor,
     precision_from_surprisal,
-    integrate_precision_logit,
-    bernoulli_nll,
     mse_error,
+    recon_error,
+    prior_error,
+    forward_error,
+    compute_precision_sensory,
 )
 
 class MeditationTrainer:
@@ -68,10 +64,10 @@ class MeditationTrainer:
     def _e_step(
         self, t: int, activations: torch.Tensor
     ) -> tuple[Dict, str, torch.Tensor, Dict]:
-        """E-step: forward inference over one timestep (Eqs. 1-8).
+        """E-step: forward inference over one timestep.
 
-        Runs entirely under torch.no_grad(). Infers z* via VI (Eq. 3),
-        selects action via EFE (Eqs. 5-8), and steps L1. Returns a buffer
+        Runs entirely under torch.no_grad(). Infers z* via VI,
+        selects action via EFE, and steps L1. Returns a buffer
         entry containing the detached tensors the M-step will re-run
         differentiable passes over.
         """
@@ -92,15 +88,18 @@ class MeditationTrainer:
 
             x_current = networks_to_tensor(network_acts, NETWORKS)
 
-            # Forward prediction error — float for precision update
+            # Forward prediction error - used for precision + diagnostics
             # (gradient-tracked version is recomputed in M-step)
-            forward_prediction_error_val = 0.0
+            forward_error_val = 0.0
+            forward_error_raw = 0.0
             base_precision = float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
             if x_prev is not None:
                 x_pred = self.agent.vae.predict_next(x_prev, action_prev)
-                fwd_err_val = bernoulli_nll(x_pred, x_current, EPS)
-                forward_prediction_error_val = float(fwd_err_val.item())
-                base_precision = precision_from_surprisal(forward_prediction_error_val, EPS)
+                fwd_err_raw = forward_error(x_pred, x_current)
+                fwd_err_val = fwd_err_raw
+                forward_error_raw = float(fwd_err_raw.item())
+                forward_error_val = float(fwd_err_val.item())
+                base_precision = precision_from_surprisal(forward_error_val, EPS)
                 self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
             # ===== Layer 3: Metacognitive Monitor (precision update) =====
@@ -108,9 +107,9 @@ class MeditationTrainer:
 
             clip_min = DEFAULTS['CLIP_MIN']
             clip_max = DEFAULTS['CLIP_MAX']
-            base_precision = float(np.clip(base_precision, clip_min, clip_max))
-            meta_awareness = float(np.clip(float(meta_awareness), clip_min, clip_max))
-            precision_sensory = integrate_precision_logit(base_precision, meta_awareness, EPS)
+            precision_sensory = compute_precision_sensory(
+                base_precision, meta_awareness, EPS, clip_min, clip_max
+            )
             self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
 
             # ===== Layer 2: Attentional Agent =====
@@ -124,6 +123,13 @@ class MeditationTrainer:
             free_energy_val = float(
                 self.agent.compute_vfe(new_state, activations, network_acts).item()
             )
+
+            # Residual diagnostics (tail-window scale estimates)
+            recon_error_val = float(
+                recon_error(self.agent.decode_with_state(activations), x_current).item()
+            )
+            prior_target = self.agent.mu_params[new_state].detach()
+            prior_error_val = float(prior_error(activations, prior_target).item())
 
             # Update L2->L3 sensory interface for next step
             thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
@@ -141,6 +147,7 @@ class MeditationTrainer:
             self.blanket_l1l2.update_active_states({
                 'mu_x': prescription['mu_x'],
                 'policy_drive': prescription['policy_drive'],
+                'policy_state_probs': prescription.get('policy_state_probs'),
             })
 
             # Update rolling store for next E-step
@@ -149,7 +156,7 @@ class MeditationTrainer:
                 'action': selected_action_mu.detach(),
             }
 
-            # Buffer entry — all tensors detached; M-step re-runs grad passes
+            # Buffer entry - all tensors detached; M-step re-runs grad passes
             buf: Dict = {
                 'x_prev':      x_prev,
                 'action_prev': action_prev,
@@ -169,9 +176,12 @@ class MeditationTrainer:
             metrics = {
                 'timestamp':               t,
                 'free_energy':             free_energy_val,
-                'loss':                    free_energy_val + forward_prediction_error_val,
+                'loss':                    free_energy_val + forward_error_val,
                 'meta_awareness':          meta_awareness,
-                'action_error':            forward_prediction_error_val,
+                'action_error':            forward_error_val,
+                'action_error_raw':        forward_error_raw,
+                'recon_error':             recon_error_val,
+                'prior_error':             prior_error_val,
                 'network_activations':     network_acts_serializable,
                 'thoughtseed_activations': ts_acts,
                 'dominant_thoughtseed':    THOUGHTSEEDS[dominant_idx],
@@ -180,14 +190,14 @@ class MeditationTrainer:
         return buf, new_state, activations, metrics
 
     # ------------------------------------------------------------------
-    # M-step: parameter update over one BPTT window (Eq. 9)
+    # M-step: parameter update over one BPTT window
     # ------------------------------------------------------------------
     def _m_step(self, buffer: List[Dict]) -> Optional[torch.Tensor]:
-        """M-step: update (phi, theta, psi) from accumulated E-step buffer (Eq. 9).
+        """M-step: update (phi, theta, psi) from accumulated E-step buffer.
 
         Re-runs only the three differentiable forward passes over the stored
-        detached (z*, x) pairs — no VI, no blanket I/O:
-          - VFE   : decoder theta  (reconstruction surprisal + KL)
+        detached (z*, x) pairs - no VI, no blanket I/O:
+          - VFE   : decoder theta  (reconstruction + prior matching)
           - S_fwd : forward model psi  (next-step prediction error)
           - L_rec : encoder phi        (amortised inference alignment)
 
@@ -196,18 +206,18 @@ class MeditationTrainer:
         """
         window_loss: Optional[torch.Tensor] = None
         for entry in buffer:
-            # ── VFE: decoder gradient (theta) ────────────────────────────────
+            # -- VFE: decoder gradient (theta) --------------------------------
             vfe = self.agent.compute_vfe(
                 entry['state'], entry['z_star'], entry['network_acts']
             )
             step_loss = vfe
 
-            # ── Forward surprisal: forward-model gradient (psi) ──────────────
+            # Forward surprisal: forward-model gradient (psi)
             if entry['x_prev'] is not None:
                 x_pred = self.agent.vae.predict_next(entry['x_prev'], entry['action_prev'])
-                step_loss = step_loss + bernoulli_nll(x_pred, entry['x_curr'], EPS)
+                step_loss = step_loss + forward_error(x_pred, entry['x_curr'])
 
-            # ── Recognition loss: encoder gradient (phi) — Eq. 9 ─────────────
+            # Recognition loss: encoder gradient (phi)
             rec_scale = RECOGNITION_LOSS_ALPHA
             if rec_scale > 0.0:
                 z_enc     = self.agent.vae.encode(entry['x_curr'])
@@ -233,11 +243,15 @@ class MeditationTrainer:
             e_step_buffer.append(buf)
 
             if new_state != current_state:
+                transition_debug = getattr(self.process, 'last_transition_info', None)
                 self.history['transitions'].append({
                     'timestamp':   t,
                     'from':        current_state,
                     'to':          new_state,
                     'free_energy': metrics['free_energy'],
+                    'weighted_exit_probs': transition_debug.get('weighted_exit_probs') if transition_debug else None,
+                    'base_exit_probs': transition_debug.get('base_exit_probs') if transition_debug else None,
+                    'policy_state_probs': transition_debug.get('policy_state_probs') if transition_debug else None,
                 })
                 current_state = new_state
 
@@ -246,6 +260,9 @@ class MeditationTrainer:
             self.history['loss'].append(metrics['loss'])
             self.history['meta_awareness'].append(metrics['meta_awareness'])
             self.history['action_errors'].append(metrics['action_error'])
+            self.history['action_errors_raw'].append(metrics['action_error_raw'])
+            self.history['recon_errors'].append(metrics['recon_error'])
+            self.history['prior_errors'].append(metrics['prior_error'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
             self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
@@ -273,8 +290,8 @@ class MeditationTrainer:
         """Run variational EM training.
 
         Each BPTT window T runs:
-          1. E-step loop  — T calls to _e_step(), no parameter gradients.
-          2. M-step once  — _m_step(buffer) re-runs differentiable passes and
+          1. E-step loop  - T calls to _e_step(), no parameter gradients.
+          2. M-step once  - _m_step(buffer) re-runs differentiable passes and
                             backprops through (phi, theta, psi).
 
         Args:
@@ -367,7 +384,10 @@ class MeditationTrainer:
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
             'dominant_ts_history': self.history['dominant_thoughtseed'],
-            'action_errors_history': self.history['action_errors']
+            'action_errors_history': self.history['action_errors'],
+            'action_errors_raw_history': self.history['action_errors_raw'],
+            'recon_errors_history': self.history['recon_errors'],
+            'prior_errors_history': self.history['prior_errors'],
         }
     
     def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
@@ -379,6 +399,9 @@ class MeditationTrainer:
             'meta_awareness': [],
             'transitions': [],
             'action_errors': [],
+            'action_errors_raw': [],
+            'recon_errors': [],
+            'prior_errors': [],
             'network_activations': [],
             'thoughtseed_activations': [],
             'dominant_thoughtseed': []

@@ -30,12 +30,25 @@ def integrate_precision_logit(
     eps: float = EPS,
 ) -> float:
     """Integrate two precision signals via logit-add (odds multiplication).
-    Eq. 4: lambda_sens = integrate(base, m_t). Base from forward surprisal;
-    meta from L3 meta-awareness. Yields a single sensory precision in [0,1]."""
+    Base from forward surprisal; meta from L3 meta-awareness.
+    Yields a single sensory precision in [0,1]."""
     b = float(np.clip(to_float(base_precision), eps, 1.0 - eps))
     m = float(np.clip(to_float(meta_precision), eps, 1.0 - eps))
     logit = np.log(b / (1.0 - b)) + np.log(m / (1.0 - m))
     return float(1.0 / (1.0 + np.exp(-logit)))
+
+
+def compute_precision_sensory(
+    base_precision: Union[float, int, torch.Tensor],
+    meta_precision: Union[float, int, torch.Tensor],
+    eps: float = EPS,
+    clip_min: float = 0.0,
+    clip_max: float = 1.0,
+) -> float:
+    """Compute integrated sensory precision from base + meta signals."""
+    b = float(np.clip(to_float(base_precision), clip_min, clip_max))
+    m = float(np.clip(to_float(meta_precision), clip_min, clip_max))
+    return integrate_precision_logit(b, m, eps)
 
 def softmax(logits: np.ndarray) -> np.ndarray:
     """Stable softmax for 1D arrays."""
@@ -72,7 +85,7 @@ def clamp_activation(x: torch.Tensor, clip_min: float, clip_max: float) -> torch
 
 
 def bernoulli_kl(q: torch.Tensor, p: torch.Tensor, eps: float) -> torch.Tensor:
-    """Elementwise Bernoulli KL averaged over dimensions."""
+    """Legacy Bernoulli KL (unused in current Gaussian/MSE model)."""
     q_safe = clamp_for_log(q, eps)
     p_safe = clamp_for_log(p, eps)
     return torch.mean(
@@ -82,7 +95,7 @@ def bernoulli_kl(q: torch.Tensor, p: torch.Tensor, eps: float) -> torch.Tensor:
 
 
 def bernoulli_nll(x_hat: torch.Tensor, x: torch.Tensor, eps: float) -> torch.Tensor:
-    """Bernoulli negative log-likelihood averaged over dimensions."""
+    """Legacy Bernoulli NLL (unused in current Gaussian/MSE model)."""
     x_hat_safe = clamp_for_log(x_hat, eps)
     x_safe = torch.clamp(x, 0.0, 1.0)
     return torch.mean(
@@ -92,6 +105,21 @@ def bernoulli_nll(x_hat: torch.Tensor, x: torch.Tensor, eps: float) -> torch.Ten
 def mse_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """Mean squared error averaged over dimensions."""
     return torch.mean((x_hat - x) ** 2)
+
+
+def recon_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Reconstruction error in network space (MSE)."""
+    return mse_error(x_hat, x)
+
+
+def prior_error(z: torch.Tensor, prior: torch.Tensor) -> torch.Tensor:
+    """Prior-matching error in thoughtseed space (MSE)."""
+    return mse_error(z, prior)
+
+
+def forward_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Forward-model prediction error (MSE)."""
+    return mse_error(x_hat, x)
 
 
 def networks_to_tensor(

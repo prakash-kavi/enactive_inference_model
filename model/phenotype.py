@@ -1,15 +1,15 @@
 """Phenotype configuration for expert/novice meditation agents.
 
 All phenotype-specific constants live here. The rest of the model code
-is phenotype-agnostic — it reads fields from PhenotypeConfig rather than
+is phenotype-agnostic - it reads fields from PhenotypeConfig rather than
 branching on a string label.
 """
 
 from dataclasses import dataclass
 from utils.config import LEARNING_RATES, EPS
 
-POLICY_GAMMA = 1.0  # Eq. 6. Fixed policy precision; >1 sharpens, <1 softens.
-RECOGNITION_LOSS_ALPHA = 1.0  # Eq. 9. Fixed recognition loss weight; lower values weaken amortization.
+POLICY_GAMMA = 0.8  # Fixed policy precision; >1 sharpens, <1 softens.
+RECOGNITION_LOSS_ALPHA = 1.0  # Fixed recognition loss weight; lower values weaken amortization.
 
 @dataclass(frozen=True)
 class PhenotypeConfig:
@@ -21,7 +21,7 @@ class PhenotypeConfig:
         Identifier used to index config tables (DWELL_TIMES, NETWORK_PROFILES,
         STATE_TRANSITION_PROBS). One of 'expert' | 'novice'.
     learning_rate : float
-        Adam optimiser step size for L2 VAE parameters.
+        Adam optimiser step size for L2 recognition/decoder parameters.
     theta_boost : bool
         Whether to apply expert-specific Theta(s) adjustments in Layer 1
         (stronger self-stabilisation in BF, amplified DMN-DAN inhibition in RA,

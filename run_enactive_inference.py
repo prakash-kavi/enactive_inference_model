@@ -84,6 +84,8 @@ def generate_plots(expert_results, novice_results):
     print("  - Processing tail window data...")
     expert_tail = get_tail_window(expert_results, TAIL_STEPS)
     novice_tail = get_tail_window(novice_results, TAIL_STEPS)
+    expert_tail["tail_start"] = max(0, len(expert_results["state_history"]) - TAIL_STEPS)
+    novice_tail["tail_start"] = max(0, len(novice_results["state_history"]) - TAIL_STEPS)
 
     expert_network_profiles = compute_network_profiles(expert_results, STATES, NETWORKS, TAIL_STEPS)
     novice_network_profiles = compute_network_profiles(novice_results, STATES, NETWORKS, TAIL_STEPS)

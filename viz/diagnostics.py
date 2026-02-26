@@ -38,16 +38,26 @@ def get_dwell_times(stats):
 
 
 def get_transition_matrix(stats):
-    """Compute transition matrix from state history (state changes only)."""
-    state_history = stats.get("state_history", [])
+    """Compute transition matrix from tail-window transitions (state changes only)."""
     trans_matrix = {fs: {ts: 0 for ts in STATES} for fs in STATES}
-    if not state_history:
-        return trans_matrix
-
-    for i in range(len(state_history) - 1):
-        fs, ts = state_history[i], state_history[i + 1]
-        if fs != ts:
-            trans_matrix[fs][ts] += 1
+    transitions = stats.get("transitions", [])
+    if transitions:
+        tail_start = stats.get("tail_start")
+        for tr in transitions:
+            t = tr.get("timestamp")
+            if tail_start is not None and t is not None and t < tail_start:
+                continue
+            fs, ts = tr.get('from'), tr.get('to')
+            if fs in trans_matrix and ts in trans_matrix[fs]:
+                trans_matrix[fs][ts] += 1
+    else:
+        state_history = stats.get("state_history", [])
+        if not state_history:
+            return trans_matrix
+        for i in range(len(state_history) - 1):
+            fs, ts = state_history[i], state_history[i + 1]
+            if fs != ts:
+                trans_matrix[fs][ts] += 1
 
     for fs in STATES:
         total = sum(trans_matrix[fs].values())

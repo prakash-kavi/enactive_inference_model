@@ -10,7 +10,7 @@ import numpy as np
 from typing import Dict
 
 from utils.config import STATES
-from viz.analysis_utils import get_tail_window, compute_tail_statistics, TAIL_STEPS
+from viz.analysis_utils import get_tail_window, compute_tail_statistics, compute_residual_scales, TAIL_STEPS
 
 def compute_metrics(results: Dict, use_tail: bool = True) -> Dict:
     """Compute summary metrics from training results (default: uses tail window).
@@ -62,6 +62,10 @@ def compute_metrics(results: Dict, use_tail: bool = True) -> Dict:
     # 4. Action prediction errors 
     for state, error in results['avg_action_errors'].items():
         metrics[f'action_error_{state}'] = error
+
+    # 5. Residual-based Gaussian scales (tail window)
+    residual_scales = compute_residual_scales(results, tail_steps=steps_to_analyze)
+    metrics.update(residual_scales)
     
     return metrics
 
@@ -86,9 +90,39 @@ def print_summary(results: Dict) -> None:
         print(f"  {state.replace('_', ' ').title():25s}: {dwell:6.1f}")
     print(f"\nKey Transition:")
     print(f"  MW -> MA rate: {metrics['mw_to_ma_rate']:.3f}")
+
+    # Policy-weighted exit distribution (event-level)
+    transitions = results.get('transitions', [])
+    weighted_accum = {state: {} for state in STATES}
+    weighted_counts = {state: 0 for state in STATES}
+    for tr in transitions:
+        weighted = tr.get('weighted_exit_probs')
+        frm = tr.get('from')
+        if not weighted or frm not in weighted_accum:
+            continue
+        weighted_counts[frm] += 1
+        for to_state, prob in weighted.items():
+            weighted_accum[frm][to_state] = weighted_accum[frm].get(to_state, 0.0) + float(prob)
+    if any(count > 0 for count in weighted_counts.values()):
+        print(f"\nPolicy-Weighted Exit (mean at transitions):")
+        for frm in STATES:
+            count = weighted_counts[frm]
+            if count <= 0:
+                continue
+            mean_probs = {
+                to_state: weighted_accum[frm].get(to_state, 0.0) / count
+                for to_state in STATES
+            }
+            mean_str = ", ".join([f"{to_state}->{mean_probs[to_state]:.3f}" for to_state in STATES])
+            print(f"  {frm}: {mean_str}")
     print(f"\nAction Prediction Errors:")
     for state in STATES:
         error = metrics.get(f'action_error_{state}', 0)
         if error > 0:
             print(f"  {state.replace('_', ' ').title():25s}: {error:.5f}")
+    if metrics.get('sigma_x2', 0) > 0 or metrics.get('sigma_z2', 0) > 0:
+        print(f"\nResidual Scales (tail window):")
+        print(f"  sigma_x^2 (decoder): {metrics.get('sigma_x2', 0):.6f}")
+        print(f"  sigma_z^2 (prior):   {metrics.get('sigma_z2', 0):.6f}")
+        print(f"  sigma_fwd^2:         {metrics.get('sigma_fwd2', 0):.6f}")
     print(f"{'='*60}\n")

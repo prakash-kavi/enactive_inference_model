@@ -81,13 +81,14 @@ class MarkovBlanketL1L2(MarkovBlanket):
         - dwell_progress: float (0-1, how long in current state)
     
     Active (L2 -> L1):
-        - mu_x: Target network activations (policy)
+        - mu_x: Descending predictions over network activations (policy)
         - policy_drive: L2 transition urge
+        - policy_state_probs: Optional[Dict[str,float]] policy posterior over candidate states
     """
     
     def __init__(self, smoothing: float = 0.0):
         self.allowed_sensory = {"DMN", "VAN", "DAN", "FPN", "dwell_progress"}
-        self.allowed_active = {"mu_x", "policy_drive"}
+        self.allowed_active = {"mu_x", "policy_drive", "policy_state_probs"}
         super().__init__(smoothing=smoothing, strict=True)
         
 
@@ -100,7 +101,7 @@ class MarkovBlanketL2L3(MarkovBlanket):
         - thoughtseed_activations: Dict[str, float] (for meta-awareness)
     
     Active (L3 -> L2):
-        - precision_sensory: float (0-1, sensory precision; Eq. 4)
+        - precision_sensory: float (0-1, sensory precision)
         - policy_prior: list of 4 floats (log prior adjustment per candidate; L3 writes, L2 reads)
     """
     

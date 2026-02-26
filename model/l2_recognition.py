@@ -1,10 +1,10 @@
-"""Layer 2: Attentional agent with VAE, thoughtseeds, and forward dynamics.
+"""Layer 2: Attentional agent with recognition/decoder, thoughtseeds, and forward dynamics.
 
-Perception-action loop (Eqs. 2-8; dwell prior heuristic is unnumbered):
-- Perception: q_phi(z|x) encodes L1 networks -> thoughtseeds
-- Dynamics: fixed-step VI updates z (Eq. 3) under F(z) (Eq. 2)
-- Action: policy posterior via expected free energy (Eqs. 5-6)
-- Forward model: predicts next networks for forward surprisal (Eq. 4)
+Perception-action loop:
+- Perception: encode L1 networks -> thoughtseeds
+- Dynamics: fixed-step VI updates z under F(z)
+- Action: policy posterior via expected free energy
+- Forward model: predicts next networks for forward surprisal
 """
 
 import numpy as np
@@ -15,15 +15,17 @@ from typing import Dict, Optional
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
     THOUGHTSEED_STATE_PRIORS,
+    VI_REFINEMENT_STATES,
     get_exit_transition_probs, get_policy_candidate_order,
     VI_STEPS, VI_LR,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, POLICY_GAMMA
 from utils.math_utils import (
-    bernoulli_kl,
-    bernoulli_nll,
     mse_error,
+    recon_error,
+    prior_error,
+    forward_error,
     clamp_activation,
     clip_probability,
     policy_posterior,
@@ -33,7 +35,7 @@ from utils.math_utils import (
 )
 
 class MeditationVAE(nn.Module):
-    """VAE for network-thoughtseed mapping + forward dynamics."""
+    """Recognition/decoder for network-thoughtseed mapping + forward dynamics."""
     
     def __init__(self, input_dim=4, latent_dim=5, hidden_dim=32):
         super().__init__()
@@ -89,7 +91,7 @@ class MeditationVAE(nn.Module):
 
 
 class Layer2Agent(nn.Module):
-    """Attentional agent: thoughtseeds + VAE + EFE policy selection."""
+    """Attentional agent: thoughtseeds + recognition/decoder + EFE policy selection."""
     
     def __init__(self, phenotype: PhenotypeConfig = None,
                  blanket_l1l2: Optional[MarkovBlanketL1L2] = None,
@@ -103,7 +105,7 @@ class Layer2Agent(nn.Module):
         self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.0)
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.0)
         
-        # VAE
+        # Recognition/decoder
         self.vae = MeditationVAE(
             input_dim=len(NETWORKS),
             latent_dim=len(THOUGHTSEEDS),
@@ -129,15 +131,15 @@ class Layer2Agent(nn.Module):
         return torch.clamp(decoded, 0.0, 1.0)
 
     def compute_vfe(self, state: str, z: torch.Tensor, observed_networks: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """Compute VFE (Eq. 2): reconstruction surprisal + KL complexity."""
+        """Compute VFE: reconstruction error + prior matching."""
         recon_x = self.decode_with_state(z)
         observed_x = networks_to_tensor(observed_networks, NETWORKS, detach=True)
 
-        recon_loss = bernoulli_nll(recon_x, observed_x, EPS)
+        recon_loss = recon_error(recon_x, observed_x)
         prior = self.mu_params[state].detach()
-        kl_div = bernoulli_kl(z, prior, EPS)
+        prior_match = prior_error(z, prior)
 
-        return recon_loss + kl_div
+        return recon_loss + prior_match
     
     def update_posterior_z(
         self,
@@ -145,7 +147,7 @@ class Layer2Agent(nn.Module):
         activations: torch.Tensor,
         z_recognition: torch.Tensor,
     ) -> torch.Tensor:
-        """Posterior update q(z): fixed-step VI (Eq. 3) over thoughtseeds."""
+        """Posterior update q(z): fixed-step VI over thoughtseeds."""
         clip_min = DEFAULTS['CLIP_MIN']
         clip_max = DEFAULTS['CLIP_MAX']
 
@@ -158,7 +160,7 @@ class Layer2Agent(nn.Module):
         sensory_target = clamp_z(z_recognition.detach())
         prior_target = clamp_z(self.mu_params[current_state].detach().clone())
         
-        # Sensory precision lambda_sens (Eq. 4)
+        # Sensory precision lambda_sens
         precision = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
         precision_weight_val = clip_probability(precision)
         
@@ -171,19 +173,19 @@ class Layer2Agent(nn.Module):
         temporal_w = 1.0 - precision_weight_val
 
         # Variational optimization loop (fixed-step VI)
-        vi_steps = int(VI_STEPS)
+        vi_steps = int(VI_STEPS) if current_state in VI_REFINEMENT_STATES else 0
         vi_lr = float(VI_LR)
         with torch.enable_grad():
             for _ in range(vi_steps):
                 recon_x = self.decode_with_state(z_var)
                 
-                recon_loss = bernoulli_nll(recon_x, observed_vec, EPS)
-                kl_div = bernoulli_kl(z_var, prior_target, EPS)
+                recon_loss = recon_error(recon_x, observed_vec)
+                prior_match = prior_error(z_var, prior_target)
                 sensory_loss = mse_error(z_var, sensory_target)
                 temporal_loss = mse_error(z_var, z_prev)
-                
+
                 loss = (recon_loss +
-                        kl_div +
+                        prior_match +
                         sensory_w * sensory_loss +
                         temporal_w * temporal_loss)
                 
@@ -217,7 +219,7 @@ class Layer2Agent(nn.Module):
         return z_posterior, z_recognition
     
     # ------------------------------------------------------------------
-    # Policy inference sub-steps (Eqs. 5-6, 8; L3 prior update is Eq. 7)
+    # Policy inference sub-steps
     # ------------------------------------------------------------------
 
     def _compute_dwell_prior(self, current_state: str, candidates: list,
@@ -239,7 +241,7 @@ class Layer2Agent(nn.Module):
 
     def _evaluate_efe(self, x_current: torch.Tensor,
                       candidates: list):
-        """Eq. 5 - Risk-only EFE G(pi) = D_KL(x_hat_pi || C_{s_pi}) per policy.
+        """Risk-only EFE G(pi) as MSE between predicted and preferred networks.
 
         FA meditation is convergent: ambiguity term omitted.
         Returns (g_vals: list[float], mu_candidates: list[Tensor]).
@@ -250,12 +252,12 @@ class Layer2Agent(nn.Module):
                 mu_c = self.mu_params[s]
                 x_pred = self.vae.predict_next(x_current, mu_c)
                 x_pref = self.decode_with_state(mu_c)
-                g_vals.append(float(bernoulli_kl(x_pred, x_pref, EPS).item()))
+                g_vals.append(float(forward_error(x_pred, x_pref).item()))
                 mu_candidates.append(mu_c)
         return g_vals, mu_candidates
 
     def _compute_posterior(self, priors: list, g_vals: list):
-        """Eq. 6 - Fixed policy precision gamma and softmax posterior q(pi).
+        """Fixed policy precision gamma and softmax posterior q(pi).
 
         Gamma is a fixed scalar (POLICY_GAMMA). L3 learned log-prior is added
         to log E(pi) if available.
@@ -274,7 +276,7 @@ class Layer2Agent(nn.Module):
         return q_pi, gamma, policy_drive
 
     def _select_attractor(self, q_pi, mu_candidates: list):
-        """Eq. 8 - Posterior-weighted latent target.
+        """Posterior-weighted latent prediction.
 
         mu = sum_pi q(pi) mu_z(s_pi)
         Returns (selected_mu, mu_x).
@@ -286,7 +288,7 @@ class Layer2Agent(nn.Module):
     # ------------------------------------------------------------------
 
     def infer_pi(self, current_state: str) -> Dict:
-        """Policy inference - orchestrates Eqs. 5 -> 6 -> 8 (L3 prior update is Eq. 7)."""
+        """Policy inference: evaluate risk and select action."""
         x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         candidates = get_policy_candidate_order(current_state)
         exit_probs = get_exit_transition_probs(self.level, current_state)
@@ -294,13 +296,18 @@ class Layer2Agent(nn.Module):
             to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0)) ** 2)
 
         priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # dwell prior (heuristic)
-        g_vals, mu_candidates            = self._evaluate_efe(x_current, candidates)  # Eq. 5
-        q_pi, gamma, pol_drive  = self._compute_posterior(priors, g_vals)  # Eq. 6
-        selected_mu, mu_x       = self._select_attractor(q_pi, mu_candidates)  # Eq. 8
+        g_vals, mu_candidates            = self._evaluate_efe(x_current, candidates)
+        q_pi, gamma, pol_drive  = self._compute_posterior(priors, g_vals)
+        selected_mu, mu_x       = self._select_attractor(q_pi, mu_candidates)
+
+        policy_state_probs = {
+            state: float(q_pi[i]) for i, state in enumerate(candidates)
+        }
 
         return {
             'selected_action_mu': selected_mu,
             'mu_x':               mu_x,
             'policy_drive':       pol_drive,
             'q_pi':               np.array(q_pi, dtype=np.float64),
+            'policy_state_probs': policy_state_probs,
         }

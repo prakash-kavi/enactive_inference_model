@@ -20,6 +20,9 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'thoughtseed_activations_history',
         'dominant_ts_history',
         'action_errors_history',
+        'action_errors_raw_history',
+        'recon_errors_history',
+        'prior_errors_history',
     ]
     tail_data = dict(results)  # shallow copy — only replaces sliced keys
     for key in time_series_keys:
@@ -133,10 +136,21 @@ def compute_tail_statistics(results: Dict, states: List[str],
 
     # Transition matrix (actual state changes only)
     trans_matrix = {fs: {ts: 0 for ts in states} for fs in states}
-    for i in range(len(state_sequence) - 1):
-        fs, ts = state_sequence[i], state_sequence[i + 1]
-        if fs != ts:
-            trans_matrix[fs][ts] += 1
+    transitions = results.get('transitions', [])
+    if transitions:
+        start_t = max(0, len(results.get('state_history', [])) - tail_steps)
+        for tr in transitions:
+            t = tr.get('timestamp')
+            if t is not None and t < start_t:
+                continue
+            fs, ts = tr.get('from'), tr.get('to')
+            if fs in trans_matrix and ts in trans_matrix[fs]:
+                trans_matrix[fs][ts] += 1
+    else:
+        for i in range(len(state_sequence) - 1):
+            fs, ts = state_sequence[i], state_sequence[i + 1]
+            if fs != ts:
+                trans_matrix[fs][ts] += 1
 
     for fs in states:
         total = sum(trans_matrix[fs].values())
@@ -144,3 +158,22 @@ def compute_tail_statistics(results: Dict, states: List[str],
             trans_matrix[fs] = {ts: c / total for ts, c in trans_matrix[fs].items()}
 
     return {'dwell_times': avg_dwell, 'transition_matrix': trans_matrix}
+
+
+def compute_residual_scales(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
+    """Compute residual-based Gaussian scales from tail window histories.
+
+    Returns:
+        {'sigma_x2': ..., 'sigma_z2': ..., 'sigma_fwd2': ...}
+    """
+    tail = get_tail_window(results, tail_steps)
+
+    def mean_or_zero(values: list) -> float:
+        return float(np.mean(values)) if values else 0.0
+
+    action_series = tail.get('action_errors_raw_history') or tail.get('action_errors_history', [])
+    return {
+        'sigma_x2': mean_or_zero(tail.get('recon_errors_history', [])),
+        'sigma_z2': mean_or_zero(tail.get('prior_errors_history', [])),
+        'sigma_fwd2': mean_or_zero(action_series),
+    }

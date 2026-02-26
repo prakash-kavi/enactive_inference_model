@@ -24,7 +24,7 @@ EPS = 1e-6
 # Layer 1: MVOU Generative Process
 # =============================================================================
 
-# Global process noise variance (used in L1 MVOU; Eq. 1)
+# Global process noise variance (used in L1 MVOU)
 NOISE_LEVEL = 0.002
 
 # Multivariate Ornstein-Uhlenbeck coupling (dX = -Theta * dt)
@@ -73,14 +73,14 @@ NETWORK_PROFILES = {
 # State dwell times (seconds) - min/max ranges
 DWELL_TIMES = {
     'expert': {
-        'breath_focus': (15, 30),
+        'breath_focus': (15, 25),
         'mind_wandering': (10, 20),
         'meta_awareness': (3, 6),
         'redirect_attention': (3, 6)
     },
     'novice': {
         'breath_focus': (8, 15),
-        'mind_wandering': (18, 35),
+        'mind_wandering': (15, 30),
         'meta_awareness': (5, 10),
         'redirect_attention': (5, 10)
     }
@@ -107,12 +107,14 @@ STATE_TRANSITION_PROBS = {
 }
 
 # =============================================================================
-# Layer 2: Thoughtseeds + VAE
+# Layer 2: Thoughtseeds + recognition/decoder
 # =============================================================================
 
 # Fixed-step VI hyperparameters (L2)
 VI_STEPS = 2
 VI_LR = 0.2
+# Apply VI refinement only in these states (System 2 sharpening)
+VI_REFINEMENT_STATES = {'meta_awareness', 'redirect_attention'}
 
 # Thoughtseed priors (state-dependent activation baselines)
 THOUGHTSEED_STATE_PRIORS = {

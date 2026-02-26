@@ -1,4 +1,4 @@
-"""Layer 1: MVOU generative process for brain networks (Eq. 1).
+"""Layer 1: MVOU generative process for brain networks.
 
 Implements state-dependent attractor dynamics with:
 - 4 brain networks (DMN, VAN, DAN, FPN)
@@ -21,7 +21,7 @@ from utils.math_utils import clip_probability, to_float
 from model.phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 
 class Layer1Process(nn.Module):
-    """MVOU generative process for brain network dynamics (Eq. 1)."""
+    """MVOU generative process for brain network dynamics."""
 
     # MVOU integration constants
     MAX_STIFFNESS = 2.5
@@ -44,6 +44,7 @@ class Layer1Process(nn.Module):
         self.current_dwell = 0
         self.current_max_dwell = 0
         self._sample_next_dwell()
+        self.last_transition_info: Optional[Dict[str, object]] = None
         
         # Network indexing
         self.net_idx = {n: i for i, n in enumerate(NETWORKS)}
@@ -55,7 +56,8 @@ class Layer1Process(nn.Module):
         self.current_max_dwell = int(dwell_seconds / self.dt)
         self.current_dwell = 0
         
-    def _check_transition(self, policy_drive: float) -> str:
+    def _check_transition(self, policy_drive: float,
+                          policy_state_probs: Optional[Dict[str, float]] = None) -> str:
         """Check if state should transition based on dwell + policy drive."""
         self.current_dwell += 1
         
@@ -69,15 +71,40 @@ class Layer1Process(nn.Module):
         hazard = L1_BASE_HAZARD + drive_boost
         
         if self.rng.rand() < hazard:
-            # Transition: sample next state
+            # Transition: sample next state (policy-conditioned exit if provided)
+            prev_state = self.current_state
             probs = STATE_TRANSITION_PROBS[self.level][self.current_state]
             states = list(probs.keys())
-            p_array = np.array([probs[s] for s in states])
+            base_array = np.array([probs[s] for s in states], dtype=float)
+            p_array = base_array.copy()
+
+            if policy_state_probs:
+                policy_weights = np.array(
+                    [float(policy_state_probs.get(s, 0.0)) for s in states],
+                    dtype=float
+                )
+                if policy_weights.sum() > 0:
+                    eta = clip_probability(policy_drive)
+                    p_array = (1.0 - eta) * base_array + eta * (base_array * policy_weights)
+            else:
+                policy_weights = None
+
+            if p_array.sum() <= 0:
+                p_array = base_array.copy()
             p_array /= p_array.sum()  # Normalize
-            
+
             next_state = self.rng.choice(states, p=p_array)
             self.current_state = next_state
             self._sample_next_dwell()
+            self.last_transition_info = {
+                'from': prev_state,
+                'weighted_exit_probs': {s: float(p_array[i]) for i, s in enumerate(states)},
+                'base_exit_probs': dict(probs),
+                'policy_state_probs': dict(policy_state_probs) if policy_state_probs else None,
+                'policy_weights': {s: float(policy_weights[i]) for i, s in enumerate(states)} if policy_weights is not None else None,
+            }
+        else:
+            self.last_transition_info = None
         
         return self.current_state
     
@@ -88,7 +115,7 @@ class Layer1Process(nn.Module):
         return torch.tensor(mu_np, dtype=torch.float32)
     
     def _get_coupling(self, state: str) -> torch.Tensor:
-        """Build Theta(s) coupling matrix for state (Eq. 1)."""
+        """Build Theta(s) coupling matrix for state."""
         # Start with diagonal (self-inhibition)
         base_diag = 0.50 if state == 'mind_wandering' else 0.15
         theta_np = np.eye(len(NETWORKS)) * base_diag
@@ -151,7 +178,7 @@ class Layer1Process(nn.Module):
         Args:
             active_states: Control from L2 via Markov blanket
                 - policy_drive: float (0-1) transition drive
-                - mu_x: Optional[torch.Tensor] L2 target in network space
+                - mu_x: Optional[torch.Tensor] L2 descending prediction in network space
         
         Returns:
             network_acts: {network_name: activation}
@@ -160,16 +187,17 @@ class Layer1Process(nn.Module):
         # Extract control signals
         policy_drive = active_states.get('policy_drive', 0.0)
         policy_drive = to_float(policy_drive)
+        policy_state_probs = active_states.get('policy_state_probs')
         
         # Check for state transition
-        self.current_state = self._check_transition(policy_drive)
+        self.current_state = self._check_transition(policy_drive, policy_state_probs)
         
         # Get dynamics for current state
         mu = self._get_attractor(self.current_state)
         theta = self._get_coupling(self.current_state)
         theta = self._clamp_theta(theta)
         
-        # Apply L2 attractor target mu_x directly (fixed bias_strength=0.5). (Eq. 1)
+        # Apply L2 attractor mu_x directly (fixed bias_strength=0.5).
         # L2->L1 active state is mu_x only; precision_gain/noise_reduction removed.
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
@@ -177,10 +205,10 @@ class Layer1Process(nn.Module):
                 mu_x = torch.tensor(mu_x, dtype=torch.float32)
             mu = 0.5 * mu + 0.5 * mu_x
 
-        # Global process noise variance (Eq. 1) — fixed, not modulated by L2.
+        # Global process noise variance - fixed, not modulated by L2.
         sigma = np.sqrt(NOISE_LEVEL)
         
-        # MVOU integration (Eq. 1) with substeps for stability
+        # MVOU integration with substeps for stability
         dt_sub = self.dt / self.N_SUBSTEPS
         curr_x = self.x
         
