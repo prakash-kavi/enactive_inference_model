@@ -62,7 +62,7 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
         save_path: Path to save figure
         window: Rolling window size for smoothing
     """
-    tail_span = TAIL_STEPS  # Use global TAIL_STEPS (2000) for stable window shading
+    tail_span = TAIL_STEPS  # Use global TAIL_STEPS for stable window shading
     set_plot_style()
     
     # Extract data

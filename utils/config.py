@@ -12,11 +12,9 @@ STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_attentio
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
-DEFAULTS = {
-    'CLIP_MIN': 0.05,
-    'CLIP_MAX': 0.9,
-    'DEFAULT_DT': 0.2,
-}
+DEFAULT_DT = 0.2
+CLIP_MIN = 0.05
+CLIP_MAX = 0.9
 
 EPS = 1e-6
 
@@ -113,8 +111,11 @@ STATE_TRANSITION_PROBS = {
 # Fixed-step VI hyperparameters (L2)
 VI_STEPS = 2
 VI_LR = 0.2
-# Apply VI refinement only in these states (System 2 sharpening)
-VI_REFINEMENT_STATES = {'meta_awareness', 'redirect_attention'}
+# Apply VI refinement by phenotype (System 2 sharpening)
+VI_REFINEMENT_STATES_BY_LEVEL = {
+    'novice': {'breath_focus', 'meta_awareness', 'redirect_attention'},
+    'expert': {'meta_awareness', 'redirect_attention'},
+}
 
 # Thoughtseed priors (state-dependent activation baselines)
 THOUGHTSEED_STATE_PRIORS = {
@@ -174,6 +175,18 @@ META_THOUGHTSEED_WEIGHTS = {
 }
 
 # =============================================================================
+# Precision and Active Inference Parameters
+# =============================================================================
+PRECISION_CLIP_MIN = 0.05
+PRECISION_CLIP_MAX = 0.90
+PRECISION_WEIGHT_SCALE = 1.0
+
+PRIOR_VARIANCE_Z = 1.0
+# EFE component weights (sum to 1.0 by default)
+EFE_PRAGMATIC_WEIGHT = 0.7
+EFE_EPISTEMIC_WEIGHT = 0.3
+
+# =============================================================================
 # Active Inference Parameters (Fine-Tuned)
 # =============================================================================
 LEARNING_RATES = {
@@ -185,6 +198,8 @@ LEARNING_RATES = {
 L3_POLICY_LR = 0.05       # EMA learning rate for L3 policy prior update
 L3_POLICY_STRENGTH = 0.5  # Scale for L3 prior influence on L2 (0 = neutral, 1 = full)
 L3_META_EMA_ALPHA = 0.1   # EMA rate for meta-awareness smoothing
+
+
 
 
 # =============================================================================
@@ -203,6 +218,9 @@ def get_policy_candidate_order(current_state: str):
     """
     return [current_state] + [s for s in STATES if s != current_state]
 
+def get_vi_refinement_states(experience_level: str):
+    """Return VI refinement state set for a phenotype level."""
+    return VI_REFINEMENT_STATES_BY_LEVEL.get(experience_level, VI_REFINEMENT_STATES_BY_LEVEL['expert'])
 
 def get_exit_transition_probs(experience_level, current_state):
     """Return exit transition probabilities for the given state (rows sum to 1.0)."""

@@ -72,7 +72,6 @@ class MarkovBlanket:
         self.sensory_states.clear()
         self.active_states.clear()
 
-
 class MarkovBlanketL1L2(MarkovBlanket):
     """Markov blanket between L1 (generative process) and L2 (attentional agent).
     
@@ -82,13 +81,13 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     Active (L2 -> L1):
         - mu_x: Descending predictions over network activations (policy)
-        - policy_drive: L2 transition urge
+        - transition_drive: L2 transition urge (u_t = 1 - q(pi=stay))
         - policy_state_probs: Optional[Dict[str,float]] policy posterior over candidate states
     """
     
     def __init__(self, smoothing: float = 0.0):
         self.allowed_sensory = {"DMN", "VAN", "DAN", "FPN", "dwell_progress"}
-        self.allowed_active = {"mu_x", "policy_drive", "policy_state_probs"}
+        self.allowed_active = {"mu_x", "transition_drive", "policy_state_probs"}
         super().__init__(smoothing=smoothing, strict=True)
         
 

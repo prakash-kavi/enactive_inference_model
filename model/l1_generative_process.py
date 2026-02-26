@@ -13,7 +13,7 @@ import torch.nn as nn
 from typing import Dict, Tuple, Optional
 
 from utils.config import (
-    NETWORKS, DEFAULTS, EPS, NOISE_LEVEL,
+    NETWORKS, DEFAULT_DT, CLIP_MIN, CLIP_MAX, EPS, NOISE_LEVEL,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS,
     L1_BASE_HAZARD,
 )
@@ -33,7 +33,7 @@ class Layer1Process(nn.Module):
 
         self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
         self.level = self.phenotype.level   # used for config table lookups
-        self.dt = DEFAULTS['DEFAULT_DT']
+        self.dt = DEFAULT_DT
         self.rng = np.random.RandomState(seed)
 
         # Network state
@@ -56,18 +56,18 @@ class Layer1Process(nn.Module):
         self.current_max_dwell = int(dwell_seconds / self.dt)
         self.current_dwell = 0
         
-    def _check_transition(self, policy_drive: float,
+    def _check_transition(self, transition_drive: float,
                           policy_state_probs: Optional[Dict[str, float]] = None) -> str:
-        """Check if state should transition based on dwell + policy drive."""
+        """Check if state should transition based on dwell + transition drive."""
         self.current_dwell += 1
         
         # Dwell not elapsed: stay
         if self.current_dwell < self.current_max_dwell:
             return self.current_state
         
-        # Dwell elapsed: compute transition hazard (policy drive increases hazard)
-        policy_drive = clip_probability(policy_drive)
-        drive_boost = 0.5 * policy_drive
+        # Dwell elapsed: compute transition hazard (transition drive increases hazard)
+        transition_drive = clip_probability(transition_drive)
+        drive_boost = 0.5 * transition_drive
         hazard = L1_BASE_HAZARD + drive_boost
         
         if self.rng.rand() < hazard:
@@ -84,7 +84,7 @@ class Layer1Process(nn.Module):
                     dtype=float
                 )
                 if policy_weights.sum() > 0:
-                    eta = clip_probability(policy_drive)
+                    eta = clip_probability(transition_drive)
                     p_array = (1.0 - eta) * base_array + eta * (base_array * policy_weights)
             else:
                 policy_weights = None
@@ -177,7 +177,7 @@ class Layer1Process(nn.Module):
         
         Args:
             active_states: Control from L2 via Markov blanket
-                - policy_drive: float (0-1) transition drive
+                - transition_drive: float (0-1) transition drive
                 - mu_x: Optional[torch.Tensor] L2 descending prediction in network space
         
         Returns:
@@ -185,12 +185,12 @@ class Layer1Process(nn.Module):
             current_state: str
         """
         # Extract control signals
-        policy_drive = active_states.get('policy_drive', 0.0)
-        policy_drive = to_float(policy_drive)
+        transition_drive = active_states.get('transition_drive', 0.0)
+        transition_drive = to_float(transition_drive)
         policy_state_probs = active_states.get('policy_state_probs')
         
         # Check for state transition
-        self.current_state = self._check_transition(policy_drive, policy_state_probs)
+        self.current_state = self._check_transition(transition_drive, policy_state_probs)
         
         # Get dynamics for current state
         mu = self._get_attractor(self.current_state)
@@ -217,7 +217,7 @@ class Layer1Process(nn.Module):
             drift = -torch.matmul(theta, (curr_x - mu)) * dt_sub
             diffusion = torch.randn_like(curr_x) * sigma * np.sqrt(dt_sub)
             curr_x = curr_x + drift + diffusion
-            curr_x = torch.clamp(curr_x, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
+            curr_x = torch.clamp(curr_x, CLIP_MIN, CLIP_MAX)
         
         self.x = curr_x
         

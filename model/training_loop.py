@@ -13,8 +13,9 @@ import json
 from pathlib import Path
 
 from utils.config import (
-    STATES, NETWORKS, THOUGHTSEEDS, DEFAULTS, EPS,
+    STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
+    PRECISION_CLIP_MIN, PRECISION_CLIP_MAX,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
@@ -91,22 +92,19 @@ class MeditationTrainer:
             # Forward prediction error - used for precision + diagnostics
             # (gradient-tracked version is recomputed in M-step)
             forward_error_val = 0.0
-            forward_error_raw = 0.0
             base_precision = float(self.blanket_l2l3.active_states.get('precision_sensory', 0.5))
             if x_prev is not None:
-                x_pred = self.agent.vae.predict_next(x_prev, action_prev)
+                x_pred = self.agent.thoughtseed_model.predict_next(x_prev, action_prev)
                 fwd_err_raw = forward_error(x_pred, x_current)
-                fwd_err_val = fwd_err_raw
-                forward_error_raw = float(fwd_err_raw.item())
-                forward_error_val = float(fwd_err_val.item())
+                forward_error_val = float(fwd_err_raw.item())
                 base_precision = precision_from_surprisal(forward_error_val, EPS)
                 self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
             # ===== Layer 3: Metacognitive Monitor (precision update) =====
             meta_awareness = self.monitor.update_meta_awareness()
 
-            clip_min = DEFAULTS['CLIP_MIN']
-            clip_max = DEFAULTS['CLIP_MAX']
+            clip_min = PRECISION_CLIP_MIN
+            clip_max = PRECISION_CLIP_MAX
             precision_sensory = compute_precision_sensory(
                 base_precision, meta_awareness, EPS, clip_min, clip_max
             )
@@ -121,15 +119,10 @@ class MeditationTrainer:
 
             # VFE as scalar metric (M-step will recompute with grad)
             free_energy_val = float(
-                self.agent.compute_vfe(new_state, activations, network_acts).item()
+                self.agent.compute_vfe(
+                    new_state, activations, x_current, precision_sensory=precision_sensory
+                ).item()
             )
-
-            # Residual diagnostics (tail-window scale estimates)
-            recon_error_val = float(
-                recon_error(self.agent.decode_with_state(activations), x_current).item()
-            )
-            prior_target = self.agent.mu_params[new_state].detach()
-            prior_error_val = float(prior_error(activations, prior_target).item())
 
             # Update L2->L3 sensory interface for next step
             thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
@@ -146,7 +139,7 @@ class MeditationTrainer:
             self.monitor.update_policy_state(new_state, prescription['q_pi'])
             self.blanket_l1l2.update_active_states({
                 'mu_x': prescription['mu_x'],
-                'policy_drive': prescription['policy_drive'],
+                'transition_drive': prescription['transition_drive'],
                 'policy_state_probs': prescription.get('policy_state_probs'),
             })
 
@@ -164,6 +157,7 @@ class MeditationTrainer:
                 'z_star':      activations,          # already detached by VI
                 'network_acts': network_acts,
                 'state':       new_state,
+                'precision_sensory': precision_sensory,
             }
 
             # Metrics (float approximation of per-step loss for diagnostics)
@@ -179,9 +173,8 @@ class MeditationTrainer:
                 'loss':                    free_energy_val + forward_error_val,
                 'meta_awareness':          meta_awareness,
                 'action_error':            forward_error_val,
-                'action_error_raw':        forward_error_raw,
-                'recon_error':             recon_error_val,
-                'prior_error':             prior_error_val,
+                'efe_prag_mean':           float(prescription.get('efe_prag_mean', 0.0)),
+                'efe_epi_mean':            float(prescription.get('efe_epi_mean', 0.0)),
                 'network_activations':     network_acts_serializable,
                 'thoughtseed_activations': ts_acts,
                 'dominant_thoughtseed':    THOUGHTSEEDS[dominant_idx],
@@ -208,19 +201,20 @@ class MeditationTrainer:
         for entry in buffer:
             # -- VFE: decoder gradient (theta) --------------------------------
             vfe = self.agent.compute_vfe(
-                entry['state'], entry['z_star'], entry['network_acts']
+                entry['state'], entry['z_star'], entry['x_curr'],
+                precision_sensory=entry.get('precision_sensory')
             )
             step_loss = vfe
 
             # Forward surprisal: forward-model gradient (psi)
             if entry['x_prev'] is not None:
-                x_pred = self.agent.vae.predict_next(entry['x_prev'], entry['action_prev'])
+                x_pred = self.agent.thoughtseed_model.predict_next(entry['x_prev'], entry['action_prev'])
                 step_loss = step_loss + forward_error(x_pred, entry['x_curr'])
 
             # Recognition loss: encoder gradient (phi)
             rec_scale = RECOGNITION_LOSS_ALPHA
             if rec_scale > 0.0:
-                z_enc     = self.agent.vae.encode(entry['x_curr'])
+                z_enc     = self.agent.thoughtseed_model.encode(entry['x_curr'])
                 step_loss = step_loss + rec_scale * mse_error(z_enc, entry['z_star'])
 
             window_loss = step_loss if window_loss is None else (window_loss + step_loss)
@@ -260,9 +254,8 @@ class MeditationTrainer:
             self.history['loss'].append(metrics['loss'])
             self.history['meta_awareness'].append(metrics['meta_awareness'])
             self.history['action_errors'].append(metrics['action_error'])
-            self.history['action_errors_raw'].append(metrics['action_error_raw'])
-            self.history['recon_errors'].append(metrics['recon_error'])
-            self.history['prior_errors'].append(metrics['prior_error'])
+            self.history['efe_prag'].append(metrics['efe_prag_mean'])
+            self.history['efe_epi'].append(metrics['efe_epi_mean'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
             self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
@@ -316,12 +309,12 @@ class MeditationTrainer:
         priors = THOUGHTSEED_STATE_PRIORS[current_state].copy()
         activations_np = np.array([priors[ts] for ts in THOUGHTSEEDS], dtype=np.float32)
         activations = torch.tensor(activations_np, dtype=torch.float32)
-        activations = torch.clamp(activations, DEFAULTS['CLIP_MIN'], DEFAULTS['CLIP_MAX'])
+        activations = torch.clamp(activations, CLIP_MIN, CLIP_MAX)
 
         # Initialise blankets
         self.blanket_l1l2.update_active_states({
             'mu_x': None,
-            'policy_drive': 0.0
+            'transition_drive': 0.0
         })
         self.blanket_l2l3.reset()
         thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
@@ -385,9 +378,8 @@ class MeditationTrainer:
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
             'dominant_ts_history': self.history['dominant_thoughtseed'],
             'action_errors_history': self.history['action_errors'],
-            'action_errors_raw_history': self.history['action_errors_raw'],
-            'recon_errors_history': self.history['recon_errors'],
-            'prior_errors_history': self.history['prior_errors'],
+            'efe_prag_history': self.history['efe_prag'],
+            'efe_epi_history': self.history['efe_epi'],
         }
     
     def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
@@ -399,9 +391,8 @@ class MeditationTrainer:
             'meta_awareness': [],
             'transitions': [],
             'action_errors': [],
-            'action_errors_raw': [],
-            'recon_errors': [],
-            'prior_errors': [],
+            'efe_prag': [],
+            'efe_epi': [],
             'network_activations': [],
             'thoughtseed_activations': [],
             'dominant_thoughtseed': []

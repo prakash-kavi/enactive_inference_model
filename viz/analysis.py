@@ -63,6 +63,17 @@ def compute_metrics(results: Dict, use_tail: bool = True) -> Dict:
     for state, error in results['avg_action_errors'].items():
         metrics[f'action_error_{state}'] = error
 
+    # 4b. EFE diagnostics (tail window means)
+    tail = get_tail_window(results, tail_steps=steps_to_analyze)
+    if tail.get('efe_prag_history'):
+        metrics['efe_prag_mean'] = float(np.mean(tail['efe_prag_history']))
+    else:
+        metrics['efe_prag_mean'] = 0.0
+    if tail.get('efe_epi_history'):
+        metrics['efe_epi_mean'] = float(np.mean(tail['efe_epi_history']))
+    else:
+        metrics['efe_epi_mean'] = 0.0
+
     # 5. Residual-based Gaussian scales (tail window)
     residual_scales = compute_residual_scales(results, tail_steps=steps_to_analyze)
     metrics.update(residual_scales)
@@ -120,9 +131,11 @@ def print_summary(results: Dict) -> None:
         error = metrics.get(f'action_error_{state}', 0)
         if error > 0:
             print(f"  {state.replace('_', ' ').title():25s}: {error:.5f}")
-    if metrics.get('sigma_x2', 0) > 0 or metrics.get('sigma_z2', 0) > 0:
+    if metrics.get('efe_prag_mean', 0) > 0 or metrics.get('efe_epi_mean', 0) > 0:
+        print(f"\nEFE Diagnostics (tail mean):")
+        print(f"  pragmatic: {metrics.get('efe_prag_mean', 0):.6f}")
+        print(f"  epistemic: {metrics.get('efe_epi_mean', 0):.6f}")
+    if metrics.get('sigma_fwd2', 0) > 0:
         print(f"\nResidual Scales (tail window):")
-        print(f"  sigma_x^2 (decoder): {metrics.get('sigma_x2', 0):.6f}")
-        print(f"  sigma_z^2 (prior):   {metrics.get('sigma_z2', 0):.6f}")
         print(f"  sigma_fwd^2:         {metrics.get('sigma_fwd2', 0):.6f}")
     print(f"{'='*60}\n")

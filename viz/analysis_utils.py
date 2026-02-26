@@ -20,9 +20,8 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'thoughtseed_activations_history',
         'dominant_ts_history',
         'action_errors_history',
-        'action_errors_raw_history',
-        'recon_errors_history',
-        'prior_errors_history',
+        'efe_prag_history',
+        'efe_epi_history',
     ]
     tail_data = dict(results)  # shallow copy — only replaces sliced keys
     for key in time_series_keys:
@@ -163,17 +162,18 @@ def compute_tail_statistics(results: Dict, states: List[str],
 def compute_residual_scales(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
     """Compute residual-based Gaussian scales from tail window histories.
 
+    Currently only forward-model error history is retained.
     Returns:
-        {'sigma_x2': ..., 'sigma_z2': ..., 'sigma_fwd2': ...}
+        {'sigma_x2': 0.0, 'sigma_z2': 0.0, 'sigma_fwd2': ...}
     """
     tail = get_tail_window(results, tail_steps)
 
     def mean_or_zero(values: list) -> float:
         return float(np.mean(values)) if values else 0.0
 
-    action_series = tail.get('action_errors_raw_history') or tail.get('action_errors_history', [])
+    action_series = tail.get('action_errors_history', [])
     return {
-        'sigma_x2': mean_or_zero(tail.get('recon_errors_history', [])),
-        'sigma_z2': mean_or_zero(tail.get('prior_errors_history', [])),
+        'sigma_x2': 0.0,
+        'sigma_z2': 0.0,
         'sigma_fwd2': mean_or_zero(action_series),
     }

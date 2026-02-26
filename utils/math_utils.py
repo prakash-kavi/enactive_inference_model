@@ -74,33 +74,10 @@ def normalize_scores(values: np.ndarray, eps: float = EPS) -> np.ndarray:
         return values
     return (values - np.mean(values)) / (std + eps)
 
-def clamp_for_log(x: torch.Tensor, eps: float) -> torch.Tensor:
-    """Clamp tensor to open interval used in log-probability terms."""
-    return torch.clamp(x, eps, 1.0 - eps)
-
-
 def clamp_activation(x: torch.Tensor, clip_min: float, clip_max: float) -> torch.Tensor:
     """Clamp activations to configured model bounds."""
     return torch.clamp(x, clip_min, clip_max)
 
-
-def bernoulli_kl(q: torch.Tensor, p: torch.Tensor, eps: float) -> torch.Tensor:
-    """Legacy Bernoulli KL (unused in current Gaussian/MSE model)."""
-    q_safe = clamp_for_log(q, eps)
-    p_safe = clamp_for_log(p, eps)
-    return torch.mean(
-        q_safe * torch.log(q_safe / p_safe)
-        + (1.0 - q_safe) * torch.log((1.0 - q_safe) / (1.0 - p_safe))
-    )
-
-
-def bernoulli_nll(x_hat: torch.Tensor, x: torch.Tensor, eps: float) -> torch.Tensor:
-    """Legacy Bernoulli NLL (unused in current Gaussian/MSE model)."""
-    x_hat_safe = clamp_for_log(x_hat, eps)
-    x_safe = torch.clamp(x, 0.0, 1.0)
-    return torch.mean(
-        -(x_safe * torch.log(x_hat_safe) + (1.0 - x_safe) * torch.log(1.0 - x_hat_safe))
-    )
 
 def mse_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """Mean squared error averaged over dimensions."""
