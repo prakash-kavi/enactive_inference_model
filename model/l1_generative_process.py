@@ -44,7 +44,6 @@ class Layer1Process(nn.Module):
         self.current_dwell = 0
         self.current_max_dwell = 0
         self._sample_next_dwell()
-        self.last_transition_info: Optional[Dict[str, object]] = None
         
         # Network indexing
         self.net_idx = {n: i for i, n in enumerate(NETWORKS)}
@@ -96,15 +95,8 @@ class Layer1Process(nn.Module):
             next_state = self.rng.choice(states, p=p_array)
             self.current_state = next_state
             self._sample_next_dwell()
-            self.last_transition_info = {
-                'from': prev_state,
-                'weighted_exit_probs': {s: float(p_array[i]) for i, s in enumerate(states)},
-                'base_exit_probs': dict(probs),
-                'policy_state_probs': dict(policy_state_probs) if policy_state_probs else None,
-                'policy_weights': {s: float(policy_weights[i]) for i, s in enumerate(states)} if policy_weights is not None else None,
-            }
         else:
-            self.last_transition_info = None
+            pass
         
         return self.current_state
     

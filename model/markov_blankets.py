@@ -20,7 +20,6 @@ class MarkovBlanket:
         Args:
             strict: If True, reject unknown keys on update
         """
-        self.smoothing = 0.0
         self.strict = bool(strict)
         self.sensory_states: Dict[str, Any] = {}
         self.active_states: Dict[str, Any] = {}

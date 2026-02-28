@@ -102,30 +102,6 @@ def print_summary(results: Dict) -> None:
     print(f"\nKey Transition:")
     print(f"  MW -> MA rate: {metrics['mw_to_ma_rate']:.3f}")
 
-    # Policy-weighted exit distribution (event-level)
-    transitions = results.get('transitions', [])
-    weighted_accum = {state: {} for state in STATES}
-    weighted_counts = {state: 0 for state in STATES}
-    for tr in transitions:
-        weighted = tr.get('weighted_exit_probs')
-        frm = tr.get('from')
-        if not weighted or frm not in weighted_accum:
-            continue
-        weighted_counts[frm] += 1
-        for to_state, prob in weighted.items():
-            weighted_accum[frm][to_state] = weighted_accum[frm].get(to_state, 0.0) + float(prob)
-    if any(count > 0 for count in weighted_counts.values()):
-        print(f"\nPolicy-Weighted Exit (mean at transitions):")
-        for frm in STATES:
-            count = weighted_counts[frm]
-            if count <= 0:
-                continue
-            mean_probs = {
-                to_state: weighted_accum[frm].get(to_state, 0.0) / count
-                for to_state in STATES
-            }
-            mean_str = ", ".join([f"{to_state}->{mean_probs[to_state]:.3f}" for to_state in STATES])
-            print(f"  {frm}: {mean_str}")
     print(f"\nAction Prediction Errors:")
     for state in STATES:
         error = metrics.get(f'action_error_{state}', 0)

@@ -275,15 +275,11 @@ class MeditationTrainer:
             e_step_buffer.append(buf)
 
             if new_state != current_state:
-                transition_debug = getattr(self.process, 'last_transition_info', None)
                 self.history['transitions'].append({
                     'timestamp':   t,
                     'from':        current_state,
                     'to':          new_state,
                     'free_energy': metrics['free_energy'],
-                    'weighted_exit_probs': transition_debug.get('weighted_exit_probs') if transition_debug else None,
-                    'base_exit_probs': transition_debug.get('base_exit_probs') if transition_debug else None,
-                    'policy_state_probs': transition_debug.get('policy_state_probs') if transition_debug else None,
                 })
                 current_state = new_state
 
