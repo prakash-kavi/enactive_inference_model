@@ -153,7 +153,6 @@ THOUGHTSEED_STATE_PRIORS = {
 # Time constant (seconds) for EMA scale of forward surprisal (sigma_fwd^2)
 PRECISION_TAU = 4.0
 
-PRIOR_VARIANCE_Z = 1.0
 # =============================================================================
 # Active Inference Parameters (Fine-Tuned)
 # =============================================================================

@@ -18,7 +18,6 @@ from utils.config import (
     Z_NOISE_STD_BY_STATE,
     get_exit_transition_probs, get_policy_candidate_order,
     VI_STEPS, VI_LR, VI_MISMATCH_THRESHOLD,
-    PRIOR_VARIANCE_Z,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -259,7 +258,7 @@ class Layer2Agent(nn.Module):
                 std = dist_vec.std(unbiased=False)
                 if float(std.item()) > EPS:
                     dist_vec = (dist_vec - mean) / (std + EPS)
-            scale = max(EPS, float(PRIOR_VARIANCE_Z))
+            scale = 1.0
             logits = -dist_vec / scale
             probs = torch.softmax(logits, dim=0)
             return {
@@ -312,7 +311,7 @@ class Layer2Agent(nn.Module):
                 if z_pred.dim() > 1:
                     z_pred = z_pred.squeeze(0)
                 z_pred = clamp_activation(z_pred, CLIP_MIN, CLIP_MAX)
-                info_gain = mse_error(z_pred, mu_c) / max(EPS, float(PRIOR_VARIANCE_Z))
+                info_gain = mse_error(z_pred, mu_c)
                 info_gain_val = float(info_gain.item())
 
                 g_prag_vals.append(g_prag_val)
