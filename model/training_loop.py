@@ -15,21 +15,17 @@ from pathlib import Path
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    PRECISION_CLIP_MIN, PRECISION_CLIP_MAX,
+    DEFAULT_DT, PRECISION_TAU,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
 from .l3_metacognition import Layer3Monitor
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, RECOGNITION_LOSS_ALPHA
+from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 from utils.math_utils import (
     networks_to_tensor,
-    precision_from_surprisal,
     mse_error,
-    recon_error,
-    prior_error,
     forward_error,
-    compute_precision_sensory,
 )
 
 class MeditationTrainer:
@@ -43,8 +39,8 @@ class MeditationTrainer:
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        self.blanket_l1l2 = MarkovBlanketL1L2(smoothing=0.0)
-        self.blanket_l2l3 = MarkovBlanketL2L3(smoothing=0.0)
+        self.blanket_l1l2 = MarkovBlanketL1L2()
+        self.blanket_l2l3 = MarkovBlanketL2L3()
 
         self.process = Layer1Process(phenotype=self.phenotype, seed=seed)
         self.agent = Layer2Agent(
@@ -52,12 +48,16 @@ class MeditationTrainer:
             blanket_l1l2=self.blanket_l1l2,
             blanket_l2l3=self.blanket_l2l3
         )
-        self.monitor = Layer3Monitor(blanket_l2l3=self.blanket_l2l3)
+        self.monitor = Layer3Monitor(blanket_l2l3=self.blanket_l2l3, experience_level=self.level)
 
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.phenotype.learning_rate)
         
         self.history = {}
         self._last_x_actual = None
+        self._sigma_fwd2 = None
+        self._surprisal_alpha = float(
+            np.clip(DEFAULT_DT / PRECISION_TAU, 0.0, 1.0)
+        ) if PRECISION_TAU > 0 else 1.0
     
     # ------------------------------------------------------------------
     # E-step: perceptual inference and action (no parameter gradients)
@@ -97,17 +97,21 @@ class MeditationTrainer:
                 x_pred = self.agent.thoughtseed_model.predict_next(x_prev, action_prev)
                 fwd_err_raw = forward_error(x_pred, x_current)
                 forward_error_val = float(fwd_err_raw.item())
-                base_precision = precision_from_surprisal(forward_error_val, EPS)
+                # EMA forward-surprisal scale (sigma_fwd^2)
+                if self._sigma_fwd2 is None:
+                    self._sigma_fwd2 = forward_error_val
+                else:
+                    self._sigma_fwd2 = (
+                        (1.0 - self._surprisal_alpha) * self._sigma_fwd2
+                        + self._surprisal_alpha * forward_error_val
+                    )
+                sigma_fwd2 = max(float(self._sigma_fwd2), EPS)
+                base_precision = float(np.exp(-forward_error_val / (sigma_fwd2 + EPS)))
                 self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
-            # ===== Layer 3: Metacognitive Monitor (precision update) =====
-            meta_awareness = self.monitor.update_meta_awareness()
-
-            clip_min = PRECISION_CLIP_MIN
-            clip_max = PRECISION_CLIP_MAX
-            precision_sensory = compute_precision_sensory(
-                base_precision, meta_awareness, EPS, clip_min, clip_max
-            )
+            # ===== L3 precision signal (used by L2) =====
+            base_precision = float(np.clip(base_precision, CLIP_MIN, CLIP_MAX))
+            precision_sensory = base_precision
             self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
 
             # ===== Layer 2: Attentional Agent =====
@@ -124,19 +128,35 @@ class MeditationTrainer:
                 ).item()
             )
 
-            # Update L2->L3 sensory interface for next step
-            thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
+            # Update L2->L3 sensory interface for policy selection
+            state_belief = self.agent.infer_state_belief(activations)
+            policy_eval = self.agent.evaluate_policies(new_state)
             self.blanket_l2l3.update_sensory_states({
-                'current_state':          new_state,
-                'dwell_progress':         dwell_progress,
-                'thoughtseed_activations': thoughtseed_dict,
+                'state_belief':      state_belief,
+                'policy_candidates': policy_eval['candidates'],
+                'policy_priors':     policy_eval['priors'],
+                'policy_costs':      policy_eval['g_vals'],
             })
-            self.monitor.write_policy_prior(new_state)
 
-            # ===== Policy Inference =====
-            prescription      = self.agent.infer_pi(new_state)
+            # ===== Policy Selection (L3) =====
+            meta_awareness = self.monitor.update_meta_awareness_from_conflict(
+                g_vals=policy_eval['g_vals'],
+                state_belief=state_belief,
+            )
+            q_pi = self.monitor.select_policy(
+                g_vals=policy_eval['g_vals'],
+                priors=policy_eval['priors'],
+                state_belief=state_belief,
+                meta_precision=meta_awareness,
+            )
+            self.monitor.update_policy_state(state_belief, q_pi)
+
+            prescription = self.agent.action_from_policy(
+                q_pi=q_pi,
+                candidates=policy_eval['candidates'],
+                mu_candidates=policy_eval['mu_candidates'],
+            )
             selected_action_mu = prescription['selected_action_mu']
-            self.monitor.update_policy_state(new_state, prescription['q_pi'])
             self.blanket_l1l2.update_active_states({
                 'mu_x': prescription['mu_x'],
                 'transition_drive': prescription['transition_drive'],
@@ -155,7 +175,6 @@ class MeditationTrainer:
                 'action_prev': action_prev,
                 'x_curr':      x_current.detach(),
                 'z_star':      activations,          # already detached by VI
-                'network_acts': network_acts,
                 'state':       new_state,
                 'precision_sensory': precision_sensory,
             }
@@ -173,8 +192,10 @@ class MeditationTrainer:
                 'loss':                    free_energy_val + forward_error_val,
                 'meta_awareness':          meta_awareness,
                 'action_error':            forward_error_val,
-                'efe_prag_mean':           float(prescription.get('efe_prag_mean', 0.0)),
-                'efe_epi_mean':            float(prescription.get('efe_epi_mean', 0.0)),
+                'efe_prag_mean':           float(policy_eval.get('efe_prag_mean', 0.0)),
+                'efe_epi_mean':            float(policy_eval.get('efe_epi_mean', 0.0)),
+                'state_belief':            state_belief,
+                'policy_posterior':        q_pi.tolist() if hasattr(q_pi, "tolist") else list(q_pi),
                 'network_activations':     network_acts_serializable,
                 'thoughtseed_activations': ts_acts,
                 'dominant_thoughtseed':    THOUGHTSEEDS[dominant_idx],
@@ -198,25 +219,42 @@ class MeditationTrainer:
         Friston et al. (2019); Dempster, Laird & Rubin (1977).
         """
         window_loss: Optional[torch.Tensor] = None
+        vfe_terms: List[torch.Tensor] = []
+        fwd_terms: List[torch.Tensor] = []
+        rec_terms: List[torch.Tensor] = []
+        vfe_sum = 0.0
+        rec_sum = 0.0
+
         for entry in buffer:
             # -- VFE: decoder gradient (theta) --------------------------------
             vfe = self.agent.compute_vfe(
                 entry['state'], entry['z_star'], entry['x_curr'],
                 precision_sensory=entry.get('precision_sensory')
             )
-            step_loss = vfe
+            vfe_terms.append(vfe)
+            vfe_sum += float(vfe.detach().item())
 
             # Forward surprisal: forward-model gradient (psi)
             if entry['x_prev'] is not None:
                 x_pred = self.agent.thoughtseed_model.predict_next(entry['x_prev'], entry['action_prev'])
-                step_loss = step_loss + forward_error(x_pred, entry['x_curr'])
+                fwd_terms.append(forward_error(x_pred, entry['x_curr']))
+            else:
+                fwd_terms.append(torch.tensor(0.0, dtype=vfe.dtype, device=vfe.device))
 
             # Recognition loss: encoder gradient (phi)
-            rec_scale = RECOGNITION_LOSS_ALPHA
-            if rec_scale > 0.0:
-                z_enc     = self.agent.thoughtseed_model.encode(entry['x_curr'])
-                step_loss = step_loss + rec_scale * mse_error(z_enc, entry['z_star'])
+            z_enc = self.agent.thoughtseed_model.encode(entry['x_curr'])
+            rec_loss = mse_error(z_enc, entry['z_star'])
+            rec_terms.append(rec_loss)
+            rec_sum += float(rec_loss.detach().item())
 
+        # Adaptive recognition scaling: match mean VFE and mean recognition loss
+        if rec_sum > 0.0:
+            rec_scale = vfe_sum / (rec_sum + EPS)
+        else:
+            rec_scale = 0.0
+
+        for vfe, fwd, rec in zip(vfe_terms, fwd_terms, rec_terms):
+            step_loss = vfe + fwd + rec_scale * rec
             window_loss = step_loss if window_loss is None else (window_loss + step_loss)
 
         return window_loss
@@ -256,6 +294,8 @@ class MeditationTrainer:
             self.history['action_errors'].append(metrics['action_error'])
             self.history['efe_prag'].append(metrics['efe_prag_mean'])
             self.history['efe_epi'].append(metrics['efe_epi_mean'])
+            self.history['state_belief'].append(metrics['state_belief'])
+            self.history['policy_posterior'].append(metrics['policy_posterior'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
             self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
@@ -300,7 +340,7 @@ class MeditationTrainer:
 
         print(f"PHENOTYPE: {self.phenotype.label} "
               f"(lr={self.phenotype.learning_rate:.4f}, "
-              f"alpha_rec={RECOGNITION_LOSS_ALPHA:.3f})")
+              f"alpha_rec=adaptive)")
 
         self.process.reset(state='breath_focus')
         current_state = self.process.current_state
@@ -317,11 +357,8 @@ class MeditationTrainer:
             'transition_drive': 0.0
         })
         self.blanket_l2l3.reset()
-        thoughtseed_dict = {ts: float(activations[i].item()) for i, ts in enumerate(THOUGHTSEEDS)}
         self.blanket_l2l3.update_sensory_states({
-            'current_state': current_state,
-            'dwell_progress': 0.0,
-            'thoughtseed_activations': thoughtseed_dict,
+            'state_belief': {state: 1.0 if state == current_state else 0.0 for state in STATES},
         })
 
         bptt_steps = 50
@@ -380,6 +417,8 @@ class MeditationTrainer:
             'action_errors_history': self.history['action_errors'],
             'efe_prag_history': self.history['efe_prag'],
             'efe_epi_history': self.history['efe_epi'],
+            'state_belief_history': self.history['state_belief'],
+            'policy_posterior_history': self.history['policy_posterior'],
         }
     
     def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
@@ -395,9 +434,12 @@ class MeditationTrainer:
             'efe_epi': [],
             'network_activations': [],
             'thoughtseed_activations': [],
-            'dominant_thoughtseed': []
+            'dominant_thoughtseed': [],
+            'state_belief': [],
+            'policy_posterior': [],
         }
         self._last_x_actual = None
+        self._sigma_fwd2 = None
         self.blanket_l1l2.reset()
         self.monitor.reset()
 

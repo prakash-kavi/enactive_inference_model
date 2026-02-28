@@ -15,14 +15,13 @@ from typing import Dict, Optional
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    get_vi_refinement_states,
+    Z_NOISE_STD_BY_STATE,
     get_exit_transition_probs, get_policy_candidate_order,
-    VI_STEPS, VI_LR,
-    PRECISION_CLIP_MIN, PRECISION_CLIP_MAX, PRECISION_WEIGHT_SCALE,
-    PRIOR_VARIANCE_Z, EFE_PRAGMATIC_WEIGHT, EFE_EPISTEMIC_WEIGHT,
+    VI_STEPS, VI_LR, VI_MISMATCH_THRESHOLD,
+    PRIOR_VARIANCE_Z,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
-from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE, POLICY_GAMMA
+from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 from utils.math_utils import (
     mse_error,
     recon_error,
@@ -30,8 +29,6 @@ from utils.math_utils import (
     forward_error,
     clamp_activation,
     clip_probability,
-    policy_posterior,
-    normalize_scores,
     to_float,
     networks_to_tensor,
 )
@@ -104,8 +101,8 @@ class Layer2Agent(nn.Module):
         self.level = self.phenotype.level   # used for config table lookups
         
         # Markov blankets
-        self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2(smoothing=0.0)
-        self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3(smoothing=0.0)
+        self.blanket_l1l2 = blanket_l1l2 or MarkovBlanketL1L2()
+        self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3()
         
         # Recognition/decoder
         self.thoughtseed_model = ThoughtseedModel(
@@ -121,6 +118,25 @@ class Layer2Agent(nn.Module):
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
         
+    def _precision_params(self, precision_sensory: Optional[float] = None) -> tuple[float, float]:
+        """Return (precision_blend, precision_weight) from a scalar precision signal."""
+        if precision_sensory is None:
+            precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
+        precision_blend = float(np.clip(precision_sensory, CLIP_MIN, CLIP_MAX))
+        precision_weight = precision_blend
+        return precision_blend, precision_weight
+
+    def _init_vi_state(
+        self,
+        z_prev: torch.Tensor,
+        z_recognition: torch.Tensor,
+        prior_target: torch.Tensor,
+        precision_blend: float,
+    ) -> torch.Tensor:
+        """Precision-weighted initialization for VI refinement."""
+        z_init = 0.5 * z_prev + 0.5 * z_recognition
+        z_init = precision_blend * z_init + (1.0 - precision_blend) * prior_target
+        return clamp_activation(z_init, CLIP_MIN, CLIP_MAX)
     
     def decode_with_state(self, z: torch.Tensor) -> torch.Tensor:
         """Top-down: decode thoughtseeds -> networks."""
@@ -143,10 +159,7 @@ class Layer2Agent(nn.Module):
         recon_x = self.decode_with_state(z)
         observed_x = observed_x.detach()
 
-        if precision_sensory is None:
-            precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
-        precision_clamped = float(np.clip(precision_sensory, PRECISION_CLIP_MIN, PRECISION_CLIP_MAX))
-        precision_weight = PRECISION_WEIGHT_SCALE * precision_clamped
+        _, precision_weight = self._precision_params(precision_sensory)
 
         recon_loss = precision_weight * recon_error(recon_x, observed_x)
         prior = self.mu_params[state].detach()
@@ -174,18 +187,21 @@ class Layer2Agent(nn.Module):
         prior_target = clamp_z(self.mu_params[current_state].detach().clone())
         
         # Sensory precision (used as observation weight + blending factor)
-        precision_raw = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
-        precision_blend = float(np.clip(precision_raw, PRECISION_CLIP_MIN, PRECISION_CLIP_MAX))
-        precision_weight = PRECISION_WEIGHT_SCALE * precision_blend
+        precision_blend, precision_weight = self._precision_params()
         
         # Initialization: blend previous and sensory target, then bias toward sensory when precision is high.
-        z_init = 0.5 * z_prev + 0.5 * sensory_target
-        z_init = precision_blend * z_init + (1.0 - precision_blend) * prior_target
-        z_var = clamp_z(z_init).requires_grad_(True)
+        z_init = self._init_vi_state(z_prev, sensory_target, prior_target, precision_blend)
+        z_var = z_init.requires_grad_(True)
 
-        # Variational optimization loop (fixed-step VI)
-        vi_states = get_vi_refinement_states(self.level)
-        vi_steps = int(VI_STEPS) if current_state in vi_states else 0
+        # Variational optimization loop (mismatch-triggered, precision-modulated VI)
+        mismatch = float(mse_error(sensory_target, prior_target).item())
+        if mismatch > VI_MISMATCH_THRESHOLD:
+            # Fewer VI steps when predictability (precision) is high.
+            uncertainty = max(0.0, 1.0 - float(precision_blend))
+            vi_steps = int(np.ceil(float(VI_STEPS) * uncertainty))
+            vi_steps = max(0, min(int(VI_STEPS), vi_steps))
+        else:
+            vi_steps = 0
         vi_lr = float(VI_LR)
         with torch.enable_grad():
             for _ in range(vi_steps):
@@ -215,7 +231,13 @@ class Layer2Agent(nn.Module):
         z = self.thoughtseed_model.encode(x.unsqueeze(0) if x.dim() == 1 else x)
         if z.dim() > 1:
             z = z.squeeze(0)
-        z_recognition = clamp_activation(z, CLIP_MIN, CLIP_MAX)
+        z_mean = clamp_activation(z, CLIP_MIN, CLIP_MAX)
+        noise_std = float(Z_NOISE_STD_BY_STATE.get(current_state, 0.0))
+        if noise_std > 0.0:
+            z_sample = z_mean + torch.randn_like(z_mean) * noise_std
+        else:
+            z_sample = z_mean
+        z_recognition = clamp_activation(z_sample, CLIP_MIN, CLIP_MAX)
 
         z_posterior = self.update_posterior_z(
             current_state=current_state,
@@ -223,6 +245,27 @@ class Layer2Agent(nn.Module):
             z_recognition=z_recognition,
         )
         return z_posterior, z_recognition
+
+    def infer_state_belief(self, z: torch.Tensor) -> Dict[str, float]:
+        """Infer state belief q(s|z) from thoughtseed activations."""
+        with torch.no_grad():
+            dists = []
+            for state in STATES:
+                prior = self.mu_params[state].detach()
+                dists.append(mse_error(z, prior))
+            dist_vec = torch.stack(dists)
+            if dist_vec.numel() > 1:
+                mean = dist_vec.mean()
+                std = dist_vec.std(unbiased=False)
+                if float(std.item()) > EPS:
+                    dist_vec = (dist_vec - mean) / (std + EPS)
+            scale = max(EPS, float(PRIOR_VARIANCE_Z))
+            logits = -dist_vec / scale
+            probs = torch.softmax(logits, dim=0)
+            return {
+                state: float(probs[i].item())
+                for i, state in enumerate(STATES)
+            }
     
     # ------------------------------------------------------------------
     # Policy inference sub-steps
@@ -290,33 +333,13 @@ class Layer2Agent(nn.Module):
             i_epi_norm = i_epi_arr
 
         for g_p, i_e in zip(g_prag_norm, i_epi_norm):
-            g_vals.append(float(EFE_PRAGMATIC_WEIGHT) * float(g_p) -
-                          float(EFE_EPISTEMIC_WEIGHT) * float(i_e))
+            g_vals.append(float(g_p) - float(i_e))
 
         stats = {
             'g_prag_mean': float(np.mean(g_prag_vals)) if g_prag_vals else 0.0,
             'i_epi_mean': float(np.mean(i_epi_vals)) if i_epi_vals else 0.0,
         }
         return g_vals, mu_candidates, stats
-
-    def _compute_posterior(self, priors: list, g_vals: list):
-        """Fixed policy precision gamma and softmax posterior q(pi).
-
-        Gamma is a fixed scalar (POLICY_GAMMA). L3 learned log-prior is added
-        to log E(pi) if available.
-        Returns (q_pi, gamma, transition_drive).
-        """
-        log_prior = np.log(np.array(priors, dtype=float))
-        l3_prior = self.blanket_l2l3.active_states.get('policy_prior')
-        if l3_prior is not None and len(l3_prior) == len(log_prior):
-            log_prior = log_prior + np.array(l3_prior, dtype=float)
-
-        g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
-
-        gamma = max(EPS, float(POLICY_GAMMA))
-        q_pi = policy_posterior(log_prior, g_array, gamma)
-        transition_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
-        return q_pi, gamma, transition_drive
 
     def _select_attractor(self, q_pi, mu_candidates: list):
         """Posterior-weighted latent prediction.
@@ -330,8 +353,8 @@ class Layer2Agent(nn.Module):
 
     # ------------------------------------------------------------------
 
-    def infer_pi(self, current_state: str) -> Dict:
-        """Policy inference: evaluate risk and select action."""
+    def evaluate_policies(self, current_state: str) -> Dict:
+        """Evaluate policy evidence G(pi) and return candidates + priors."""
         x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         candidates = get_policy_candidate_order(current_state)
         exit_probs = get_exit_transition_probs(self.level, current_state)
@@ -340,19 +363,25 @@ class Layer2Agent(nn.Module):
 
         priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # dwell prior (heuristic)
         g_vals, mu_candidates, efe_stats = self._evaluate_efe(x_current, candidates)
-        q_pi, gamma, transition_drive    = self._compute_posterior(priors, g_vals)
-        selected_mu, mu_x       = self._select_attractor(q_pi, mu_candidates)
+        return {
+            'candidates':     candidates,
+            'priors':         priors,
+            'g_vals':         g_vals,
+            'mu_candidates':  mu_candidates,
+            'efe_prag_mean':  efe_stats.get('g_prag_mean', 0.0),
+            'efe_epi_mean':   efe_stats.get('i_epi_mean', 0.0),
+        }
 
+    def action_from_policy(self, q_pi, candidates: list, mu_candidates: list) -> Dict:
+        """Compute action outputs from an externally selected policy posterior."""
+        selected_mu, mu_x = self._select_attractor(q_pi, mu_candidates)
+        transition_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
         policy_state_probs = {
             state: float(q_pi[i]) for i, state in enumerate(candidates)
         }
-
         return {
             'selected_action_mu': selected_mu,
             'mu_x':               mu_x,
             'transition_drive':   transition_drive,
-            'q_pi':               np.array(q_pi, dtype=np.float64),
             'policy_state_probs': policy_state_probs,
-            'efe_prag_mean':      efe_stats.get('g_prag_mean', 0.0),
-            'efe_epi_mean':       efe_stats.get('i_epi_mean', 0.0),
         }

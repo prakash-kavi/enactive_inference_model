@@ -6,10 +6,7 @@ branching on a string label.
 """
 
 from dataclasses import dataclass
-from utils.config import LEARNING_RATES, EPS
-
-POLICY_GAMMA = 0.8  # Fixed policy precision; >1 sharpens, <1 softens.
-RECOGNITION_LOSS_ALPHA = 1.0  # Fixed recognition loss weight; lower values weaken amortization.
+from utils.config import LEARNING_RATES
 
 @dataclass(frozen=True)
 class PhenotypeConfig:
@@ -48,10 +45,3 @@ NOVICE_PHENOTYPE = PhenotypeConfig(
     label='NOVICE',
 )
 
-def phenotype_from_str(level: str) -> PhenotypeConfig:
-    """Convenience: resolve a level string to the matching PhenotypeConfig."""
-    if level == 'expert':
-        return EXPERT_PHENOTYPE
-    if level == 'novice':
-        return NOVICE_PHENOTYPE
-    raise ValueError(f"Unknown phenotype level '{level}'. Use 'expert' or 'novice'.")

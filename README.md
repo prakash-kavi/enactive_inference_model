@@ -7,23 +7,22 @@
 ```
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |
-| - Tracks meta-awareness from L2 thoughtseeds                 |
-| - Sends meta-awareness to L2 (sensory) to modulate precision                       |
+| - Tracks meta-awareness as EMA of forward predictability     |
+| - Sends policy prior to L2 (habit-like bias)                 |
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
-               | Sensory: meta_awareness
-               | Active:  precision_sensory, policy_precision
+               | Sensory: current_state, dwell_progress
+               | Active:  precision_sensory, policy_prior
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
-| - VAE encoder/decoder + forward dynamics model               |
+| - Encoder/decoder + forward dynamics model                   |
 | - Policy posterior q(pi) via softmax of G(pi)                |
-| - Policy precision from entropy(q_pi)
-| - Sensory precision from forward prediction error + meta-awareness            |
+| - Sensory precision from forward prediction error            |
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
                | Sensory: DMN, VAN, DAN, FPN activations
-               | Active:  mu_x, policy_drive, precision_gain, noise_reduction
+               | Active:  mu_x, transition_drive, policy_state_probs
 +------------------------------v-------------------------------+
 | Layer 1: Neural Generative Process (MVOU)                    |
 | - 4 brain networks (DMN, VAN, DAN, FPN)                      |
@@ -140,12 +139,10 @@ Layer 2 predicts next-step network activations from (x_t, z_t). This provides a 
 
 ### 4. BPTT Learning
 Backpropagation Through Time optimizes:
-- VAE encoder/decoder (latent structure learning)
+- Encoder/decoder (latent structure learning)
 - Forward model (dynamics prediction)
-- Loss = VFE + w_fwd * forward prediction error + alpha_rec * recognition loss
-- Recognition loss uses alpha_rec=1 for expert and alpha_rec=lr_novice/lr_expert for novice
-- Policy precision is derived from policy posterior entropy (q_pi)
-- Sensory precision blends forward prediction error with meta-awareness
+- Loss = VFE + forward prediction error + alpha_rec * recognition loss
+- Sensory precision is derived from forward prediction error
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
@@ -177,7 +174,7 @@ Backpropagation Through Time optimizes:
 +-- model/                     # Core Logic
 |   +-- training_loop.py       # MeditationTrainer class
 |   +-- l1_generative_process.py  # Layer1Process (MVOU dynamics)
-|   +-- l2_recognition.py         # Layer2Agent (VAE + forward model)
+|   +-- l2_recognition.py         # Layer2Agent (encoder/decoder + forward model)
 |   +-- l3_metacognition.py       # Layer3Monitor (meta-awareness tracking)
 |   +-- markov_blankets.py        # Markov blanket interfaces
 +-- utils/                     # Utilities & Config
@@ -215,50 +212,50 @@ dx = -Theta(s) (x - mu_x(s)) dt + sigma dW
 ```
 with `sigma^2 = NOISE_LEVEL`. Euler integration is used with state-specific `Theta(s)`.
 
-### Layer 2: Recognition + Variational Inference (VAE)
-VAE components:
+### Layer 2: Recognition + Variational Inference
+Components:
 - **Encoder**: `q(z|x)` (networks -> thoughtseeds)
 - **Decoder**: `p(x|z)` (likelihood / surprisal)
 - **Forward model**: `f(x, z)` predicts next networks
 
 Per-step VFE:
 ```
-F(z) = Surprisal_NLL_Bernoulli(decode(z), x) + KL_Bernoulli(z || mu_z(s))
+F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2
 ```
 
-Fixed-step VI (2 steps, lr=0.2) optimizes:
-```
-L(z) = surprisal + KL
-     + pi_w * MSE(z, z_rec)
-     + (1 - pi_w) * MSE(z, z_prev)
-```
-Initialization:
+Fixed-step VI (2 steps, lr=0.2) optimizes F(z):
 ```
 z_init = 0.5 * z_prev + 0.5 * z_rec
-z_init = pi_w * z_init + (1 - pi_w) * mu_z(s)
+z_init = pi_x * z_init + (1 - pi_x) * mu_z(s)
 ```
-where `pi_w = clip(precision_sensory)` in [0, 1].
+where `pi_x = clip(precision_sensory)` in [0, 1]. VI refinement is triggered when
+latent mismatch exceeds a threshold (`VI_MISMATCH_THRESHOLD`).
 
 ### Sensory Precision (from forward surprisal)
 Forward prediction and surprisal (S_forward):
 ```
 x_pred = f(x_{t-1}, a_{t-1})
-S_forward = Surprisal_NLL_Bernoulli(x_pred, x_t)
+S_forward = ||x_t - x_pred||^2
 ```
 We map forward surprisal to sensory precision (`precision_sensory`), so higher surprise implies lower precision.
 Precision update (Option A, Act-Inf aligned):
 ```
-precision_sensory = exp(-S_forward)
+precision_sensory = sigmoid(-(S_forward - mean)/std)
 precision_sensory = clip(precision_sensory, CLIP_MIN, CLIP_MAX)
-precision_sensory = fuse_logit(precision_sensory, meta)
 ```
 
 ### Layer 3: Meta-Awareness
-Meta-awareness is a weighted sum of thoughtseeds:
+Meta-awareness is an EMA of forward predictability:
 ```
-meta = sum_i w_i z_i / sum_i w_i
+meta = EMA(sigmoid(-(S_forward - mean)/std))
 ```
-clipped to [0, 1], with state-dependent weights.
+
+### Policy Evaluation (EFE)
+EFE combines pragmatic and epistemic components (per policy set, z-normalized):
+```
+G(pi) = w_prag * ||x_pred(pi) - C_{s_pi}||^2 - w_epi * I(pi)
+```
+where `I(pi)` is an information-gain proxy from the predicted state in thoughtseed space.
 
 ### Policy Inference (L2)
 Candidate policies: stay in `s` or transition to each other state.
@@ -271,37 +268,26 @@ Policy prior:
 E(stay) = 1 - h
 E(s') = h * P(s' | s)
 ```
-Expected free energy:
+Policy posterior (fixed gamma):
 ```
-C_s = decode(mu_z(s))
-G(pi) = KL_Bernoulli(x_pred || C_s) + H(x_pred)
+q(pi) = softmax(log E(pi) + beta * l_pi(s) - gamma * G(pi))
 ```
-Policy posterior:
+with entropy-adaptive policy precision
 ```
-q(pi) = softmax(log E(pi) - gamma * G(pi))
-```
-Policy precision:
-```
-gamma = 1 - H(q(pi)) / log(N_pi)
+gamma = gamma0 * (1 - H(q) / log(|Pi|))
 ```
 Action target:
 ```
 mu = sum_pi q(pi) * mu_z(s_pi)
-mu = (1 - h) * mu_current + h * mu
 mu_x = decode(mu)
 ```
 
 ### Learning Objective
-Auto-balanced forward weight:
-```
-w_fwd = EMA(F_t) / (EMA(S_forward) + eps)
-```
 Total loss:
 ```
-L_total = F + w_fwd * S_forward + alpha_rec * L_rec
+L_total = F + S_forward + alpha_rec * L_rec
 ```
-where `L_rec = MSE(encode(x), z*)`. Experts use `alpha_rec = 1`. Novices use a weak
-weight tied to learning rate: `alpha_rec = lr_novice / lr_expert`.
+where `L_rec = MSE(encode(x), z*)` and `alpha_rec` is set per BPTT window as mean(VFE)/mean(L_rec).
 
 ### Training Loop
 BPTT windows of 50 steps; gradients accumulated per window.
@@ -315,7 +301,7 @@ Edit `config.py` to modify:
 - Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
 - Learning rates (0.01 - 0.02)
 - Process noise (NOISE_LEVEL)
-- Phenotype differences (learning rate + recognition loss scaling)
+- Phenotype differences (learning rate + VI refinement state set)
 
 ---
 

@@ -198,7 +198,7 @@ class Layer1Process(nn.Module):
         theta = self._clamp_theta(theta)
         
         # Apply L2 attractor mu_x directly (fixed bias_strength=0.5).
-        # L2->L1 active state is mu_x only; precision_gain/noise_reduction removed.
+        # L2->L1 control signals are mu_x, transition_drive, and policy_state_probs.
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
             if not isinstance(mu_x, torch.Tensor):

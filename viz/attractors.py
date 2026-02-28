@@ -4,10 +4,8 @@ attractors.py
 Attractor visualizations using PCA projections.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -44,7 +42,7 @@ def _prepare_data(tail_data: dict) -> Dict:
     }
 
 
-def _fit_pca(X: np.ndarray) -> tuple[PCA | None, np.ndarray]:
+def _fit_pca(X: np.ndarray) -> Tuple[Optional[PCA], np.ndarray]:
     if X.size == 0 or X.shape[0] < 2:
         return None, np.zeros(2, dtype=float)
     n_components = min(2, X.shape[1])
@@ -56,7 +54,7 @@ def _fit_pca(X: np.ndarray) -> tuple[PCA | None, np.ndarray]:
     return pca, var_ratio[:2]
 
 
-def _project_pca(X: np.ndarray, pca: PCA | None) -> np.ndarray:
+def _project_pca(X: np.ndarray, pca: Optional[PCA]) -> np.ndarray:
     if X.size == 0 or pca is None:
         return np.zeros((0, 2), dtype=float)
     proj = pca.transform(X)
@@ -68,7 +66,7 @@ def _project_pca(X: np.ndarray, pca: PCA | None) -> np.ndarray:
 def _state_centroids_pca(
     projected: np.ndarray,
     states: List[str],
-    pca: PCA | None,
+    pca: Optional[PCA],
 ) -> Dict[str, np.ndarray]:
     centroids: Dict[str, np.ndarray] = {}
     if pca is None:

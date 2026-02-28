@@ -63,8 +63,8 @@ NETWORK_PROFILES = {
         "expert": {"DMN": 0.40, "VAN": 0.80, "DAN": 0.42, "FPN": 0.55}
     },
     "redirect_attention": {
-        "novice": {"DMN": 0.40, "VAN": 0.50, "DAN": 0.78, "FPN": 0.74},
-        "expert": {"DMN": 0.35, "VAN": 0.50, "DAN": 0.78, "FPN": 0.70}
+        "novice": {"DMN": 0.40, "VAN": 0.45, "DAN": 0.78, "FPN": 0.72},
+        "expert": {"DMN": 0.35, "VAN": 0.40, "DAN": 0.78, "FPN": 0.68}
     }
 }
 
@@ -111,11 +111,8 @@ STATE_TRANSITION_PROBS = {
 # Fixed-step VI hyperparameters (L2)
 VI_STEPS = 2
 VI_LR = 0.2
-# Apply VI refinement by phenotype (System 2 sharpening)
-VI_REFINEMENT_STATES_BY_LEVEL = {
-    'novice': {'breath_focus', 'meta_awareness', 'redirect_attention'},
-    'expert': {'meta_awareness', 'redirect_attention'},
-}
+# Trigger VI refinement when latent mismatch exceeds this threshold (MSE in z-space)
+VI_MISMATCH_THRESHOLD = 0.02
 
 # Thoughtseed priors (state-dependent activation baselines)
 THOUGHTSEED_STATE_PRIORS = {
@@ -150,42 +147,13 @@ THOUGHTSEED_STATE_PRIORS = {
 
 }
 
-# Meta-awareness computation: state-aware thoughtseed weighting
-META_THOUGHTSEED_WEIGHTS = {
-    "breath_focus": {
-        "attend_breath": 0.25,
-        "equanimity": 0.35,
-        "aha_moment": 0.25
-    },
-    "mind_wandering": {
-        "attend_breath": 0.15,
-        "equanimity": 0.25,
-        "aha_moment": 0.20
-    },
-    "meta_awareness": {
-        "attend_breath": 0.15,
-        "equanimity": 0.35,
-        "aha_moment": 0.60
-    },
-    "redirect_attention": {
-        "attend_breath": 0.30,
-        "equanimity": 0.40,
-        "aha_moment": 0.25
-    }
-}
-
 # =============================================================================
 # Precision and Active Inference Parameters
 # =============================================================================
-PRECISION_CLIP_MIN = 0.05
-PRECISION_CLIP_MAX = 0.90
-PRECISION_WEIGHT_SCALE = 1.0
+# Time constant (seconds) for EMA scale of forward surprisal (sigma_fwd^2)
+PRECISION_TAU = 4.0
 
 PRIOR_VARIANCE_Z = 1.0
-# EFE component weights (sum to 1.0 by default)
-EFE_PRAGMATIC_WEIGHT = 0.7
-EFE_EPISTEMIC_WEIGHT = 0.3
-
 # =============================================================================
 # Active Inference Parameters (Fine-Tuned)
 # =============================================================================
@@ -194,34 +162,39 @@ LEARNING_RATES = {
     "expert": 0.02,
 }
 
-# Layer 3: learned policy tendencies
-L3_POLICY_LR = 0.05       # EMA learning rate for L3 policy prior update
-L3_POLICY_STRENGTH = 0.5  # Scale for L3 prior influence on L2 (0 = neutral, 1 = full)
-L3_META_EMA_ALPHA = 0.1   # EMA rate for meta-awareness smoothing
+# Layer 3: learned policy tendencies (phenotype-specific)
+L3_POLICY_LR_BY_LEVEL = {
+    "expert": 0.05,
+    "novice": 0.02,
+}
+L3_POLICY_STRENGTH_BY_LEVEL = {
+    "expert": 0.42,
+    "novice": 0.15,
+}
 
-
-
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-def compute_meta_awareness(state, thoughtseed_activations):
-    """Compute meta-awareness from weighted thoughtseeds."""
-    weights = META_THOUGHTSEED_WEIGHTS.get(state, {})
-    weighted_sum = sum(float(thoughtseed_activations.get(ts, 0.0)) * float(w) for ts, w in weights.items())
-    weight_total = sum(float(w) for w in weights.values())
-    meta = weighted_sum / weight_total if weight_total > 0.0 else 0.0
-    return float(max(0.0, min(1.0, meta)))
+# State-dependent latent noise for stochastic inference (posterior variance proxy)
+Z_NOISE_STD_BY_STATE = {
+    "breath_focus": 0.02,
+    "mind_wandering": 0.08,
+    "meta_awareness": 0.03,
+    "redirect_attention": 0.03,
+}
+# Meta-awareness EMA time constant (seconds)
+L3_META_TAU = 1.0
 
 def get_policy_candidate_order(current_state: str):
     """Return policy candidate order: [current_state, ...others in STATES order].
     """
     return [current_state] + [s for s in STATES if s != current_state]
 
-def get_vi_refinement_states(experience_level: str):
-    """Return VI refinement state set for a phenotype level."""
-    return VI_REFINEMENT_STATES_BY_LEVEL.get(experience_level, VI_REFINEMENT_STATES_BY_LEVEL['expert'])
-
 def get_exit_transition_probs(experience_level, current_state):
     """Return exit transition probabilities for the given state (rows sum to 1.0)."""
     return dict(STATE_TRANSITION_PROBS[experience_level][current_state])
+
+def get_l3_policy_lr(experience_level: str) -> float:
+    """Return L3 policy learning rate for a phenotype level."""
+    return float(L3_POLICY_LR_BY_LEVEL.get(experience_level, L3_POLICY_LR_BY_LEVEL["expert"]))
+
+def get_l3_policy_strength(experience_level: str) -> float:
+    """Return L3 policy strength for a phenotype level."""
+    return float(L3_POLICY_STRENGTH_BY_LEVEL.get(experience_level, L3_POLICY_STRENGTH_BY_LEVEL["expert"]))

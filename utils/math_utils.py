@@ -16,40 +16,6 @@ def clip_probability(value: Union[float, int, torch.Tensor]) -> float:
     """Clamp scalar-like values to [0, 1]."""
     return float(np.clip(to_float(value), 0.0, 1.0))
 
-def precision_from_surprisal(
-    surprisal: Union[float, int, torch.Tensor],
-    eps: float = EPS,
-) -> float:
-    """Precision from surprisal via exponential mapping."""
-    s = max(0.0, to_float(surprisal))
-    return clip_probability(np.exp(-s))
-
-def integrate_precision_logit(
-    base_precision: Union[float, int, torch.Tensor],
-    meta_precision: Union[float, int, torch.Tensor],
-    eps: float = EPS,
-) -> float:
-    """Integrate two precision signals via logit-add (odds multiplication).
-    Base from forward surprisal; meta from L3 meta-awareness.
-    Yields a single sensory precision in [0,1]."""
-    b = float(np.clip(to_float(base_precision), eps, 1.0 - eps))
-    m = float(np.clip(to_float(meta_precision), eps, 1.0 - eps))
-    logit = np.log(b / (1.0 - b)) + np.log(m / (1.0 - m))
-    return float(1.0 / (1.0 + np.exp(-logit)))
-
-
-def compute_precision_sensory(
-    base_precision: Union[float, int, torch.Tensor],
-    meta_precision: Union[float, int, torch.Tensor],
-    eps: float = EPS,
-    clip_min: float = 0.0,
-    clip_max: float = 1.0,
-) -> float:
-    """Compute integrated sensory precision from base + meta signals."""
-    b = float(np.clip(to_float(base_precision), clip_min, clip_max))
-    m = float(np.clip(to_float(meta_precision), clip_min, clip_max))
-    return integrate_precision_logit(b, m, eps)
-
 def softmax(logits: np.ndarray) -> np.ndarray:
     """Stable softmax for 1D arrays."""
     if logits.size == 0:

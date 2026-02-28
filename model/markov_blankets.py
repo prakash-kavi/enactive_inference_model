@@ -15,13 +15,12 @@ class MarkovBlanket:
     allowed_sensory: set[str] = set()
     allowed_active: set[str] = set()
 
-    def __init__(self, smoothing: float = 0.0, strict: bool = True):
+    def __init__(self, strict: bool = True):
         """
         Args:
-            smoothing: EMA coefficient (0=no memory, 1=no update)
             strict: If True, reject unknown keys on update
         """
-        self.smoothing = float(max(0.0, min(1.0, smoothing)))
+        self.smoothing = 0.0
         self.strict = bool(strict)
         self.sensory_states: Dict[str, Any] = {}
         self.active_states: Dict[str, Any] = {}
@@ -41,25 +40,17 @@ class MarkovBlanket:
             raise KeyError(f"Unknown {kind} keys for {self.__class__.__name__}: {sorted(extra)}")
         
     def update_sensory_states(self, new_states: Dict[str, Any]) -> None:
-        """Update sensory states. Numeric/Tensor: EMA smoothing. Other (str, dict): overwrite."""
+        """Update sensory states. Numeric/Tensor: overwrite. Other (str, dict): overwrite."""
         self._validate_keys(new_states, self.allowed_sensory, "sensory")
         for key, new_val in new_states.items():
             new_val = self._detach_value(new_val)
-            if isinstance(new_val, (str, dict)):
-                # Non-numeric: overwrite (e.g. current_state, thoughtseed_activations)
+            if isinstance(new_val, (str, dict, list, tuple)):
+                # Non-numeric: overwrite (e.g. labels, belief dicts, candidate lists)
                 self.sensory_states[key] = new_val
             elif key not in self.sensory_states:
                 self.sensory_states[key] = new_val
             else:
-                old_val = self.sensory_states[key]
-                if isinstance(new_val, torch.Tensor):
-                    self.sensory_states[key] = (
-                        self.smoothing * old_val + (1 - self.smoothing) * new_val
-                    )
-                else:
-                    self.sensory_states[key] = (
-                        self.smoothing * float(old_val) + (1 - self.smoothing) * float(new_val)
-                    )
+                self.sensory_states[key] = new_val
     
     def update_active_states(self, new_states: Dict[str, Any]) -> None:
         """Update active states (top-down control)."""
@@ -85,34 +76,32 @@ class MarkovBlanketL1L2(MarkovBlanket):
         - policy_state_probs: Optional[Dict[str,float]] policy posterior over candidate states
     """
     
-    def __init__(self, smoothing: float = 0.0):
+    def __init__(self):
         self.allowed_sensory = {"DMN", "VAN", "DAN", "FPN", "dwell_progress"}
         self.allowed_active = {"mu_x", "transition_drive", "policy_state_probs"}
-        super().__init__(smoothing=smoothing, strict=True)
+        super().__init__(strict=True)
         
 
 class MarkovBlanketL2L3(MarkovBlanket):
     """Markov blanket between L2 (attentional agent) and L3 (metacognitive monitor).
     
     Sensory (L2 -> L3):
-        - current_state: str (meditation state label)
-        - dwell_progress: float (0-1, how long in current state)
-        - thoughtseed_activations: Dict[str, float] (for meta-awareness)
+        - state_belief: Dict[str, float] inferred state posterior from L2
+        - policy_candidates: list[str] policy candidate labels
+        - policy_priors: list[float] dwell-aware prior weights E(pi)
+        - policy_costs: list[float] policy evidence G(pi)
     
     Active (L3 -> L2):
         - precision_sensory: float (0-1, sensory precision)
-        - policy_prior: list of 4 floats (log prior adjustment per candidate; L3 writes, L2 reads)
     """
     
-    def __init__(self, smoothing: float = 0.0):
-        self.allowed_sensory = {"current_state", "dwell_progress", "thoughtseed_activations"}
-        self.allowed_active = {"precision_sensory", "policy_prior"}
-        super().__init__(smoothing=smoothing, strict=True)
+    def __init__(self):
+        self.allowed_sensory = {"state_belief", "policy_candidates", "policy_priors", "policy_costs"}
+        self.allowed_active = {"precision_sensory"}
+        super().__init__(strict=True)
         self.active_states['precision_sensory'] = 0.5
-        self.active_states['policy_prior'] = None  # neutral until L3 writes
 
     def reset(self) -> None:
         """Reset state and restore defaults."""
         super().reset()
         self.active_states['precision_sensory'] = 0.5
-        self.active_states['policy_prior'] = None
