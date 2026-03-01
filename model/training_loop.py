@@ -358,6 +358,7 @@ class MeditationTrainer:
         enable_learning: bool = True,
         reseed_rng: bool = False,
         run_seed: Optional[int] = None,
+        preserve_habit_prior: bool = False,
     ) -> Dict:
         """Run variational EM training.
 
@@ -375,7 +376,11 @@ class MeditationTrainer:
         Returns:
             Training results dict
         """
-        self._reset_run_state(reseed_rng=reseed_rng, run_seed=run_seed)
+        self._reset_run_state(
+            reseed_rng=reseed_rng,
+            run_seed=run_seed,
+            preserve_habit=preserve_habit_prior,
+        )
 
         print(f"PHENOTYPE: {self.phenotype.label} "
               f"(lr={self.phenotype.learning_rate:.4f}, "
@@ -466,8 +471,16 @@ class MeditationTrainer:
             'state_belief_ra_history': self.history['state_belief_ra'],
         }
     
-    def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
-        """Reset internal state for a new run."""
+    def _reset_run_state(
+        self,
+        reseed_rng: bool = False,
+        run_seed: Optional[int] = None,
+        preserve_habit: bool = False,
+    ):
+        """Reset internal state for a new run.
+
+        Set preserve_habit=True to keep learned habit priors across runs.
+        """
         self.history = {
             'states': [],
             'free_energy': [],
@@ -492,7 +505,7 @@ class MeditationTrainer:
         self._last_x_actual = None
         self._sigma_fwd2 = None
         self.blanket_l1l2.reset()
-        self.monitor.reset()
+        self.monitor.reset(preserve_habit=preserve_habit)
 
         if reseed_rng:
             seed = self.seed if run_seed is None else int(run_seed)
@@ -500,15 +513,19 @@ class MeditationTrainer:
             np.random.seed(seed)
             self.process.rng = np.random.RandomState(seed)
 
-    def save_results(self, output_dir: str = 'data/lean_results') -> None:
-        """Save training results to JSON."""
+    def save_results(
+        self,
+        output_dir: str = 'data/lean_results',
+        prefix: str = 'training_results',
+    ) -> None:
+        """Save results to JSON."""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
         results = self._package_results()
         
         # Save compact JSON
-        filepath = output_path / f'training_results_{self.level}_seed{self.seed}.json'
+        filepath = output_path / f'{prefix}_{self.level}_seed{self.seed}.json'
         with open(filepath, 'w') as f:
             json.dump(results, f, indent=2)
         
@@ -523,11 +540,7 @@ def train_meditation(
     save_results: bool = True,
     output_dir: str = 'data/lean_results',
 ) -> Dict:
-    """Convenience wrapper for MeditationTrainer.
-
-    Pass ``phenotype=EXPERT_PHENOTYPE`` or ``phenotype=NOVICE_PHENOTYPE``.
-    Defaults to EXPERT_PHENOTYPE if omitted.
-    """
+    """Convenience wrapper for MeditationTrainer (learning enabled)."""
     trainer = MeditationTrainer(
         phenotype=phenotype,
         seed=seed,
@@ -537,9 +550,57 @@ def train_meditation(
         enable_learning=True,
         reseed_rng=reseed_rng,
         run_seed=run_seed,
+        preserve_habit_prior=False,
     )
 
     if save_results:
-        trainer.save_results(output_dir=output_dir)
+        trainer.save_results(output_dir=output_dir, prefix='training_results')
 
+    return results
+
+
+def train_meditation_model(
+    phenotype: PhenotypeConfig = None,
+    timesteps: int = 10000,
+    seed: int = 42,
+    reseed_rng: bool = False,
+    run_seed: Optional[int] = None,
+    save_results: bool = True,
+    output_dir: str = 'data/lean_results',
+) -> tuple[MeditationTrainer, Dict]:
+    """Train a model (learning phase) and return the trainer + results."""
+    trainer = MeditationTrainer(
+        phenotype=phenotype,
+        seed=seed,
+    )
+    results = trainer.train(
+        timesteps=timesteps,
+        enable_learning=True,
+        reseed_rng=reseed_rng,
+        run_seed=run_seed,
+        preserve_habit_prior=False,
+    )
+    if save_results:
+        trainer.save_results(output_dir=output_dir, prefix='training_results')
+    return trainer, results
+
+
+def simulate_meditation(
+    trainer: MeditationTrainer,
+    timesteps: int = 10000,
+    reseed_rng: bool = True,
+    run_seed: Optional[int] = None,
+    save_results: bool = True,
+    output_dir: str = 'data/lean_results',
+) -> Dict:
+    """Run inference-only simulation using a trained model."""
+    results = trainer.train(
+        timesteps=timesteps,
+        enable_learning=False,
+        reseed_rng=reseed_rng,
+        run_seed=run_seed,
+        preserve_habit_prior=True,
+    )
+    if save_results:
+        trainer.save_results(output_dir=output_dir, prefix='simulation_results')
     return results

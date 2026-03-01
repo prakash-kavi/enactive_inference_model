@@ -1,4 +1,4 @@
-"""Main entry point for lean meditation model training and simulation.
+"""Main entry point for lean meditation model learning and simulation.
 
 Usage:
     python run_enactive_inference.py run
@@ -8,7 +8,7 @@ Usage:
 import argparse
 from pathlib import Path
 
-from model.training_loop import train_meditation
+from model.training_loop import train_meditation_model, simulate_meditation
 from model.phenotype import EXPERT_PHENOTYPE, NOVICE_PHENOTYPE
 from viz.analysis import print_summary
 from viz.analysis_utils import (
@@ -20,7 +20,7 @@ from viz.analysis_utils import (
 )
 from utils.config import STATES, NETWORKS, THOUGHTSEEDS
 
-from viz.convergence import plot_convergence
+from viz.convergence import plot_convergence, plot_convergence_comparison
 from viz.radar_plot import plot_comparison
 from viz.hierarchy import plot_hierarchy, plot_hierarchy_continuous
 from viz.attractors import plot_attractor_pca
@@ -35,45 +35,73 @@ PLOT_DIR = CURRENT_DIR / "figures"
 
 
 def run_training_and_simulation(timesteps: int):
-    """Train both expert and novice, then run simulation for both."""
+    """Train both expert and novice, then run inference-only simulation."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print("\n" + "=" * 70)
-    print("PHASE 1: TRAINING EXPERT PHENOTYPE")
+    print("PHASE 1: LEARNING EXPERT PHENOTYPE")
     print("=" * 70)
-    expert_results = train_meditation(
+    expert_trainer, expert_learning = train_meditation_model(
         phenotype=EXPERT_PHENOTYPE,
         timesteps=timesteps,
         seed=SEED,
         save_results=True,
         output_dir=str(OUTPUT_DIR),
     )
+    print_summary(expert_learning)
+
+    print("\n" + "=" * 70)
+    print("PHASE 1b: SIMULATION EXPERT PHENOTYPE")
+    print("=" * 70)
+    expert_results = simulate_meditation(
+        trainer=expert_trainer,
+        timesteps=timesteps,
+        reseed_rng=True,
+        run_seed=SEED,
+        save_results=True,
+        output_dir=str(OUTPUT_DIR),
+    )
     print_summary(expert_results)
 
     print("\n" + "=" * 70)
-    print("PHASE 2: TRAINING NOVICE PHENOTYPE")
+    print("PHASE 2: LEARNING NOVICE PHENOTYPE")
     print("=" * 70)
-    novice_results = train_meditation(
+    novice_trainer, novice_learning = train_meditation_model(
         phenotype=NOVICE_PHENOTYPE,
         timesteps=timesteps,
         seed=SEED,
         save_results=True,
         output_dir=str(OUTPUT_DIR),
     )
+    print_summary(novice_learning)
+
+    print("\n" + "=" * 70)
+    print("PHASE 2b: SIMULATION NOVICE PHENOTYPE")
+    print("=" * 70)
+    novice_results = simulate_meditation(
+        trainer=novice_trainer,
+        timesteps=timesteps,
+        reseed_rng=True,
+        run_seed=SEED,
+        save_results=True,
+        output_dir=str(OUTPUT_DIR),
+    )
     print_summary(novice_results)
 
     print("\n" + "=" * 70)
-    print("TRAINING COMPLETE")
+    print("LEARNING + SIMULATION COMPLETE")
     print("=" * 70)
     print(f"Results saved to: {OUTPUT_DIR}/")
     print(f"  - training_results_expert_seed{SEED}.json")
     print(f"  - training_results_novice_seed{SEED}.json")
+    print(f"  - simulation_results_expert_seed{SEED}.json")
+    print(f"  - simulation_results_novice_seed{SEED}.json")
     print()
 
-    return expert_results, novice_results
+    return expert_learning, expert_results, novice_learning, novice_results
 
 
-def generate_plots(expert_results, novice_results):
+def generate_plots(expert_results, novice_results, expert_learning=None, novice_learning=None):
     """Generate all comparison and individual plots."""
     PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -108,10 +136,24 @@ def generate_plots(expert_results, novice_results):
 
     print("\n--- Figures ---")
     print("  - FigS1_Convergence_Expert.pdf")
-    plot_convergence(expert_results, str(PLOT_DIR / "FigS1_Convergence_Expert.pdf"))
+    if expert_learning is not None:
+        plot_convergence_comparison(
+            expert_learning,
+            expert_results,
+            str(PLOT_DIR / "FigS1_Convergence_Expert.pdf"),
+        )
+    else:
+        plot_convergence(expert_results, str(PLOT_DIR / "FigS1_Convergence_Expert.pdf"))
 
     print("  - FigS1_Convergence_Novice.pdf")
-    plot_convergence(novice_results, str(PLOT_DIR / "FigS1_Convergence_Novice.pdf"))
+    if novice_learning is not None:
+        plot_convergence_comparison(
+            novice_learning,
+            novice_results,
+            str(PLOT_DIR / "FigS1_Convergence_Novice.pdf"),
+        )
+    else:
+        plot_convergence(novice_results, str(PLOT_DIR / "FigS1_Convergence_Novice.pdf"))
 
     print("  - fig3a.pdf")
     plot_comparison(novice_tail, expert_tail, str(PLOT_DIR / "fig3a.pdf"))
@@ -147,15 +189,23 @@ def generate_plots(expert_results, novice_results):
 def _load_results():
     import json
 
-    expert_path = OUTPUT_DIR / f"training_results_expert_seed{SEED}.json"
-    novice_path = OUTPUT_DIR / f"training_results_novice_seed{SEED}.json"
-
+    expert_path = OUTPUT_DIR / f"simulation_results_expert_seed{SEED}.json"
+    novice_path = OUTPUT_DIR / f"simulation_results_novice_seed{SEED}.json"
+    training_expert_path = OUTPUT_DIR / f"training_results_expert_seed{SEED}.json"
+    training_novice_path = OUTPUT_DIR / f"training_results_novice_seed{SEED}.json"
     if not expert_path.exists() or not novice_path.exists():
-        print("ERROR: Could not find saved results:")
-        print(f"  Looking for: {expert_path}")
-        print(f"  Looking for: {novice_path}")
-        print("\nRun 'python run_enactive_inference.py run' first to generate results.")
-        return None, None
+        fallback_expert = OUTPUT_DIR / f"training_results_expert_seed{SEED}.json"
+        fallback_novice = OUTPUT_DIR / f"training_results_novice_seed{SEED}.json"
+        if fallback_expert.exists() and fallback_novice.exists():
+            print("WARNING: Simulation results not found. Falling back to training results.")
+            expert_path = fallback_expert
+            novice_path = fallback_novice
+        else:
+            print("ERROR: Could not find saved results:")
+            print(f"  Looking for: {expert_path}")
+            print(f"  Looking for: {novice_path}")
+            print("\nRun 'python run_enactive_inference.py run' first to generate results.")
+            return None, None
 
     print(f"\nLoading results from {OUTPUT_DIR}/...")
     with open(expert_path, "r") as f:
@@ -163,16 +213,25 @@ def _load_results():
     with open(novice_path, "r") as f:
         novice_results = json.load(f)
 
-    return expert_results, novice_results
+    expert_learning = None
+    novice_learning = None
+    if training_expert_path.exists():
+        with open(training_expert_path, "r") as f:
+            expert_learning = json.load(f)
+    if training_novice_path.exists():
+        with open(training_novice_path, "r") as f:
+            novice_learning = json.load(f)
+
+    return expert_results, novice_results, expert_learning, novice_learning
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Lean meditation model: training and visualization",
+        description="Lean meditation model: learning, simulation, and visualization",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  run   - Train both expert and novice, then generate plots
+  run   - Learn parameters, then simulate (inference-only), then plot
   plot  - Generate plots from previously saved results
 
 Examples:
@@ -196,13 +255,25 @@ Configuration (fixed for reproducibility):
     args = parser.parse_args()
 
     if args.command == "run":
-        expert_results, novice_results = run_training_and_simulation(timesteps=TIMESTEPS)
-        generate_plots(expert_results, novice_results)
+        expert_learning, expert_results, novice_learning, novice_results = run_training_and_simulation(
+            timesteps=TIMESTEPS
+        )
+        generate_plots(
+            expert_results,
+            novice_results,
+            expert_learning=expert_learning,
+            novice_learning=novice_learning,
+        )
     elif args.command == "plot":
-        expert_results, novice_results = _load_results()
+        expert_results, novice_results, expert_learning, novice_learning = _load_results()
         if expert_results is None:
             return
-        generate_plots(expert_results, novice_results)
+        generate_plots(
+            expert_results,
+            novice_results,
+            expert_learning=expert_learning,
+            novice_learning=novice_learning,
+        )
 
 
 if __name__ == "__main__":

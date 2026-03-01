@@ -7,28 +7,28 @@
 ```
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |
-| - Tracks meta-awareness as EMA of forward predictability     |
-| - Sends policy prior to L2 (habit-like bias)                 |
+| - Meta-awareness: gated divergence (policy evidence vs habit) |
+| - Selects policy posterior q(pi); modulates policy precision  |
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
-               | Sensory: current_state, dwell_progress
-               | Active:  precision_sensory, policy_prior
+               | Sensory: policy evidence G(pi), state belief
+               | Active:  policy posterior q(pi)
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
-| - Encoder/decoder + forward dynamics model                   |
-| - Policy posterior q(pi) via softmax of G(pi)                |
-| - Sensory precision from forward prediction error            |
+| - Encoder/decoder + forward model f(x,z)                     |
+| - Evaluates expected free energy G(pi); passes evidence to L3 |
+| - Sensory precision from forward surprisal (exp form)         |
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
-               | Sensory: DMN, VAN, DAN, FPN activations
-               | Active:  mu_x, transition_drive, policy_state_probs
+               | Sensory: s_t, x_t, dwell_progress d_t
+               | Active:  mu_x, transition_drive u_t, policy_state_probs
 +------------------------------v-------------------------------+
 | Layer 1: Neural Generative Process (MVOU)                    |
 | - 4 brain networks (DMN, VAN, DAN, FPN)                      |
 | - 4 meditation states (BF, MW, MA, RA)                       |
 | - Multivariate Ornstein-Uhlenbeck dynamics                   |
-| - State-dependent coupling (Theta matrices)                 |
+| - Attractor mixing: mu <- (1-m_t)mu + m_t mu_x               |
 +--------------------------------------------------------------+
 ```
 
@@ -71,13 +71,13 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Train Both Phenotypes (Expert & Novice)
+### Run Full Pipeline (Learning + Simulation + Plots)
 
 ```bash
 python run_enactive_inference.py run
 ```
 
-This trains both expert and novice models for 10,000 timesteps (default), saves results to `data/`, and generates all plots.
+This runs a **two-phase protocol** per phenotype: (1) **Learning phase**: variational EM for 10,000 timesteps to fit encoder, decoder, forward model, and habit prior; (2) **Simulation phase**: inference-only for 10,000 timesteps with frozen parameters. Results are saved to `data/` and all plots are generated in `figures/`.
 
 ### Generate Plots from Existing Data
 
@@ -85,42 +85,35 @@ This trains both expert and novice models for 10,000 timesteps (default), saves 
 python run_enactive_inference.py plot
 ```
 
-Generates 8 publication-quality figures from saved training results.
+Generates publication-quality figures from saved results. When available, plots use **simulation results** (inference-only) rather than training results; otherwise falls back to training results.
 
 ---
 
 ## Output
 
-### Training Results
-Saved to `data/`:
-- `training_results_expert_seed42.json`
-- `training_results_novice_seed42.json`
+### Results (saved to `data/`)
+- `training_results_expert_seed42.json` / `training_results_novice_seed42.json` — learning-phase trajectories
+- `simulation_results_expert_seed42.json` / `simulation_results_novice_seed42.json` — inference-only trajectories (used for figures when available)
 
-Each contains:
-- Full state/network/thoughtseed trajectories
-- Free energy history
-- Meta-awareness evolution
-- Transition statistics
-- Action prediction error summaries
+Each contains: state/network/thoughtseed histories, free energy, meta-awareness, transition statistics, prediction errors.
 
-### Plots
-Generated in `figures/`:
+### Plots (generated in `figures/`)
+**Convergence (FigS1):**
+- `FigS1_Convergence_Expert.pdf`, `FigS1_Convergence_Novice.pdf` — learning vs inference-only stability, cumulative state occupancy
 
-**Convergence:**
-- `FigS1_Convergence_Expert.pdf` - Loss/free-energy convergence, state occupancy
-- `FigS1_Convergence_Novice.pdf`
+**Comparison (Fig 3):**
+- `fig3a.pdf` — Network activation profiles across states (Expert vs Novice)
+- `fig3b.pdf` — Dwell times per state (timesteps)
+- `fig3c.pdf` — State transition probability matrices
 
-**Comparison:**
-- `fig3a.pdf` - Network profiles across states (Expert vs Novice)
-- `fig3b.pdf` - Dwell times per state (timesteps)
-- `fig3c.pdf` - State transition probability matrices
+**Hierarchy (Fig 4 & 6):**
+- `fig4a.pdf`, `fig4b.pdf` — 3-layer hierarchical dynamics (L3 meta-awareness, L2 dominant thoughtseed, L1 networks)
+- `fig6a.pdf`, `fig6b.pdf` — Same with continuous thoughtseed traces
 
-**Dynamics:**
-- `fig4a.pdf` - 3-layer hierarchical dynamics over time
-- `fig4b.pdf`
+**State space (Fig 5):**
+- `fig5.pdf` — PCA trajectories (L2 thoughtseeds + L1 networks)
 
-**State Space:**
-- `fig5.pdf` - PCA trajectories across the hierarchy (L2 thoughtseeds + L1 networks)
+**Tail window:** Plots and transition/dwell statistics use the last 2,000 steps (converged regime).
 
 ---
 
@@ -138,11 +131,11 @@ Layer 2 compresses 4 network activations -> 5 thoughtseeds, making neural state 
 Layer 2 predicts next-step network activations from (x_t, z_t). This provides a prospective signal for policy scoring (stay/switch), and supplies forward surprisal for precision calibration.
 
 ### 4. BPTT Learning
-Backpropagation Through Time optimizes:
+Backpropagation Through Time (window 25 steps) optimizes:
 - Encoder/decoder (latent structure learning)
 - Forward model (dynamics prediction)
-- Loss = VFE + forward prediction error + alpha_rec * recognition loss
-- Sensory precision is derived from forward prediction error
+- Loss = VFE + S_forward + alpha_rec * L_rec (L_rec = MSE(encode(x), z*))
+- alpha_rec set adaptively per BPTT window as mean(VFE)/mean(L_rec)
 
 ### 5. Expert vs Novice Phenotypes
 **Expert:**
@@ -159,10 +152,10 @@ Backpropagation Through Time optimizes:
 
 ## Key Results
 
-**Behavioral Signatures (run-dependent):**
-- Expert typically shows lower free energy and a more stable breath-focus basin
-- Novice shows broader excursions and shallower basins
-- See `data/` and `figures/` for the current run's quantitative summaries
+**Behavioral signatures (run-dependent, from simulation tail window):**
+- Expert: longer Breath Focus dwell, shorter MW/MA/RA dwell; lower DMN, stronger DAN/FPN; tighter recovery loop (MW→MA→RA→BF)
+- Novice: shorter BF, longer MW; DMN-dominant; more diffuse transitions
+- See `data/` and `figures/` for quantitative summaries from the current run
 
 ---
 
@@ -170,27 +163,24 @@ Backpropagation Through Time optimizes:
 
 ```
 .
-+-- run_enactive_inference.py  # Main entry point
-+-- model/                     # Core Logic
-|   +-- training_loop.py       # MeditationTrainer class
++-- run_enactive_inference.py  # Main entry point (run | plot)
++-- model/                     # Core logic
+|   +-- training_loop.py       # MeditationTrainer (EM, BPTT, simulate)
+|   +-- phenotype.py           # Expert/novice phenotype definitions
 |   +-- l1_generative_process.py  # Layer1Process (MVOU dynamics)
-|   +-- l2_recognition.py         # Layer2Agent (encoder/decoder + forward model)
-|   +-- l3_metacognition.py       # Layer3Monitor (meta-awareness tracking)
+|   +-- l2_recognition.py         # Layer2Agent (encoder/decoder/forward model)
+|   +-- l3_metacognition.py       # Layer3Monitor (meta-awareness, policy selection)
 |   +-- markov_blankets.py        # Markov blanket interfaces
-+-- utils/                     # Utilities & Config
-|   +-- config.py              # Constants and universal priors
++-- utils/
+|   +-- config.py              # Constants, priors, BPTT_STEPS, TAIL_STEPS, etc.
 |   +-- math_utils.py          # Tensor/math operations
-+-- data/                      # Training results (JSON)
++-- data/                      # Training and simulation results (JSON)
 +-- figures/                   # Generated figures (PDF)
-+-- viz/                       # Plotting modules
-    +-- analysis.py
-    +-- analysis_utils.py
-    +-- attractors.py
-    +-- convergence.py
-    +-- diagnostics.py
-    +-- hierarchy.py
-    +-- radar_plot.py
-    +-- plotting_utils.py
++-- scripts/                   # Utilities (e.g. extract_results_stats.py)
++-- viz/                       # Plotting
+    +-- analysis.py, analysis_utils.py
+    +-- attractors.py, convergence.py, diagnostics.py
+    +-- hierarchy.py, radar_plot.py, plotting_utils.py
 ```
 
 ---
@@ -210,7 +200,7 @@ Continuous-time dynamics:
 ```
 dx = -Theta(s) (x - mu_x(s)) dt + sigma dW
 ```
-with `sigma^2 = NOISE_LEVEL`. Euler integration is used with state-specific `Theta(s)`.
+with `sigma^2 = NOISE_LEVEL`. Euler-Maruyama integration (2 substeps per step). When L2 provides descending prediction mu_x, attractor is mixed: mu <- (1-m_t)mu + m_t mu_x. State transitions are dwell-timed; after dwell elapses, transition probability is tilde{u}_t = max(u_t, 1/n); exit priors reweighted by policy posterior.
 
 ### Layer 2: Recognition + Variational Inference
 Components:
@@ -223,85 +213,74 @@ Per-step VFE:
 F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2
 ```
 
-Fixed-step VI (2 steps, lr=0.2) optimizes F(z):
-```
-z_init = 0.5 * z_prev + 0.5 * z_rec
-z_init = pi_x * z_init + (1 - pi_x) * mu_z(s)
-```
-where `pi_x = clip(precision_sensory)` in [0, 1]. VI refinement is triggered when
-latent mismatch exceeds a threshold (`VI_MISMATCH_THRESHOLD`).
+Fixed-step VI (config: VI_STEPS, VI_LR) minimizes F(z). Encoder provides initialization; state-dependent perturbation applied before VI; result clipped to [0.05, 0.9]. VI refinement triggered when latent mismatch exceeds VI_MISMATCH_THRESHOLD.
 
 ### Sensory Precision (from forward surprisal)
-Forward prediction and surprisal (S_forward):
+Forward prediction and surprisal:
 ```
-x_pred = f(x_{t-1}, a_{t-1})
-S_forward = ||x_t - x_pred||^2
+x_pred = f(x_{t-1}, mu_{t-1})
+S_forward = (1/D_x) ||x_t - x_pred||^2
 ```
-We map forward surprisal to sensory precision (`precision_sensory`), so higher surprise implies lower precision.
-Precision update (Option A, Act-Inf aligned):
+Precision (weights reconstruction term in VFE; clipped in code):
 ```
-precision_sensory = sigmoid(-(S_forward - mean)/std)
-precision_sensory = clip(precision_sensory, CLIP_MIN, CLIP_MAX)
+pi_x = exp(-S_forward / (sigma^2_fwd + epsilon))
 ```
+with sigma^2_fwd an EMA of S_forward.
 
 ### Layer 3: Meta-Awareness
-Meta-awareness is an EMA of forward predictability:
+Meta-awareness m_t is a gated divergence between policy evidence and habitual priors:
 ```
-meta = EMA(sigmoid(-(S_forward - mean)/std))
+q_evid(pi) = softmax(-G_tilde(pi)),  q_habit(pi) = softmax(bar{l_pi})
+gate = q_t(MA) + q_t(RA)
+m_t = (1 - exp(-KL(q_evid || q_habit))) * gate
 ```
+EMA-smoothed for stability. Higher m_t shifts policy selection from habits toward evidence.
 
-### Policy Evaluation (EFE)
-EFE combines pragmatic and epistemic components (per policy set, z-normalized):
+### Policy Evaluation (L2)
+Expected free energy (z-scored across candidates):
 ```
-G(pi) = w_prag * ||x_pred(pi) - C_{s_pi}||^2 - w_epi * I(pi)
+G(pi) = ||x_pred(pi) - C_{s_pi}||^2 - I(pi)
 ```
-where `I(pi)` is an information-gain proxy from the predicted state in thoughtseed space.
+Pragmatic: deviation from preferred network target. Epistemic: I(pi) in thoughtseed space.
 
-### Policy Inference (L2)
-Candidate policies: stay in `s` or transition to each other state.
-Hazard from dwell:
+### Policy Selection (L3)
+Dwell-aware prior: rho_t = d_t^2 (dwell progress squared)
 ```
-h = clip(dwell_progress^2)
+E(stay) = 1 - rho_t,   E(s') = rho_t * P(s'|s)
 ```
-Policy prior:
+Policy posterior (L3):
 ```
-E(stay) = 1 - h
-E(s') = h * P(s' | s)
+q(pi) = softmax(log E(pi) + (1-m_t) bar{l_pi} - m_t r_t G_tilde(pi))
 ```
-Policy posterior (fixed gamma):
-```
-q(pi) = softmax(log E(pi) + beta * l_pi(s) - gamma * G(pi))
-```
-with entropy-adaptive policy precision
-```
-gamma = gamma0 * (1 - H(q) / log(|Pi|))
-```
-Action target:
+bar{l_pi} = belief-weighted habit prior; r_t = evidence reliability (from policy cost dispersion).
+
+### Action (L2)
 ```
 mu = sum_pi q(pi) * mu_z(s_pi)
 mu_x = decode(mu)
 ```
+Transition drive: u_t = 1 - q(pi=stay). L1 uses tilde{u}_t = max(u_t, 1/n) as transition probability floor.
 
 ### Learning Objective
 Total loss:
 ```
-L_total = F + S_forward + alpha_rec * L_rec
+L_t = F_t + S_forward,t + alpha_rec * L_rec,t
 ```
-where `L_rec = MSE(encode(x), z*)` and `alpha_rec` is set per BPTT window as mean(VFE)/mean(L_rec).
+where `L_rec,t = MSE(encode(x_t), z*_t)`; alpha_rec set per BPTT window as mean(F)/mean(L_rec).
 
 ### Training Loop
-BPTT windows of 50 steps; gradients accumulated per window.
+BPTT windows of 25 steps; gradients accumulated per window. At BPTT boundaries, blanket sensory states reset; L1 state and L2 thoughtseed activations preserved.
 
 ---
 
 ## Configuration
 
-Edit `config.py` to modify:
+Edit `utils/config.py` to modify:
 - Network/state parameters (Theta matrices, mu attractors)
 - Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
-- Learning rates (0.01 - 0.02)
-- Process noise (NOISE_LEVEL)
-- Phenotype differences (learning rate + VI refinement state set)
+- Dwell ranges (DWELL_TIMES) and transition priors (STATE_TRANSITION_PROBS)
+- Learning rates (0.01 novice, 0.02 expert)
+- Process noise (NOISE_LEVEL), BPTT_STEPS (25), TAIL_STEPS (2000)
 
 ---
 
@@ -316,12 +295,11 @@ Fixed random seed (42) ensures identical results across runs. Training is stocha
 If you use this model in your research:
 
 ```
-@article{enactive_inference_mental_action_via_vipassana_simulation_2026,
-  author = {Author, A. and Author, B. and Author, C.},
-  title = {Attentional Agents and Enactive Inference: Computational Phenomenology of Mental Action},
-  journal = {}
-  author={[Authors]},
-  year={2026}
+@article{enactive_inference_thoughtseeds_2026,
+  author = {Kavi, P. C. and Friedman, D. A. and Patow, G.},
+  title = {Thoughtseeds as Latent Causes in Enactive Inference: A Computational Phenomenology of Focused-Attention Meditation},
+  journal = {Proc. R. Soc. A},
+  year = {2026}
 }
 ```
 This repository is a significant step forward in enhancing the Thoughtseeds Framework for Enactive Inference. It builds upon the foundational work of the Thoughtseeds Framework, adapting code snippets from below:

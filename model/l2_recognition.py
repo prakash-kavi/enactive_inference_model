@@ -18,6 +18,7 @@ from utils.config import (
     get_exit_transition_probs, get_policy_candidate_order,
     VI_STEPS, VI_LR, VI_MISMATCH_THRESHOLD,
     Z_NOISE_STD_BY_STATE,
+    STATE_BELIEF_VAR,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -253,13 +254,8 @@ class Layer2Agent(nn.Module):
                 prior = self.mu_params[state].detach()
                 dists.append(mse_error(z, prior))
             dist_vec = torch.stack(dists)
-            if dist_vec.numel() > 1:
-                mean = dist_vec.mean()
-                std = dist_vec.std(unbiased=False)
-                if float(std.item()) > EPS:
-                    dist_vec = (dist_vec - mean) / (std + EPS)
-            scale = 1.0
-            logits = -dist_vec / scale
+            var = max(float(STATE_BELIEF_VAR), EPS)
+            logits = -0.5 * dist_vec / var
             probs = torch.softmax(logits, dim=0)
             return {
                 state: float(probs[i].item())

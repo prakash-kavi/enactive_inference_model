@@ -113,6 +113,9 @@ VI_LR = 0.2
 # Trigger VI refinement when latent mismatch exceeds this threshold (MSE in z-space)
 VI_MISMATCH_THRESHOLD = 0.02
 
+# State-belief likelihood variance (MSE units) for q(s|z) softmax
+STATE_BELIEF_VAR = 0.1
+
 # State-dependent latent noise for stochastic inference (posterior variance proxy)
 Z_NOISE_STD_BY_STATE = {
     "breath_focus": 0.02,
@@ -170,6 +173,7 @@ LEARNING_RATES = {
     "novice": 0.01,
     "expert": 0.02,
 }
+
 
 def get_policy_candidate_order(current_state: str):
     """Return policy candidate order: [current_state, ...others in STATES order].

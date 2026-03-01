@@ -31,12 +31,16 @@ class Layer3Monitor(nn.Module):
         self.policy_lr = 1.0 / self.bptt_steps
         self._meta_alpha = 1.0 / self.bptt_steps
 
-    def reset(self) -> None:
-        """Reset monitor state for an isolated training run."""
+    def reset(self, preserve_habit: bool = False) -> None:
+        """Reset monitor state for a new run.
+
+        Set preserve_habit=True to keep learned habit priors across runs.
+        """
         self.meta_awareness_ema = None
         self.q_pi_ema = None
         self.state_belief_ema = None
-        self._learned_alpha.clear()
+        if not preserve_habit:
+            self._learned_alpha.clear()
         self.blanket_l2l3.reset()
 
     def smooth_state_belief(self, state_belief: Optional[dict]) -> Optional[dict]:
@@ -114,8 +118,14 @@ class Layer3Monitor(nn.Module):
         log_prior = np.log(np.array(priors, dtype=float))
         habit_scale = float(np.clip(1.0 - float(meta_precision), 0.0, 1.0))
         log_prior = log_prior + self._habit_log_prior(state_belief, scale=habit_scale)
-        g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
-        gamma_eff = max(EPS, float(meta_precision))
+        g_raw = np.array(g_vals, dtype=float)
+        g_array = normalize_scores(g_raw, EPS)
+        # Evidence reliability: coefficient of variation (scale-free)
+        mean_abs = float(np.mean(np.abs(g_raw))) if g_raw.size else 0.0
+        std_raw = float(np.std(g_raw)) if g_raw.size else 0.0
+        cv = std_raw / (mean_abs + EPS)
+        evidence_gain = cv / (cv + 1.0)  # in (0, 1), lower when evidence is flat
+        gamma_eff = max(EPS, float(meta_precision) * evidence_gain)
         q_pi = policy_posterior(log_prior, g_array, gamma_eff)
         return q_pi
 

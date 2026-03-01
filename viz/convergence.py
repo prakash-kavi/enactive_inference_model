@@ -54,94 +54,162 @@ def cumulative_state_fraction(states: List[str]) -> Dict[str, np.ndarray]:
     return fractions
 
 
-def plot_convergence(results: Dict, save_path: str, window: int = 25):
-    """Generate convergence diagnostic plot.
-    
-    Args:
-        results: Training results dict with full trajectory
-        save_path: Path to save figure
-        window: Rolling window size for smoothing
-    """
-    tail_span = TAIL_STEPS  # Use global TAIL_STEPS for stable window shading
-    set_plot_style()
-    
-    # Extract data
-    free_energy = np.asarray(results['free_energy_history'], dtype=float)
-    loss_history = np.asarray(results.get('loss_history', []), dtype=float)
-    states = results['state_history']
-    level = results['experience_level']
-    
+def _extract_primary_series(results: Dict):
+    free_energy = np.asarray(results["free_energy_history"], dtype=float)
+    loss_history = np.asarray(results.get("loss_history", []), dtype=float)
     use_loss = loss_history.size == free_energy.size and loss_history.size > 0
     primary = loss_history if use_loss else free_energy
+    label = "Loss" if use_loss else "Free energy"
+    return primary, label
 
+
+def _plot_single_convergence_pair(
+    ax_loss,
+    ax_occ,
+    results: Dict,
+    window: int,
+    panel_title: str,
+    tail_span: int,
+):
+    primary, label = _extract_primary_series(results)
+    states = results["state_history"]
     steps = np.arange(primary.size)
     highlight_start = max(0, primary.size - tail_span)
-    
-    fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
-    
-    # Panel 1: Free energy trend
-    ax = axes[0]
-    ax.plot(
+
+    ax_loss.plot(
         steps,
         primary,
         color="#cccccc",
         linewidth=1.0,
-        label="Total loss (raw)" if use_loss else "Free energy (raw)"
+        label=f"{label} (raw)",
     )
-    
-    fe_mean = rolling_mean(primary, window)
-    fe_std = rolling_std(primary, window)
-    ax.plot(steps, fe_mean, color="#E74C3C", linewidth=2.0, label=f"Rolling mean (w={window})")
-    
-    valid = ~np.isnan(fe_mean)
+
+    series_mean = rolling_mean(primary, window)
+    series_std = rolling_std(primary, window)
+    ax_loss.plot(
+        steps,
+        series_mean,
+        color="#E74C3C",
+        linewidth=2.0,
+        label=f"Rolling mean (w={window})",
+    )
+
+    valid = ~np.isnan(series_mean)
     if np.any(valid):
-        lower = (fe_mean - fe_std)[valid]
-        upper = (fe_mean + fe_std)[valid]
-        ax.fill_between(steps[valid], lower, upper, color="#E74C3C", alpha=0.18)
-    
-    ax.set_ylabel("Loss" if use_loss else "Free energy", fontweight="bold")
-    ax.set_title(f"{'Loss' if use_loss else 'Free energy'} convergence ({level.title()})",
-                 fontsize=14, fontweight="bold")
-    ax.legend(loc="upper right", frameon=True)
-    if use_loss and primary.size:
+        lower = (series_mean - series_std)[valid]
+        upper = (series_mean + series_std)[valid]
+        ax_loss.fill_between(steps[valid], lower, upper, color="#E74C3C", alpha=0.18)
+
+    ax_loss.set_ylabel(label, fontweight="bold")
+    ax_loss.set_title(f"{panel_title}: {label}", fontsize=12, fontweight="bold")
+    ax_loss.legend(loc="upper right", frameon=True)
+    if primary.size:
         y_min = np.nanmin(primary)
         y_max = np.nanmax(primary)
         if np.isfinite(y_min) and np.isfinite(y_max):
             span = y_max - y_min
             pad = 0.05 * span if span > 0 else 0.05 * max(abs(y_max), 1.0)
-            ax.set_ylim(y_min - pad, y_max + pad)
-    
-    # Panel 2: Cumulative state occupancy
-    ax = axes[1]
+            ax_loss.set_ylim(y_min - pad, y_max + pad)
+
     fractions = cumulative_state_fraction(states)
     for state in STATES:
-        ax.plot(steps, fractions[state], color=STATE_COLORS[state], 
-               linewidth=1.8, label=STATE_SHORT_NAMES[state])
-    
-    ax.set_ylabel("Cumulative fraction", fontweight="bold")
-    ax.set_xlabel("Timestep", fontweight="bold")
-    ax.set_ylim(0.0, 1.0)
-    ax.set_title("Cumulative state occupancy", fontsize=14, fontweight="bold")
-    ax.legend(loc="lower right", frameon=True)
-    
-    # Highlight tail window
+        ax_occ.plot(
+            steps,
+            fractions[state],
+            color=STATE_COLORS[state],
+            linewidth=1.6,
+            label=STATE_SHORT_NAMES[state],
+        )
+
+    ax_occ.set_ylabel("Cumulative fraction", fontweight="bold")
+    ax_occ.set_xlabel("Timestep", fontweight="bold")
+    ax_occ.set_ylim(0.0, 1.0)
+    ax_occ.set_title(f"{panel_title}: Cumulative state occupancy", fontsize=12, fontweight="bold")
+    ax_occ.legend(loc="lower right", frameon=True)
+
     if highlight_start > 0:
-        for ax in axes:
-            ax.axvspan(highlight_start, primary.size, color="#d0d0d0", alpha=0.7, label="Tail window")
+        for ax in (ax_loss, ax_occ):
+            ax.axvspan(
+                highlight_start,
+                primary.size,
+                color="#d0d0d0",
+                alpha=0.7,
+                label="Tail window",
+            )
             handles, labels = ax.get_legend_handles_labels()
             dedup = {}
             for handle, label in zip(handles, labels):
                 dedup[label] = handle
             ax.legend(list(dedup.values()), list(dedup.keys()), loc="best", frameon=True)
-    
-    fig.suptitle(f"Convergence diagnostics ({level.title()})", fontsize=16, fontweight="bold")
-    plt.tight_layout(rect=[0, 0, 1, 0.97])
-    
-    save_figure(fig, Path(save_path), "Convergence")
-    plt.close(fig)
-    
-    # Log tail statistics
+
     if primary.size and highlight_start < primary.size:
         tail = primary[highlight_start:]
-        metric = "loss" if use_loss else "F"
-        print(f"    {level.title()} tail (last {tail_span} steps): mean {metric}={tail.mean():.4f}, std={tail.std(ddof=0):.4f}")
+        metric = "loss" if label == "Loss" else "F"
+        level = results.get("experience_level", "unknown").title()
+        print(
+            f"    {level} {panel_title.lower()} tail (last {tail_span} steps): "
+            f"mean {metric}={tail.mean():.4f}, std={tail.std(ddof=0):.4f}"
+        )
+
+
+def plot_convergence(results: Dict, save_path: str, window: int = 25):
+    """Generate a single convergence diagnostic plot (legacy)."""
+    tail_span = TAIL_STEPS
+    set_plot_style()
+
+    level = results.get("experience_level", "unknown")
+    fig, axes = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
+    _plot_single_convergence_pair(
+        axes[0],
+        axes[1],
+        results,
+        window,
+        panel_title="Convergence",
+        tail_span=tail_span,
+    )
+
+    fig.suptitle(f"Convergence diagnostics ({level.title()})", fontsize=16, fontweight="bold")
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    save_figure(fig, Path(save_path), "Convergence")
+    plt.close(fig)
+
+
+def plot_convergence_comparison(
+    learning_results: Dict,
+    simulation_results: Dict,
+    save_path: str,
+    window: int = 25,
+):
+    """Generate combined learning vs inference-only stability diagnostics."""
+    tail_span = TAIL_STEPS
+    set_plot_style()
+
+    level = learning_results.get("experience_level", simulation_results.get("experience_level", "unknown"))
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9), sharex="col")
+
+    _plot_single_convergence_pair(
+        axes[0, 0],
+        axes[1, 0],
+        learning_results,
+        window,
+        panel_title="Learning (E+M)",
+        tail_span=tail_span,
+    )
+    _plot_single_convergence_pair(
+        axes[0, 1],
+        axes[1, 1],
+        simulation_results,
+        window,
+        panel_title="Inference-only (E-step)",
+        tail_span=tail_span,
+    )
+
+    fig.suptitle(
+        f"Learning vs inference-only stability ({level.title()})",
+        fontsize=16,
+        fontweight="bold",
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    save_figure(fig, Path(save_path), "Convergence comparison")
+    plt.close(fig)
