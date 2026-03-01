@@ -32,27 +32,11 @@
 +--------------------------------------------------------------+
 ```
 
-## Core Components
-
-### States (4)
-- **BF** (Breath Focus): Stable attention on breath sensations
-- **MW** (Mind Wandering): Spontaneous thought proliferation
-- **MA** (Meta-Awareness): Recognition of mind-wandering
-- **RA** (Redirect Attention): Volitional return to breath
-
-### Networks (4)
-- **DMN** (Default Mode): Self-referential processing
-- **VAN** (Ventral Attention): Stimulus-driven detection
-- **DAN** (Dorsal Attention): Goal-directed control
-- **FPN** (Frontoparietal): Cognitive flexibility
-
-### Thoughtseeds (5)
-Compress high-dimensional neural state into interpretable mental content:
-- `attend_breath`: Breath sensation focus
-- `pain_discomfort`: Physical discomfort awareness
-- `pending_tasks`: Task-related rumination
-- `aha_moment`: Insight/creative thought
-- `equanimity`: Acceptance/non-reactivity
+## Summary
+- States: BF, MW, MA, RA (focused attention cycle)
+- Networks: DMN, VAN, DAN, FPN
+- Thoughtseeds: attend_breath, pain_discomfort, pending_tasks, aha_moment, equanimity
+- Two-phase protocol: learning (variational EM) then inference-only simulation; figures use the last 2,000 steps
 
 ---
 
@@ -117,46 +101,11 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 
 ---
 
-## Model Features
-
-### 1. Hierarchical Markov Blankets
-Each layer interfaces through Markov blankets defining:
-- **Sensory states**: What the layer observes from below
-- **Active states**: How the layer influences layers below
-In implementation, the L2↔L3 blanket carries state belief and policy evidence upward and sensory precision downward; the selected policy posterior is returned directly from L3 to L2 (not encoded as a blanket variable).
-
-### 2. Thoughtseeds as Tractable Bottleneck
-Layer 2 compresses 4 network activations -> 5 thoughtseeds, making neural state "tractable" for conscious access and metacognitive monitoring.
-
-### 3. Forward Dynamics Model
-Layer 2 predicts next-step network activations from (x_t, z_t). This provides a prospective signal for policy scoring (stay/switch), and supplies forward surprisal for precision calibration.
-
-### 4. BPTT Learning
-Backpropagation Through Time (window 25 steps) optimizes:
-- Encoder/decoder (latent structure learning)
-- Forward model (dynamics prediction)
-- Loss = VFE + S_forward + alpha_rec * L_rec (L_rec = MSE(encode(x), z*))
-- alpha_rec set adaptively per BPTT window as mean(VFE)/mean(L_rec)
-
-### 5. Expert vs Novice Phenotypes
-**Expert:**
-- Learns "Amortized Inference" (fast, intuitive state recognition).
-- Uses expert priors for dwell ranges and transition probabilities.
-- Stronger FPN activation, longer BF dwell times.
-
-**Novice:**
-- Weak Amortized Inference: Learns more slowly due to lower learning rate, so recognition is less reliable.
-- Uses novice priors for dwell ranges and transition probabilities.
-- DMN-dominant profile, shorter BF dwell times.
-
----
-
-## Key Results
-
-**Behavioral signatures (run-dependent, from simulation tail window):**
-- Expert: longer Breath Focus dwell, shorter MW/MA/RA dwell; lower DMN, stronger DAN/FPN; tighter recovery loop (MW→MA→RA→BF)
-- Novice: shorter BF, longer MW; DMN-dominant; more diffuse transitions
-- See `data/` and `figures/` for quantitative summaries from the current run
+## Mechanics (short)
+- Markov blankets: L2↔L3 carries state belief and policy evidence upward and sensory precision downward; policy posterior is returned directly from L3 to L2.
+- VFE: `F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2`
+- Policy posterior: `q(pi) = softmax(log E(pi) + (1-m_t) * lbar_pi - m_t * r_t * G_tilde(pi))`
+- VI refinement: mismatch-triggered; step count scales with uncertainty `(1 - precision)` up to `VI_STEPS`
 
 ---
 
@@ -186,94 +135,6 @@ Backpropagation Through Time (window 25 steps) optimizes:
 
 ---
 
-## Technical Details
-
-### Notation
-- `x in R^4`: L1 network activations ordered {DMN, VAN, DAN, FPN}
-- `z in [0,1]^5`: L2 thoughtseed activations
-- `s in {BF, MW, MA, RA}`: meditation state
-- `mu_x(s)`, `mu_z(s)`: state-conditioned network and thoughtseed priors
-- `Theta(s)`: state-conditioned coupling matrix
-- `NOISE_LEVEL`: L1 process noise variance
-
-### Layer 1: Generative Process (MVOU)
-Continuous-time dynamics:
-```
-dx = -Theta(s) (x - mu_x(s)) dt + sigma dW
-```
-with `sigma^2 = NOISE_LEVEL`. Euler-Maruyama integration (2 substeps per step). When L2 provides descending prediction mu_x, attractor is mixed: mu <- (1-m_t)mu + m_t mu_x. State transitions are dwell-timed; after dwell elapses, transition probability is tilde{u}_t = max(u_t, 1/n); exit priors reweighted by policy posterior.
-
-### Layer 2: Recognition + Variational Inference
-Components:
-- **Encoder**: `q(z|x)` (networks -> thoughtseeds)
-- **Decoder**: `p(x|z)` (likelihood / surprisal)
-- **Forward model**: `f(x, z)` predicts next networks
-
-Per-step VFE:
-```
-F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2
-```
-
-Fixed-step VI (config: VI_STEPS, VI_LR) minimizes F(z). Encoder provides initialization; state-dependent perturbation applied before VI; result clipped to [0.05, 0.9]. VI refinement is triggered when latent mismatch exceeds VI_MISMATCH_THRESHOLD, and the number of VI steps is scaled by uncertainty (1 - precision) so high precision yields fewer steps.
-
-### Sensory Precision (from forward surprisal)
-Forward prediction and surprisal:
-```
-x_pred = f(x_{t-1}, mu_{t-1})
-S_forward = (1/D_x) ||x_t - x_pred||^2
-```
-Precision (weights reconstruction term in VFE; clipped in code):
-```
-pi_x = exp(-S_forward / (sigma^2_fwd + epsilon))
-```
-with sigma^2_fwd an EMA of S_forward.
-
-### Layer 3: Meta-Awareness
-Meta-awareness m_t is a gated divergence between policy evidence and habitual priors:
-```
-q_evid(pi) = softmax(-G_tilde(pi)),  q_habit(pi) = softmax(bar{l_pi})
-gate = q_t(MA) + q_t(RA)
-m_t = (1 - exp(-KL(q_evid || q_habit))) * gate
-```
-EMA-smoothed for stability. Higher m_t shifts policy selection from habits toward evidence.
-
-### Policy Evaluation (L2)
-Expected free energy (z-scored across candidates):
-```
-G(pi) = ||x_pred(pi) - C_{s_pi}||^2 - I(pi)
-```
-Pragmatic: deviation from preferred network target. Epistemic: I(pi) in thoughtseed space.
-
-### Policy Selection (L3)
-Dwell-aware prior: rho_t = d_t^2 (dwell progress squared)
-```
-E(stay) = 1 - rho_t,   E(s') = rho_t * P(s'|s)
-```
-Policy posterior (L3):
-```
-q(pi) = softmax(log E(pi) + (1-m_t) bar{l_pi} - m_t r_t G_tilde(pi))
-```
-bar{l_pi} = belief-weighted habit prior; r_t = evidence reliability (from policy cost dispersion).
-
-### Action (L2)
-```
-mu = sum_pi q(pi) * mu_z(s_pi)
-mu_x = decode(mu)
-```
-Transition drive: u_t = 1 - q(pi=stay). L1 uses tilde{u}_t = max(u_t, 1/n) as transition probability floor.
-
-### Learning Objective
-Total loss:
-```
-L_t = F_t + S_forward,t + alpha_rec * L_rec,t
-```
-where `L_rec,t = MSE(encode(x_t), z*_t)`; alpha_rec set per BPTT window as mean(F)/mean(L_rec).
-
-### Training Loop
-BPTT windows of 25 steps; gradients accumulated per window. At BPTT boundaries, blanket sensory states reset; L1 state and L2 thoughtseed activations preserved.
-
----
-
 ## Configuration
 
 Edit `utils/config.py` to modify:
@@ -298,7 +159,7 @@ If you use this model in your research:
 ```
 @article{enactive_inference_thoughtseeds_2026,
   author = {Kavi, P. C. and Friedman, D. A. and Patow, G.},
-  title = {Thoughtseeds as Latent Causes in Enactive Inference: A Computational Phenomenology of Focused-Attention Meditation},
+  title = {Thoughtseeds as Latent Causes: A Computational Phenomenology of Focused-Attention Meditation},
   journal = {Proc. R. Soc. A},
   year = {2026}
 }
