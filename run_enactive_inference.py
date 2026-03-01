@@ -205,7 +205,7 @@ def _load_results():
             print(f"  Looking for: {expert_path}")
             print(f"  Looking for: {novice_path}")
             print("\nRun 'python run_enactive_inference.py run' first to generate results.")
-            return None, None
+            return None, None, None, None
 
     print(f"\nLoading results from {OUTPUT_DIR}/...")
     with open(expert_path, "r") as f:

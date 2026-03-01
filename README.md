@@ -12,7 +12,7 @@
 +------------------------------+-------------------------------+
                | Markov Blanket L2<->L3
                | Sensory: policy evidence G(pi), state belief
-               | Active:  policy posterior q(pi)
+               | Active:  sensory precision pi_x
 +------------------------------v-------------------------------+
 | Layer 2: Attentional Agent (Thoughtseeds)                    |
 | - Compresses neural dynamics into 5 thoughtseeds             |
@@ -95,7 +95,7 @@ Generates publication-quality figures from saved results. When available, plots 
 - `training_results_expert_seed42.json` / `training_results_novice_seed42.json` — learning-phase trajectories
 - `simulation_results_expert_seed42.json` / `simulation_results_novice_seed42.json` — inference-only trajectories (used for figures when available)
 
-Each contains: state/network/thoughtseed histories, free energy, meta-awareness, transition statistics, prediction errors.
+Each contains: state/network/thoughtseed histories, free energy, meta-awareness, and transition statistics.
 
 ### Plots (generated in `figures/`)
 **Convergence (FigS1):**
@@ -123,6 +123,7 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 Each layer interfaces through Markov blankets defining:
 - **Sensory states**: What the layer observes from below
 - **Active states**: How the layer influences layers below
+In implementation, the L2↔L3 blanket carries state belief and policy evidence upward and sensory precision downward; the selected policy posterior is returned directly from L3 to L2 (not encoded as a blanket variable).
 
 ### 2. Thoughtseeds as Tractable Bottleneck
 Layer 2 compresses 4 network activations -> 5 thoughtseeds, making neural state "tractable" for conscious access and metacognitive monitoring.
@@ -213,7 +214,7 @@ Per-step VFE:
 F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2
 ```
 
-Fixed-step VI (config: VI_STEPS, VI_LR) minimizes F(z). Encoder provides initialization; state-dependent perturbation applied before VI; result clipped to [0.05, 0.9]. VI refinement triggered when latent mismatch exceeds VI_MISMATCH_THRESHOLD.
+Fixed-step VI (config: VI_STEPS, VI_LR) minimizes F(z). Encoder provides initialization; state-dependent perturbation applied before VI; result clipped to [0.05, 0.9]. VI refinement is triggered when latent mismatch exceeds VI_MISMATCH_THRESHOLD, and the number of VI steps is scaled by uncertainty (1 - precision) so high precision yields fewer steps.
 
 ### Sensory Precision (from forward surprisal)
 Forward prediction and surprisal:
