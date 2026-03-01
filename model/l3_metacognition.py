@@ -9,38 +9,49 @@ import numpy as np
 import torch.nn as nn
 from typing import Optional, Dict, List
 
-from utils.config import (
-    DEFAULT_DT,
-    EPS,
-    STATES,
-    L3_META_TAU,
-    get_l3_policy_lr,
-    get_l3_policy_strength,
-)
+from utils.config import EPS, STATES
 from .markov_blankets import MarkovBlanketL2L3
 from utils.math_utils import clip_probability, normalize_scores, policy_posterior, softmax
 
 class Layer3Monitor(nn.Module):
     """Metacognitive monitor: policy selection + meta-awareness (L3 -> L2)."""
 
-    def __init__(self, blanket_l2l3: Optional[MarkovBlanketL2L3] = None,
-                 experience_level: str = "expert"):
+    def __init__(
+        self,
+        blanket_l2l3: Optional[MarkovBlanketL2L3] = None,
+        bptt_steps: int = 25,
+    ):
         super().__init__()
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3()
         self.meta_awareness_ema = None
+        self.q_pi_ema = None
+        self.state_belief_ema = None
         self._learned_alpha: dict = {}
-        self.policy_lr = get_l3_policy_lr(experience_level)
-        self.policy_strength = get_l3_policy_strength(experience_level)
-        if L3_META_TAU > 0:
-            self._meta_alpha = float(np.clip(DEFAULT_DT / L3_META_TAU, 0.0, 1.0))
-        else:
-            self._meta_alpha = 1.0
+        self.bptt_steps = max(1, int(bptt_steps))
+        self.policy_lr = 1.0 / self.bptt_steps
+        self._meta_alpha = 1.0 / self.bptt_steps
 
     def reset(self) -> None:
         """Reset monitor state for an isolated training run."""
         self.meta_awareness_ema = None
+        self.q_pi_ema = None
+        self.state_belief_ema = None
         self._learned_alpha.clear()
         self.blanket_l2l3.reset()
+
+    def smooth_state_belief(self, state_belief: Optional[dict]) -> Optional[dict]:
+        """EMA-smooth state belief for stable GNW gating."""
+        if not state_belief:
+            return state_belief
+        weights = self._normalize_belief(state_belief)
+        if self.state_belief_ema is None:
+            self.state_belief_ema = weights
+        else:
+            alpha = self._meta_alpha
+            self.state_belief_ema = (1.0 - alpha) * self.state_belief_ema + alpha * weights
+            self.state_belief_ema = np.clip(self.state_belief_ema, EPS, 1.0)
+            self.state_belief_ema = self.state_belief_ema / self.state_belief_ema.sum()
+        return {s: float(self.state_belief_ema[i]) for i, s in enumerate(STATES)}
 
     def _normalize_belief(self, state_belief: Optional[dict]) -> np.ndarray:
         """Return normalized belief weights over STATES (uniform if missing)."""
@@ -61,7 +72,7 @@ class Layer3Monitor(nn.Module):
         alpha = alpha / alpha.sum()
         return np.log(alpha)
 
-    def _habit_log_prior(self, state_belief: Optional[dict]) -> np.ndarray:
+    def _habit_log_prior(self, state_belief: Optional[dict], scale: float = 1.0) -> np.ndarray:
         """Return habit log-prior adjustment weighted by state belief."""
         weights = self._normalize_belief(state_belief)
         log_adj = np.zeros(4, dtype=np.float64)
@@ -69,10 +80,14 @@ class Layer3Monitor(nn.Module):
             if weight <= 0.0:
                 continue
             log_adj += weight * self._get_prior_for_state(state)
-        return self.policy_strength * log_adj
+        scale = float(np.clip(scale, 0.0, 1.0))
+        return scale * log_adj
 
     def update_policy_state(self, state_belief: Optional[dict], q_pi: np.ndarray) -> None:
-        """Update learned habit prior from inferred state belief (Dirichlet-like EMA)."""
+        """Update learned habit prior from inferred state belief (Dirichlet-like EMA).
+
+        This is treated as an M-step update using E-step sufficient statistics.
+        """
         q = np.array(q_pi, dtype=np.float64)
         if q.size != 4:
             return
@@ -97,23 +112,48 @@ class Layer3Monitor(nn.Module):
         if meta_precision is None:
             raise ValueError("meta_precision must be provided for policy selection.")
         log_prior = np.log(np.array(priors, dtype=float))
-        log_prior = log_prior + self._habit_log_prior(state_belief)
+        habit_scale = float(np.clip(1.0 - float(meta_precision), 0.0, 1.0))
+        log_prior = log_prior + self._habit_log_prior(state_belief, scale=habit_scale)
         g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
         gamma_eff = max(EPS, float(meta_precision))
         q_pi = policy_posterior(log_prior, g_array, gamma_eff)
         return q_pi
 
+    def smooth_policy(self, q_pi: np.ndarray) -> np.ndarray:
+        """EMA-smooth policy posterior (GNW-style broadcast stability)."""
+        q = np.array(q_pi, dtype=np.float64)
+        if q.size == 0:
+            return q
+        q = np.clip(q, EPS, 1.0)
+        q = q / q.sum()
+        if self.q_pi_ema is None:
+            self.q_pi_ema = q
+        else:
+            alpha = self._meta_alpha
+            self.q_pi_ema = (1.0 - alpha) * self.q_pi_ema + alpha * q
+            self.q_pi_ema = np.clip(self.q_pi_ema, EPS, 1.0)
+            self.q_pi_ema = self.q_pi_ema / self.q_pi_ema.sum()
+        return self.q_pi_ema
+
     def update_meta_awareness_from_conflict(
         self,
         g_vals: List[float],
         state_belief: Optional[dict] = None,
+        gate_belief: Optional[dict] = None,
     ) -> float:
-        """Second-order belief: policy--prior divergence between evidence and habit."""
+        """Second-order belief: policy--prior divergence gated by detection state belief."""
+        gate = 0.0
+        belief_for_gate = gate_belief if gate_belief is not None else state_belief
+        if belief_for_gate:
+            q_ma = float(belief_for_gate.get('meta_awareness', 0.0))
+            q_ra = float(belief_for_gate.get('redirect_attention', 0.0))
+            gate = clip_probability(q_ma + q_ra)
+
         if not g_vals:
             raw = 0.0
         else:
             g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
-            log_habit = self._habit_log_prior(state_belief)
+            log_habit = self._habit_log_prior(state_belief, scale=1.0)
             q_evid = policy_posterior(np.zeros_like(log_habit), g_array, 1.0)
             q_habit = softmax(log_habit)
             q_evid = np.clip(q_evid, EPS, 1.0)
@@ -121,7 +161,8 @@ class Layer3Monitor(nn.Module):
             q_evid = q_evid / q_evid.sum()
             q_habit = q_habit / q_habit.sum()
             kl = float(np.sum(q_evid * np.log(q_evid / q_habit)))
-            raw = float(1.0 - np.exp(-kl))
+            raw_conflict = float(1.0 - np.exp(-kl))
+            raw = max(raw_conflict * gate, 0.05)
 
         raw = clip_probability(raw)
         if self.meta_awareness_ema is None:

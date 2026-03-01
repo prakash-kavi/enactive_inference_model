@@ -15,9 +15,9 @@ from typing import Dict, Optional
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    Z_NOISE_STD_BY_STATE,
     get_exit_transition_probs, get_policy_candidate_order,
     VI_STEPS, VI_LR, VI_MISMATCH_THRESHOLD,
+    Z_NOISE_STD_BY_STATE,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE

@@ -22,7 +22,7 @@ from utils.config import STATES, NETWORKS, THOUGHTSEEDS
 
 from viz.convergence import plot_convergence
 from viz.radar_plot import plot_comparison
-from viz.hierarchy import plot_hierarchy
+from viz.hierarchy import plot_hierarchy, plot_hierarchy_continuous
 from viz.attractors import plot_attractor_pca
 from viz.diagnostics import plot_fe_and_dwell, plot_transitions
 
@@ -127,6 +127,12 @@ def generate_plots(expert_results, novice_results):
 
     print("  - fig4b.pdf")
     plot_hierarchy(expert_tail, str(PLOT_DIR / "fig4b.pdf"), "Expert")
+
+    print("  - fig6a.pdf")
+    plot_hierarchy_continuous(novice_tail, str(PLOT_DIR / "fig6a.pdf"), "Novice")
+
+    print("  - fig6b.pdf")
+    plot_hierarchy_continuous(expert_tail, str(PLOT_DIR / "fig6b.pdf"), "Expert")
 
     print("  - fig5.pdf")
     plot_attractor_pca(novice_tail, expert_tail, str(PLOT_DIR / "fig5.pdf"))

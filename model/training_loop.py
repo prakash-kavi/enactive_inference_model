@@ -2,7 +2,8 @@
 
 Timescale separation (Dempster et al., 1977; Friston et al., 2019):
 - E-step (every t): perceptual inference via VI + policy selection. No parameter gradients.
-- M-step (every T=50 steps): parameter update via BPTT over the accumulated buffer.
+- M-step (every T steps): parameter update via BPTT over the accumulated buffer,
+  plus habit-prior updates from E-step sufficient statistics.
 """
 
 import numpy as np
@@ -15,7 +16,7 @@ from pathlib import Path
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    DEFAULT_DT, PRECISION_TAU,
+    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
@@ -35,6 +36,7 @@ class MeditationTrainer:
         self.phenotype = phenotype if phenotype is not None else EXPERT_PHENOTYPE
         self.level = self.phenotype.level
         self.seed = seed
+        self.bptt_steps = int(BPTT_STEPS)
 
         torch.manual_seed(seed)
         np.random.seed(seed)
@@ -48,7 +50,10 @@ class MeditationTrainer:
             blanket_l1l2=self.blanket_l1l2,
             blanket_l2l3=self.blanket_l2l3
         )
-        self.monitor = Layer3Monitor(blanket_l2l3=self.blanket_l2l3, experience_level=self.level)
+        self.monitor = Layer3Monitor(
+            blanket_l2l3=self.blanket_l2l3,
+            bptt_steps=self.bptt_steps,
+        )
 
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.phenotype.learning_rate)
         
@@ -129,7 +134,8 @@ class MeditationTrainer:
             )
 
             # Update L2->L3 sensory interface for policy selection
-            state_belief = self.agent.infer_state_belief(activations)
+            state_belief_raw = self.agent.infer_state_belief(activations)
+            state_belief = self.monitor.smooth_state_belief(state_belief_raw)
             policy_eval = self.agent.evaluate_policies(new_state)
             self.blanket_l2l3.update_sensory_states({
                 'state_belief':      state_belief,
@@ -142,6 +148,7 @@ class MeditationTrainer:
             meta_awareness = self.monitor.update_meta_awareness_from_conflict(
                 g_vals=policy_eval['g_vals'],
                 state_belief=state_belief,
+                gate_belief=state_belief_raw,
             )
             q_pi = self.monitor.select_policy(
                 g_vals=policy_eval['g_vals'],
@@ -149,7 +156,14 @@ class MeditationTrainer:
                 state_belief=state_belief,
                 meta_precision=meta_awareness,
             )
-            self.monitor.update_policy_state(state_belief, q_pi)
+            q_pi = self.monitor.smooth_policy(q_pi)
+            q_pi = np.array(q_pi, dtype=float)
+            if not np.all(np.isfinite(q_pi)) or q_pi.sum() <= 0.0:
+                raise ValueError(f"Invalid policy posterior at t={t}: {q_pi}")
+            q_pi = q_pi / q_pi.sum()
+            sb_vals = np.array(list(state_belief.values()), dtype=float)
+            if sb_vals.size > 0 and (not np.all(np.isfinite(sb_vals)) or sb_vals.sum() <= 0.0):
+                raise ValueError(f"Invalid state belief at t={t}: {state_belief}")
 
             prescription = self.agent.action_from_policy(
                 q_pi=q_pi,
@@ -161,6 +175,7 @@ class MeditationTrainer:
                 'mu_x': prescription['mu_x'],
                 'transition_drive': prescription['transition_drive'],
                 'policy_state_probs': prescription.get('policy_state_probs'),
+                'meta_precision': meta_awareness,
             })
 
             # Update rolling store for next E-step
@@ -177,6 +192,8 @@ class MeditationTrainer:
                 'z_star':      activations,          # already detached by VI
                 'state':       new_state,
                 'precision_sensory': precision_sensory,
+                'state_belief': state_belief,
+                'policy_posterior': q_pi.tolist() if hasattr(q_pi, "tolist") else list(q_pi),
             }
 
             # Metrics (float approximation of per-step loss for diagnostics)
@@ -186,6 +203,10 @@ class MeditationTrainer:
             }
             ts_acts      = activations.cpu().numpy().tolist()
             dominant_idx = int(np.argmax(ts_acts))
+            transition_drive = float(prescription['transition_drive'])
+            transition_floor = 1.0 / max(self.process.current_max_dwell, 1)
+            transition_prob = max(transition_drive, transition_floor)
+            policy_entropy = float(-np.sum(q_pi * np.log(np.clip(q_pi, EPS, 1.0))))
             metrics = {
                 'timestamp':               t,
                 'free_energy':             free_energy_val,
@@ -195,7 +216,13 @@ class MeditationTrainer:
                 'efe_prag_mean':           float(policy_eval.get('efe_prag_mean', 0.0)),
                 'efe_epi_mean':            float(policy_eval.get('efe_epi_mean', 0.0)),
                 'state_belief':            state_belief,
-                'policy_posterior':        q_pi.tolist() if hasattr(q_pi, "tolist") else list(q_pi),
+                'policy_posterior':        q_pi.tolist(),
+                'policy_entropy':          policy_entropy,
+                'transition_drive':        transition_drive,
+                'transition_prob':         transition_prob,
+                'precision_sensory':       precision_sensory,
+                'state_belief_ma':         float(state_belief.get('meta_awareness', 0.0)),
+                'state_belief_ra':         float(state_belief.get('redirect_attention', 0.0)),
                 'network_activations':     network_acts_serializable,
                 'thoughtseed_activations': ts_acts,
                 'dominant_thoughtseed':    THOUGHTSEEDS[dominant_idx],
@@ -292,6 +319,12 @@ class MeditationTrainer:
             self.history['efe_epi'].append(metrics['efe_epi_mean'])
             self.history['state_belief'].append(metrics['state_belief'])
             self.history['policy_posterior'].append(metrics['policy_posterior'])
+            self.history['policy_entropy'].append(metrics['policy_entropy'])
+            self.history['transition_drive'].append(metrics['transition_drive'])
+            self.history['transition_prob'].append(metrics['transition_prob'])
+            self.history['precision_sensory'].append(metrics['precision_sensory'])
+            self.history['state_belief_ma'].append(metrics['state_belief_ma'])
+            self.history['state_belief_ra'].append(metrics['state_belief_ra'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
             self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
@@ -308,6 +341,16 @@ class MeditationTrainer:
             window_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_norm=1.0)
             self.optimizer.step()
+        self._update_policy_prior_from_buffer(buffer)
+
+    def _update_policy_prior_from_buffer(self, buffer: List[Dict]) -> None:
+        """M-step: update learned policy prior from E-step sufficient statistics."""
+        for entry in buffer:
+            state_belief = entry.get('state_belief')
+            q_pi = entry.get('policy_posterior')
+            if state_belief is None or q_pi is None:
+                continue
+            self.monitor.update_policy_state(state_belief, q_pi)
 
     def train(
         self,
@@ -357,7 +400,7 @@ class MeditationTrainer:
             'state_belief': {state: 1.0 if state == current_state else 0.0 for state in STATES},
         })
 
-        bptt_steps = 50
+        bptt_steps = self.bptt_steps
 
         for t_start in range(0, timesteps, bptt_steps):
             # Window boundary: clear sensory states (hidden state carries across)
@@ -415,6 +458,12 @@ class MeditationTrainer:
             'efe_epi_history': self.history['efe_epi'],
             'state_belief_history': self.history['state_belief'],
             'policy_posterior_history': self.history['policy_posterior'],
+            'policy_entropy_history': self.history['policy_entropy'],
+            'transition_drive_history': self.history['transition_drive'],
+            'transition_prob_history': self.history['transition_prob'],
+            'precision_sensory_history': self.history['precision_sensory'],
+            'state_belief_ma_history': self.history['state_belief_ma'],
+            'state_belief_ra_history': self.history['state_belief_ra'],
         }
     
     def _reset_run_state(self, reseed_rng: bool = False, run_seed: Optional[int] = None):
@@ -433,6 +482,12 @@ class MeditationTrainer:
             'dominant_thoughtseed': [],
             'state_belief': [],
             'policy_posterior': [],
+            'policy_entropy': [],
+            'transition_drive': [],
+            'transition_prob': [],
+            'precision_sensory': [],
+            'state_belief_ma': [],
+            'state_belief_ra': [],
         }
         self._last_x_actual = None
         self._sigma_fwd2 = None

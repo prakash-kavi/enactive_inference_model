@@ -12,7 +12,8 @@ STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_attentio
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
 
-DEFAULT_DT = 0.2
+DEFAULT_DT = 0.2  # Step size
+BPTT_STEPS = 25   # BPTT window length (steps)
 CLIP_MIN = 0.05
 CLIP_MAX = 0.9
 
@@ -77,16 +78,14 @@ DWELL_TIMES = {
         'redirect_attention': (3, 6)
     },
     'novice': {
-        'breath_focus': (8, 15),
-        'mind_wandering': (15, 30),
+        'breath_focus': (10, 18),
+        'mind_wandering': (15, 25),
         'meta_awareness': (5, 10),
         'redirect_attention': (5, 10)
     }
 }
 
-# L1 state transition: once dwell has elapsed, hazard = L1_BASE_HAZARD + drive_boost.
-# Set to 0 for strictly dwell- and policy-driven transitions; >0 adds baseline hazard.
-L1_BASE_HAZARD = 0.3
+# L1 state transition: once dwell has elapsed, hazard is set by transition_drive only.
 
 # Exit transition probabilities priors (exclude self-transitions)
 STATE_TRANSITION_PROBS = {
@@ -105,7 +104,7 @@ STATE_TRANSITION_PROBS = {
 }
 
 # =============================================================================
-# Layer 2: Thoughtseeds + recognition/decoder
+# Layer 2: Thoughtseeds + encoder/decoder
 # =============================================================================
 
 # Fixed-step VI hyperparameters (L2)
@@ -113,6 +112,14 @@ VI_STEPS = 2
 VI_LR = 0.2
 # Trigger VI refinement when latent mismatch exceeds this threshold (MSE in z-space)
 VI_MISMATCH_THRESHOLD = 0.02
+
+# State-dependent latent noise for stochastic inference (posterior variance proxy)
+Z_NOISE_STD_BY_STATE = {
+    "breath_focus": 0.02,
+    "mind_wandering": 0.08,
+    "meta_awareness": 0.03,
+    "redirect_attention": 0.03,
+}
 
 # Thoughtseed priors (state-dependent activation baselines)
 THOUGHTSEED_STATE_PRIORS = {
@@ -150,36 +157,19 @@ THOUGHTSEED_STATE_PRIORS = {
 # =============================================================================
 # Precision and Active Inference Parameters
 # =============================================================================
-# Time constant (seconds) for EMA scale of forward surprisal (sigma_fwd^2)
-PRECISION_TAU = 4.0
+# Time constant (seconds) for EMA scale of forward surprisal (sigma_fwd^2).
+# Meta-awareness smoothing and habit-prior learning are derived from the
+# BPTT window; we align precision smoothing to the same timescale.
+PRECISION_TAU = BPTT_STEPS * DEFAULT_DT
 
 # =============================================================================
-# Active Inference Parameters (Fine-Tuned)
+# Optimization Parameters
 # =============================================================================
+# Optimizer learning rate for model parameters (phi, theta, psi).
 LEARNING_RATES = {
     "novice": 0.01,
     "expert": 0.02,
 }
-
-# Layer 3: learned policy tendencies (phenotype-specific)
-L3_POLICY_LR_BY_LEVEL = {
-    "expert": 0.05,
-    "novice": 0.02,
-}
-L3_POLICY_STRENGTH_BY_LEVEL = {
-    "expert": 0.42,
-    "novice": 0.15,
-}
-
-# State-dependent latent noise for stochastic inference (posterior variance proxy)
-Z_NOISE_STD_BY_STATE = {
-    "breath_focus": 0.02,
-    "mind_wandering": 0.08,
-    "meta_awareness": 0.03,
-    "redirect_attention": 0.03,
-}
-# Meta-awareness EMA time constant (seconds)
-L3_META_TAU = 1.0
 
 def get_policy_candidate_order(current_state: str):
     """Return policy candidate order: [current_state, ...others in STATES order].
@@ -190,10 +180,3 @@ def get_exit_transition_probs(experience_level, current_state):
     """Return exit transition probabilities for the given state (rows sum to 1.0)."""
     return dict(STATE_TRANSITION_PROBS[experience_level][current_state])
 
-def get_l3_policy_lr(experience_level: str) -> float:
-    """Return L3 policy learning rate for a phenotype level."""
-    return float(L3_POLICY_LR_BY_LEVEL.get(experience_level, L3_POLICY_LR_BY_LEVEL["expert"]))
-
-def get_l3_policy_strength(experience_level: str) -> float:
-    """Return L3 policy strength for a phenotype level."""
-    return float(L3_POLICY_STRENGTH_BY_LEVEL.get(experience_level, L3_POLICY_STRENGTH_BY_LEVEL["expert"]))

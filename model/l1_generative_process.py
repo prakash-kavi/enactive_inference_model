@@ -15,7 +15,6 @@ from typing import Dict, Tuple, Optional
 from utils.config import (
     NETWORKS, DEFAULT_DT, CLIP_MIN, CLIP_MAX, EPS, NOISE_LEVEL,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS,
-    L1_BASE_HAZARD,
 )
 from utils.math_utils import clip_probability, to_float
 from model.phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -52,7 +51,7 @@ class Layer1Process(nn.Module):
         """Sample dwell duration for current state from config ranges."""
         dwell_min, dwell_max = DWELL_TIMES[self.level][self.current_state]
         dwell_seconds = self.rng.uniform(dwell_min, dwell_max)
-        self.current_max_dwell = int(dwell_seconds / self.dt)
+        self.current_max_dwell = max(1, int(dwell_seconds / self.dt))
         self.current_dwell = 0
         
     def _check_transition(self, transition_drive: float,
@@ -64,12 +63,11 @@ class Layer1Process(nn.Module):
         if self.current_dwell < self.current_max_dwell:
             return self.current_state
         
-        # Dwell elapsed: compute transition hazard (transition drive increases hazard)
+        # Dwell elapsed: transition probability driven by transition_drive
         transition_drive = clip_probability(transition_drive)
-        drive_boost = 0.5 * transition_drive
-        hazard = L1_BASE_HAZARD + drive_boost
-        
-        if self.rng.rand() < hazard:
+        floor = 1.0 / max(self.current_max_dwell, 1)
+        transition_prob = max(transition_drive, floor)
+        if self.rng.rand() < transition_prob:
             # Transition: sample next state (policy-conditioned exit if provided)
             prev_state = self.current_state
             probs = STATE_TRANSITION_PROBS[self.level][self.current_state]
@@ -83,7 +81,7 @@ class Layer1Process(nn.Module):
                     dtype=float
                 )
                 if policy_weights.sum() > 0:
-                    eta = clip_probability(transition_drive)
+                    eta = clip_probability(transition_prob)
                     p_array = (1.0 - eta) * base_array + eta * (base_array * policy_weights)
             else:
                 policy_weights = None
@@ -189,13 +187,15 @@ class Layer1Process(nn.Module):
         theta = self._get_coupling(self.current_state)
         theta = self._clamp_theta(theta)
         
-        # Apply L2 attractor mu_x directly (fixed bias_strength=0.5).
+        # Apply precision-weighted mix of config attractor and L2 prediction.
         # L2->L1 control signals are mu_x, transition_drive, and policy_state_probs.
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
             if not isinstance(mu_x, torch.Tensor):
                 mu_x = torch.tensor(mu_x, dtype=torch.float32)
-            mu = 0.5 * mu + 0.5 * mu_x
+            meta_precision = float(active_states.get('meta_precision', 0.0))
+            meta_precision = clip_probability(meta_precision)
+            mu = (1.0 - meta_precision) * mu + meta_precision * mu_x
 
         # Global process noise variance - fixed, not modulated by L2.
         sigma = np.sqrt(NOISE_LEVEL)
