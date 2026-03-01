@@ -59,20 +59,18 @@ def compute_metrics(results: Dict, use_tail: bool = True) -> Dict:
         metrics['final_fe'] = fe_history[-1] if fe_history else 0.0
         metrics['fe_reduction'] = 0.0
     
-    # 4. Action prediction errors 
-    for state, error in results['avg_action_errors'].items():
-        metrics[f'action_error_{state}'] = error
+    # 4. Action prediction errors (optional; may be absent in slim JSON)
+    avg_action_errors = results.get('avg_action_errors')
+    if isinstance(avg_action_errors, dict):
+        for state, error in avg_action_errors.items():
+            metrics[f'action_error_{state}'] = error
 
     # 4b. EFE diagnostics (tail window means)
     tail = get_tail_window(results, tail_steps=steps_to_analyze)
     if tail.get('efe_prag_history'):
         metrics['efe_prag_mean'] = float(np.mean(tail['efe_prag_history']))
-    else:
-        metrics['efe_prag_mean'] = 0.0
     if tail.get('efe_epi_history'):
         metrics['efe_epi_mean'] = float(np.mean(tail['efe_epi_history']))
-    else:
-        metrics['efe_epi_mean'] = 0.0
 
     # 5. Residual-based Gaussian scales (tail window)
     residual_scales = compute_residual_scales(results, tail_steps=steps_to_analyze)

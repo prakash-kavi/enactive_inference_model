@@ -3,7 +3,7 @@
 ---
 
 ## Architecture
-![Thoughtseeds Framework](figures/fig1a.jpg) ![Thoughtseeds Framework](figures/fig1b.jpg)
+![Meditative Cycle](figures/fig1.jpg) ![Thoughtseeds Framework](figures/fig2.jpg)
 ```
 +--------------------------------------------------------------+
 | Layer 3: Metacognitive Monitor                               |

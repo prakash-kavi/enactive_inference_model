@@ -21,11 +21,14 @@ from utils.config import NETWORKS, THOUGHTSEEDS, STATES
 def plot_hierarchy(data, save_path: str, level_name: str):
     """Figure 4A/4B: hierarchical dynamics across L3, L2, and L1."""
     # Check for required data
-    required_fields = ['state_history', 'meta_awareness_history', 'network_activations_history', 'dominant_ts_history']
+    required_fields = ['state_history', 'meta_awareness_history', 'network_activations_history']
     for field in required_fields:
         if field not in data:
             print(f"ERROR: Required data '{field}' missing for hierarchy plot")
             return
+    if 'dominant_ts_history' not in data and 'thoughtseed_activations_history' not in data:
+        print("ERROR: Required data 'dominant_ts_history' or 'thoughtseed_activations_history' missing for hierarchy plot")
+        return
     
     n_steps = len(data['state_history'])
     time_steps = np.arange(n_steps) if n_steps > 0 else np.array([0.0])
@@ -55,12 +58,28 @@ def plot_hierarchy(data, save_path: str, level_name: str):
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
     thoughtseeds = THOUGHTSEEDS
     ts_mapping = {ts: i for i, ts in enumerate(thoughtseeds)}
+    ts_alpha = 0.2  # smoother thoughtseed trajectories (visual only)
+    if 'thoughtseed_activations_history' in data:
+        ts_history = np.array(data.get('thoughtseed_activations_history', []), dtype=float)
+        if ts_history.size == 0:
+            print("ERROR: Empty thoughtseed_activations_history for hierarchy plot")
+            return
+        # EMA-smooth each thoughtseed channel before argmax
+        smoothed = np.zeros_like(ts_history, dtype=float)
+        for i in range(ts_history.shape[1]):
+            smoothed[:, i] = pd.Series(ts_history[:, i], dtype=float).ewm(
+                alpha=ts_alpha, adjust=False
+            ).mean().to_numpy()
+        dominant_idx = np.argmax(smoothed, axis=1)
+        dominant_ts = [thoughtseeds[i] for i in dominant_idx]
+    else:
+        dominant_ts = data['dominant_ts_history']
     
     # Create categorical scatter plot
     prev_ts = None
     prev_y = None
     prev_x = None
-    for i, ts in enumerate(data['dominant_ts_history']):
+    for i, ts in enumerate(dominant_ts):
         if ts not in ts_mapping:
             continue
         x_val = time_steps[i]
@@ -184,10 +203,10 @@ def plot_hierarchy_continuous(data, save_path: str, level_name: str):
     # 2. Level 2: Thoughtseed trajectories (continuous)
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
     ts_history = data['thoughtseed_activations_history']
+    ts_alpha = 0.2  # smoother thoughtseed traces (visual only)
     for i, ts in enumerate(THOUGHTSEEDS):
         ts_vals = [row[i] for row in ts_history]
-        alpha = 0.25
-        smoothed = pd.Series(ts_vals, dtype=float).ewm(alpha=alpha, adjust=False).mean().to_numpy()
+        smoothed = pd.Series(ts_vals, dtype=float).ewm(alpha=ts_alpha, adjust=False).mean().to_numpy()
         ax2.plot(
             time_steps,
             smoothed,

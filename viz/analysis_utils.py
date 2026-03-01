@@ -18,10 +18,6 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'meta_awareness_history',
         'network_activations_history',
         'thoughtseed_activations_history',
-        'dominant_ts_history',
-        'action_errors_history',
-        'efe_prag_history',
-        'efe_epi_history',
     ]
     tail_data = dict(results)  # shallow copy — only replaces sliced keys
     for key in time_series_keys:

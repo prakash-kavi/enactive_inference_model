@@ -314,20 +314,8 @@ class MeditationTrainer:
             self.history['free_energy'].append(metrics['free_energy'])
             self.history['loss'].append(metrics['loss'])
             self.history['meta_awareness'].append(metrics['meta_awareness'])
-            self.history['action_errors'].append(metrics['action_error'])
-            self.history['efe_prag'].append(metrics['efe_prag_mean'])
-            self.history['efe_epi'].append(metrics['efe_epi_mean'])
-            self.history['state_belief'].append(metrics['state_belief'])
-            self.history['policy_posterior'].append(metrics['policy_posterior'])
-            self.history['policy_entropy'].append(metrics['policy_entropy'])
-            self.history['transition_drive'].append(metrics['transition_drive'])
-            self.history['transition_prob'].append(metrics['transition_prob'])
-            self.history['precision_sensory'].append(metrics['precision_sensory'])
-            self.history['state_belief_ma'].append(metrics['state_belief_ma'])
-            self.history['state_belief_ra'].append(metrics['state_belief_ra'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
-            self.history['dominant_thoughtseed'].append(metrics['dominant_thoughtseed'])
 
         return e_step_buffer, activations, current_state
 
@@ -432,17 +420,6 @@ class MeditationTrainer:
     
     def _package_results(self) -> Dict:
         """Package training results for analysis."""
-        # Action prediction errors by state
-        action_errors_by_state = {state: [] for state in STATES}
-        for i, state in enumerate(self.history['states']):
-            if i < len(self.history['action_errors']):
-                action_errors_by_state[state].append(self.history['action_errors'][i])
-        
-        avg_action_errors = {
-            state: np.mean(errors) if errors else 0.0
-            for state, errors in action_errors_by_state.items()
-        }
-        
         return {
             'experience_level': self.level,
             'seed': self.seed,
@@ -452,23 +429,8 @@ class MeditationTrainer:
             'meta_awareness_history': self.history['meta_awareness'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
             'transitions': self.history['transitions'],
-            'avg_action_errors': avg_action_errors,
-            'final_free_energy': self.history['free_energy'][-1] if self.history['free_energy'] else 0.0,
-            'final_loss': self.history['loss'][-1] if self.history['loss'] else 0.0,
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
-            'dominant_ts_history': self.history['dominant_thoughtseed'],
-            'action_errors_history': self.history['action_errors'],
-            'efe_prag_history': self.history['efe_prag'],
-            'efe_epi_history': self.history['efe_epi'],
-            'state_belief_history': self.history['state_belief'],
-            'policy_posterior_history': self.history['policy_posterior'],
-            'policy_entropy_history': self.history['policy_entropy'],
-            'transition_drive_history': self.history['transition_drive'],
-            'transition_prob_history': self.history['transition_prob'],
-            'precision_sensory_history': self.history['precision_sensory'],
-            'state_belief_ma_history': self.history['state_belief_ma'],
-            'state_belief_ra_history': self.history['state_belief_ra'],
         }
     
     def _reset_run_state(
@@ -487,20 +449,8 @@ class MeditationTrainer:
             'loss': [],
             'meta_awareness': [],
             'transitions': [],
-            'action_errors': [],
-            'efe_prag': [],
-            'efe_epi': [],
             'network_activations': [],
             'thoughtseed_activations': [],
-            'dominant_thoughtseed': [],
-            'state_belief': [],
-            'policy_posterior': [],
-            'policy_entropy': [],
-            'transition_drive': [],
-            'transition_prob': [],
-            'precision_sensory': [],
-            'state_belief_ma': [],
-            'state_belief_ra': [],
         }
         self._last_x_actual = None
         self._sigma_fwd2 = None
@@ -530,34 +480,6 @@ class MeditationTrainer:
             json.dump(results, f, indent=2)
         
         print(f"Results saved to {filepath}")
-
-def train_meditation(
-    phenotype: PhenotypeConfig = None,
-    timesteps: int = 10000,
-    seed: int = 42,
-    reseed_rng: bool = False,
-    run_seed: Optional[int] = None,
-    save_results: bool = True,
-    output_dir: str = 'data/lean_results',
-) -> Dict:
-    """Convenience wrapper for MeditationTrainer (learning enabled)."""
-    trainer = MeditationTrainer(
-        phenotype=phenotype,
-        seed=seed,
-    )
-    results = trainer.train(
-        timesteps=timesteps,
-        enable_learning=True,
-        reseed_rng=reseed_rng,
-        run_seed=run_seed,
-        preserve_habit_prior=False,
-    )
-
-    if save_results:
-        trainer.save_results(output_dir=output_dir, prefix='training_results')
-
-    return results
-
 
 def train_meditation_model(
     phenotype: PhenotypeConfig = None,
