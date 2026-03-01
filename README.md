@@ -165,6 +165,7 @@ If you use this model in your research:
 }
 ```
 This repository is a significant step forward in enhancing the Thoughtseeds Framework for Enactive Inference. It builds upon the foundational work of the Thoughtseeds Framework, adapting code snippets from below:
+
   https://github.com/prakash-kavi/thoughtseeds_vipassana 
   
   https://github.com/prakash-kavi/viapssana_ts2  
