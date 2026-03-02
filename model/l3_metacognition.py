@@ -120,12 +120,16 @@ class Layer3Monitor(nn.Module):
         log_prior = log_prior + self._habit_log_prior(state_belief, scale=habit_scale)
         g_raw = np.array(g_vals, dtype=float)
         g_array = normalize_scores(g_raw, EPS)
-        # Evidence reliability: coefficient of variation (scale-free)
-        mean_abs = float(np.mean(np.abs(g_raw))) if g_raw.size else 0.0
-        std_raw = float(np.std(g_raw)) if g_raw.size else 0.0
-        cv = std_raw / (mean_abs + EPS)
-        evidence_gain = cv / (cv + 1.0)  # in (0, 1), lower when evidence is flat
-        gamma_eff = max(EPS, float(meta_precision) * evidence_gain)
+        # Evidence precision from state-belief confidence (entropy-based).
+        weights = self._normalize_belief(state_belief)
+        entropy = -float(np.sum(weights * np.log(np.clip(weights, EPS, 1.0))))
+        max_entropy = float(np.log(max(len(STATES), 1)))
+        if max_entropy <= EPS:
+            confidence = 0.0
+        else:
+            confidence = 1.0 - (entropy / max_entropy)
+        confidence = float(np.clip(confidence, 0.0, 1.0))
+        gamma_eff = max(EPS, float(meta_precision) * confidence)
         q_pi = policy_posterior(log_prior, g_array, gamma_eff)
         return q_pi
 
