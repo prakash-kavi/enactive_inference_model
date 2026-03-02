@@ -283,16 +283,41 @@ class Layer2Agent(nn.Module):
                 priors.append(max(EPS, hazard * exit_probs.get(s, avg_exit)))
         return priors
 
-    def _evaluate_efe(self, x_current: torch.Tensor,
-                      candidates: list):
+    def _belief_entropy(self, belief: Dict[str, float]) -> float:
+        """Entropy of a discrete belief over STATES (in nats)."""
+        weights = np.array([float(belief.get(s, 0.0)) for s in STATES], dtype=float)
+        total = float(np.sum(weights))
+        if total <= EPS:
+            weights = np.full(len(STATES), 1.0 / max(len(STATES), 1), dtype=float)
+        else:
+            weights = weights / total
+        weights = np.clip(weights, EPS, 1.0)
+        return float(-np.sum(weights * np.log(weights)))
+
+    def _evaluate_efe(
+        self,
+        x_current: torch.Tensor,
+        candidates: list,
+        state_belief_current: Optional[Dict[str, float]] = None,
+    ):
         """EFE G(pi) with pragmatic + epistemic components.
 
         Pragmatic: MSE between predicted and preferred networks.
-        Epistemic: information-gain proxy in thoughtseed space.
+        Epistemic: predicted reduction in state-belief entropy.
         Returns (g_vals: list[float], mu_candidates: list[Tensor], stats: dict).
         """
         g_vals, mu_candidates = [], []
         g_prag_vals, i_epi_vals = [], []
+        if state_belief_current is None:
+            with torch.no_grad():
+                z_curr = self.thoughtseed_model.encode(
+                    x_current.unsqueeze(0) if x_current.dim() == 1 else x_current
+                )
+                if z_curr.dim() > 1:
+                    z_curr = z_curr.squeeze(0)
+                z_curr = clamp_activation(z_curr, CLIP_MIN, CLIP_MAX)
+                state_belief_current = self.infer_state_belief(z_curr)
+        h_current = self._belief_entropy(state_belief_current)
         with torch.no_grad():
             for s in candidates:
                 mu_c = self.mu_params[s]
@@ -302,13 +327,14 @@ class Layer2Agent(nn.Module):
                 g_prag = forward_error(x_pred, x_pref)
                 g_prag_val = float(g_prag.item())
 
-                # Epistemic value proxy: KL-like term in thoughtseed space
+                # Epistemic value: predicted reduction in state-belief entropy
                 z_pred = self.thoughtseed_model.encode(x_pred.unsqueeze(0) if x_pred.dim() == 1 else x_pred)
                 if z_pred.dim() > 1:
                     z_pred = z_pred.squeeze(0)
                 z_pred = clamp_activation(z_pred, CLIP_MIN, CLIP_MAX)
-                info_gain = mse_error(z_pred, mu_c)
-                info_gain_val = float(info_gain.item())
+                belief_pred = self.infer_state_belief(z_pred)
+                h_pred = self._belief_entropy(belief_pred)
+                info_gain_val = float(h_current - h_pred)
 
                 g_prag_vals.append(g_prag_val)
                 i_epi_vals.append(info_gain_val)
@@ -348,7 +374,11 @@ class Layer2Agent(nn.Module):
 
     # ------------------------------------------------------------------
 
-    def evaluate_policies(self, current_state: str) -> Dict:
+    def evaluate_policies(
+        self,
+        current_state: str,
+        state_belief: Optional[Dict[str, float]] = None,
+    ) -> Dict:
         """Evaluate policy evidence G(pi) and return candidates + priors."""
         x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         candidates = get_policy_candidate_order(current_state)
@@ -357,7 +387,9 @@ class Layer2Agent(nn.Module):
             to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0)) ** 2)
 
         priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # dwell prior (heuristic)
-        g_vals, mu_candidates, efe_stats = self._evaluate_efe(x_current, candidates)
+        g_vals, mu_candidates, efe_stats = self._evaluate_efe(
+            x_current, candidates, state_belief_current=state_belief
+        )
         return {
             'candidates':     candidates,
             'priors':         priors,

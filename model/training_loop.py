@@ -136,7 +136,7 @@ class MeditationTrainer:
             # Update L2->L3 sensory interface for policy selection
             state_belief_raw = self.agent.infer_state_belief(activations)
             state_belief = self.monitor.smooth_state_belief(state_belief_raw)
-            policy_eval = self.agent.evaluate_policies(new_state)
+            policy_eval = self.agent.evaluate_policies(new_state, state_belief=state_belief)
             self.blanket_l2l3.update_sensory_states({
                 'state_belief':      state_belief,
                 'policy_candidates': policy_eval['candidates'],
