@@ -575,24 +575,3 @@ def train_meditation_model(
     if save_results:
         trainer.save_results(output_dir=output_dir, prefix='training_results')
     return trainer, results
-
-
-def simulate_meditation(
-    trainer: MeditationTrainer,
-    timesteps: int = 10000,
-    reseed_rng: bool = True,
-    run_seed: Optional[int] = None,
-    save_results: bool = True,
-    output_dir: str = 'data/lean_results',
-) -> Dict:
-    """Run inference-only simulation using a trained model."""
-    results = trainer.train(
-        timesteps=timesteps,
-        enable_learning=False,
-        reseed_rng=reseed_rng,
-        run_seed=run_seed,
-        preserve_habit_prior=True,
-    )
-    if save_results:
-        trainer.save_results(output_dir=output_dir, prefix='simulation_results')
-    return results

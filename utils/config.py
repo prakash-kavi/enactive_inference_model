@@ -1,26 +1,18 @@
 """Consolidated configuration for the lean meditation model.
 
 Single source of truth for constants used across training, simulation, and plotting.
+
+We distinguish between \"phenomenological\" parameters (which define the expert/novice
+profiles) and \"technical\" hyperparameters (which define numerical behaviour). This
+file is the only place where either should be changed.
 """
 
+# ---------------------------------------------------------------------------
+# Phenomenological parameters (states, networks, priors, dwell/transition)
+# ---------------------------------------------------------------------------
 STATES = ['breath_focus', 'mind_wandering', 'meta_awareness', 'redirect_attention']
 NETWORKS = ['DMN', 'VAN', 'DAN', 'FPN']
 THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment', 'equanimity']
-
-DEFAULT_DT = 0.2
-BPTT_STEPS = 25
-
-TRAIN_STEPS = 8000
-EVAL_STEPS = 2000
-PLOT_STEPS = 2000
-TOTAL_STEPS = TRAIN_STEPS + EVAL_STEPS + PLOT_STEPS
-
-CLIP_MIN = 0.05
-CLIP_MAX = 0.9
-
-EPS = 1e-6
-
-NOISE_LEVEL = 0.002
 
 THETA_BASE = {
     'breath_focus': {
@@ -92,11 +84,6 @@ STATE_TRANSITION_PROBS = {
     }
 }
 
-VI_STEPS = 2
-VI_LR = 0.2
-
-STATE_BELIEF_VAR = 0.1
-
 THOUGHTSEED_STATE_PRIORS = {
     "breath_focus": {
         "attend_breath": 0.85,
@@ -128,6 +115,29 @@ THOUGHTSEED_STATE_PRIORS = {
     }
 
 }
+
+# ---------------------------------------------------------------------------
+# Technical hyperparameters (timescales, learning rates, numerics)
+# ---------------------------------------------------------------------------
+DEFAULT_DT = 0.2
+BPTT_STEPS = 25
+
+TRAIN_STEPS = 8000
+EVAL_STEPS = 2000
+PLOT_STEPS = 2000
+TOTAL_STEPS = TRAIN_STEPS + EVAL_STEPS + PLOT_STEPS
+
+CLIP_MIN = 0.05
+CLIP_MAX = 0.9
+
+EPS = 1e-6
+
+NOISE_LEVEL = 0.002
+
+VI_STEPS = 2
+VI_LR = 0.2
+
+STATE_BELIEF_VAR = 0.1
 
 PRECISION_TAU = BPTT_STEPS * DEFAULT_DT
 

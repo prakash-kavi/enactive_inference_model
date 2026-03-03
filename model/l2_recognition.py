@@ -198,7 +198,11 @@ class Layer2Agent(nn.Module):
         z_recognition: torch.Tensor,
         z_prior: torch.Tensor,
     ) -> torch.Tensor:
-        """Posterior update q(z): fixed-step VI over thoughtseeds."""
+        """Posterior update q(z): fixed-step VI over thoughtseeds.
+
+        The OU-evolved z_prior is used only for dynamical initialisation; the
+        VI objective itself uses the state-conditioned prior mu_z(s_t).
+        """
         clip_min = CLIP_MIN
         clip_max = CLIP_MAX
 
@@ -208,13 +212,12 @@ class Layer2Agent(nn.Module):
             return clamp_activation(t, clip_min, clip_max)
 
         sensory_target = clamp_z(z_recognition.detach())
-        prior_target = clamp_z(z_prior.detach())
         
         # Sensory precision (used as observation weight + blending factor)
         precision_blend, precision_weight = self._precision_params()
 
         # Initialization: blend dynamical prior and sensory target, bias toward sensory when precision is high.
-        z_init = self._init_vi_state(sensory_target, prior_target, precision_blend)
+        z_init = self._init_vi_state(sensory_target, z_prior, precision_blend)
         z_var = z_init.requires_grad_(True)
 
         # State-conditioned prior for VI objective
