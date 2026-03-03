@@ -319,11 +319,8 @@ class MeditationTrainer:
                 current_state = new_state
 
             self.history['states'].append(current_state)
-            self.history['free_energy'].append(metrics['free_energy'])
-            self.history['loss'].append(metrics['loss'])
-            self.history['meta_awareness'].append(metrics['meta_awareness'])
-            self.history['network_activations'].append(metrics['network_activations'])
-            self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+            for k in ['free_energy', 'loss', 'meta_awareness', 'network_activations', 'thoughtseed_activations']:
+                self.history[k].append(metrics[k])
             self.history['thoughtseed_prior_activations'].append(
                 metrics.get('thoughtseed_prior_activations', metrics['thoughtseed_activations'])
             )

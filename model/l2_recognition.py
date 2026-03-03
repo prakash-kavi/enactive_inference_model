@@ -34,6 +34,8 @@ from utils.math_utils import (
     networks_to_tensor,
     belief_entropy,
     normalize_belief,
+    ou_step_scalar,
+    normalize_scores,
 )
 
 class ThoughtseedModel(nn.Module):
@@ -139,17 +141,16 @@ class Layer2Agent(nn.Module):
         """OU-like latent dynamics for thoughtseeds (slow latent causes)."""
         dt = float(DEFAULT_DT)
         tau = max(float(PRECISION_TAU), dt)
-        theta = 1.0 / tau
         mu = self.mu_params[current_state].detach()
-        z_prev = clamp_activation(z_prev.detach(), CLIP_MIN, CLIP_MAX)
-        drift = -theta * (z_prev - mu)
-        noise_std = float(np.sqrt(NOISE_LEVEL))
-        if noise_std > 0.0:
-            noise = torch.randn_like(z_prev) * noise_std * np.sqrt(dt)
-        else:
-            noise = torch.zeros_like(z_prev)
-        z_prior = z_prev + drift * dt + noise
-        return clamp_activation(z_prior, CLIP_MIN, CLIP_MAX)
+        return ou_step_scalar(
+            value=z_prev,
+            target=mu,
+            dt=dt,
+            tau=tau,
+            noise_level=float(NOISE_LEVEL),
+            clip_min=CLIP_MIN,
+            clip_max=CLIP_MAX,
+        )
 
     def _init_vi_state(
         self,
@@ -271,16 +272,11 @@ class Layer2Agent(nn.Module):
     def infer_state_belief(self, z: torch.Tensor) -> Dict[str, float]:
         """Infer state belief q(s|z) from thoughtseed activations."""
         with torch.no_grad():
-            dists = []
-            for state in STATES:
-                prior = self.mu_params[state].detach()
-                dists.append(mse_error(z, prior))
-            dist_vec = torch.stack(dists)
+            mu_all = torch.stack([self.mu_params[s].detach() for s in STATES])
+            dist_vec = torch.mean((mu_all - z) ** 2, dim=-1)
             var = max(float(STATE_BELIEF_VAR), EPS)
-            logits = -0.5 * dist_vec / var
-            probs = torch.softmax(logits, dim=0)
-            raw = {state: float(probs[i].item()) for i, state in enumerate(STATES)}
-            weights = normalize_belief(raw, keys=STATES, eps=EPS)
+            probs = torch.softmax(-0.5 * dist_vec / var, dim=0).tolist()
+            weights = normalize_belief(probs, eps=EPS)
             return {state: float(weights[i]) for i, state in enumerate(STATES)}
     
     # ------------------------------------------------------------------
@@ -316,52 +312,31 @@ class Layer2Agent(nn.Module):
         Epistemic: predicted reduction in state-belief entropy.
         Returns (g_vals: list[float], mu_candidates: list[Tensor], stats: dict).
         """
-        g_vals, mu_candidates = [], []
-        g_prag_vals, i_epi_vals = [], []
+        g_vals, i_epi_vals = [], []
         h_current = belief_entropy(state_belief_current, keys=STATES)
         with torch.no_grad():
-            for s in candidates:
-                mu_c = self.mu_params[s]
-                x_pred = self.thoughtseed_model.predict_next(x_current, mu_c)
-                x_pref = self.decode_with_state(mu_c)
+            mu_candidates = [self.mu_params[s] for s in candidates]
+            mu_c_stack = torch.stack(mu_candidates)
+            x_pred = self.thoughtseed_model.predict_next(x_current.expand(len(candidates), -1), mu_c_stack)
+            x_pref = self.decode_with_state(mu_c_stack)
 
-                g_prag = forward_error(x_pred, x_pref)
-                g_prag_val = float(g_prag.item())
+            g_prag_vals = torch.mean((x_pred - x_pref) ** 2, dim=-1).tolist()
+            z_pred = clamp_activation(self.thoughtseed_model.encode(x_pred), CLIP_MIN, CLIP_MAX)
+            
+            for i in range(len(candidates)):
+                h_pred = belief_entropy(self.infer_state_belief(z_pred[i]), keys=STATES)
+                i_epi_vals.append(float(h_current - h_pred))
 
-                # Epistemic value: predicted reduction in state-belief entropy
-                z_pred = self.thoughtseed_model.encode(x_pred.unsqueeze(0) if x_pred.dim() == 1 else x_pred)
-                if z_pred.dim() > 1:
-                    z_pred = z_pred.squeeze(0)
-                z_pred = clamp_activation(z_pred, CLIP_MIN, CLIP_MAX)
-                belief_pred = self.infer_state_belief(z_pred)
-                h_pred = belief_entropy(belief_pred, keys=STATES)
-                info_gain_val = float(h_current - h_pred)
-
-                g_prag_vals.append(g_prag_val)
-                i_epi_vals.append(info_gain_val)
-                mu_candidates.append(mu_c)
         # Normalize per policy set (z-score) to make terms comparable
-        g_prag_arr = np.array(g_prag_vals, dtype=float)
-        i_epi_arr = np.array(i_epi_vals, dtype=float)
-        g_prag_std = float(np.std(g_prag_arr)) if g_prag_arr.size else 0.0
-        i_epi_std = float(np.std(i_epi_arr)) if i_epi_arr.size else 0.0
-        if g_prag_arr.size and g_prag_std > EPS:
-            g_prag_norm = (g_prag_arr - float(np.mean(g_prag_arr))) / (g_prag_std + EPS)
-        else:
-            g_prag_norm = g_prag_arr
-        if i_epi_arr.size and i_epi_std > EPS:
-            i_epi_norm = (i_epi_arr - float(np.mean(i_epi_arr))) / (i_epi_std + EPS)
-        else:
-            i_epi_norm = i_epi_arr
-
+        g_prag_norm = normalize_scores(np.array(g_prag_vals, dtype=float), EPS)
+        i_epi_norm = normalize_scores(np.array(i_epi_vals, dtype=float), EPS)
         for g_p, i_e in zip(g_prag_norm, i_epi_norm):
             g_vals.append(float(g_p) - float(i_e))
 
-        stats = {
+        return g_vals, mu_candidates, {
             'g_prag_mean': float(np.mean(g_prag_vals)) if g_prag_vals else 0.0,
             'i_epi_mean': float(np.mean(i_epi_vals)) if i_epi_vals else 0.0,
         }
-        return g_vals, mu_candidates, stats
 
     def _select_attractor(self, q_pi, mu_candidates: list):
         """Posterior-weighted latent prediction.

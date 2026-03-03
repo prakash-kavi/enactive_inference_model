@@ -40,27 +40,18 @@ def normalize_scores(values: np.ndarray, eps: float = EPS) -> np.ndarray:
         return values
     return (values - np.mean(values)) / (std + eps)
 
-def belief_entropy(
-    belief: Union[Dict[str, float], np.ndarray, list, tuple],
+def _to_array(
+    belief: Union[Dict[str, float], np.ndarray, list, tuple, None],
     keys: Optional[Iterable[str]] = None,
-    eps: float = EPS,
-) -> float:
-    """Entropy of a discrete belief (in nats) with safe normalization."""
+) -> np.ndarray:
+    """Helper to convert dictionary or sequence to 1D float array."""
+    if belief is None:
+        return np.empty(0, dtype=float)
     if isinstance(belief, dict):
         if keys is None:
-            values = np.array(list(belief.values()), dtype=float)
-        else:
-            values = np.array([float(belief.get(k, 0.0)) for k in keys], dtype=float)
-    else:
-        values = np.array(belief, dtype=float)
-    total = float(np.sum(values))
-    if total <= eps:
-        n = max(values.size, 1)
-        values = np.full(n, 1.0 / n, dtype=float)
-    else:
-        values = values / total
-    values = np.clip(values, eps, 1.0)
-    return float(-np.sum(values * np.log(values)))
+            return np.array(list(belief.values()), dtype=float)
+        return np.array([float(belief.get(k, 0.0)) for k in keys], dtype=float)
+    return np.array(belief, dtype=float)
 
 def normalize_belief(
     belief: Union[Dict[str, float], np.ndarray, list, tuple, None],
@@ -68,23 +59,21 @@ def normalize_belief(
     eps: float = EPS,
 ) -> np.ndarray:
     """Normalize belief weights (uniform if missing or degenerate)."""
-    if belief is None:
-        n = len(keys) if keys is not None else 1
-        return np.full(max(n, 1), 1.0 / max(n, 1), dtype=float)
-    if isinstance(belief, dict):
-        if keys is None:
-            values = np.array(list(belief.values()), dtype=float)
-        else:
-            values = np.array([float(belief.get(k, 0.0)) for k in keys], dtype=float)
-    else:
-        values = np.array(belief, dtype=float)
+    values = _to_array(belief, keys)
+    n = max(values.size, 1) if values.size > 0 else (len(keys) if keys else 1)
     total = float(np.sum(values))
-    if total <= eps:
-        n = max(values.size, 1)
+    if total <= eps or values.size == 0:
         return np.full(n, 1.0 / n, dtype=float)
-    values = values / total
-    values = np.clip(values, 0.0, 1.0)
-    return values
+    return np.clip(values / total, 0.0, 1.0)
+
+def belief_entropy(
+    belief: Union[Dict[str, float], np.ndarray, list, tuple],
+    keys: Optional[Iterable[str]] = None,
+    eps: float = EPS,
+) -> float:
+    """Entropy of a discrete belief (in nats) with safe normalization."""
+    values = np.clip(normalize_belief(belief, keys, eps), eps, 1.0)
+    return float(-np.sum(values * np.log(values)))
 
 def state_confidence(
     belief: Union[Dict[str, float], np.ndarray, list, tuple, None],
@@ -95,39 +84,50 @@ def state_confidence(
     if belief is None:
         return 0.0
     entropy = belief_entropy(belief, keys=keys, eps=eps)
-    n = len(keys) if keys is not None else None
-    if n is None:
-        if isinstance(belief, dict):
-            n = max(len(belief), 1)
-        else:
-            n = max(len(np.array(belief).flatten()), 1)
+    n = len(keys) if keys is not None else max(len(_to_array(belief)), 1)
     max_entropy = float(np.log(max(n, 1)))
     if max_entropy <= eps:
         return 0.0
-    confidence = 1.0 - (entropy / max_entropy)
-    return float(np.clip(confidence, 0.0, 1.0))
+    return float(np.clip(1.0 - (entropy / max_entropy), 0.0, 1.0))
 
 def policy_entropy(
     probs: Union[np.ndarray, list, tuple, None],
     eps: float = EPS,
 ) -> float:
     """Entropy of a categorical policy distribution (in nats)."""
-    if probs is None:
+    if probs is None or len(probs) == 0:
         return 0.0
-    values = np.array(probs, dtype=float)
-    if values.size == 0:
-        return 0.0
-    total = float(np.sum(values))
-    if total <= eps:
-        values = np.full(values.size, 1.0 / max(values.size, 1), dtype=float)
-    else:
-        values = values / total
-    values = np.clip(values, eps, 1.0)
+    values = np.clip(normalize_belief(probs, eps=eps), eps, 1.0)
     return float(-np.sum(values * np.log(values)))
 
 def clamp_activation(x: torch.Tensor, clip_min: float, clip_max: float) -> torch.Tensor:
     """Clamp activations to configured model bounds."""
     return torch.clamp(x, clip_min, clip_max)
+
+
+def ou_step_scalar(
+    value: torch.Tensor,
+    target: torch.Tensor,
+    dt: float,
+    tau: float,
+    noise_level: float,
+    clip_min: float,
+    clip_max: float,
+) -> torch.Tensor:
+    """Single-step scalar OU update for latent variables.
+
+    dZ = -(1/tau) * (Z - target) dt + sqrt(noise_level) dW
+    """
+    theta = 1.0 / max(tau, dt)
+    value = clamp_activation(value.detach(), clip_min, clip_max)
+    drift = -theta * (value - target.detach())
+    noise_std = float(np.sqrt(noise_level))
+    if noise_std > 0.0:
+        noise = torch.randn_like(value) * noise_std * np.sqrt(dt)
+    else:
+        noise = torch.zeros_like(value)
+    updated = value + drift * dt + noise
+    return clamp_activation(updated, clip_min, clip_max)
 
 
 def mse_error(x_hat: torch.Tensor, x: torch.Tensor) -> torch.Tensor:

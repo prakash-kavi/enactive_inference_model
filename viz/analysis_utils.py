@@ -85,21 +85,11 @@ def get_dwell_run_lengths(state_history: List[str], states: List[str]) -> Dict[s
     Returns:
         {state: [run_length_1, run_length_2, ...]} for bar plots with error bars.
     """
-    if not state_history:
-        return {s: [] for s in states}
+    from itertools import groupby
     dwells = {s: [] for s in states}
-    current = state_history[0]
-    count = 1
-    for s in state_history[1:]:
-        if s == current:
-            count += 1
-        else:
-            if current in dwells:
-                dwells[current].append(count)
-            current = s
-            count = 1
-    if current in dwells:
-        dwells[current].append(count)
+    for k, g in groupby(state_history):
+        if k in dwells:
+            dwells[k].append(sum(1 for _ in g))
     return dwells
 
 
@@ -110,21 +100,16 @@ def _build_transition_matrix(
     tail_start: int = None,
 ) -> Dict[str, Dict[str, float]]:
     """Build normalized transition matrix from transitions or state history."""
-    trans_matrix = {fs: {ts: 0 for ts in states} for fs in states}
+    trans_matrix = {fs: {ts: 0.0 for ts in states} for fs in states}
     if transitions:
         for tr in transitions:
-            t = tr.get("timestamp")
-            if tail_start is not None and t is not None and t < tail_start:
-                continue
-            fs, ts = tr.get('from'), tr.get('to')
-            if fs in trans_matrix and ts in trans_matrix[fs]:
+            t, fs, ts = tr.get("timestamp"), tr.get('from'), tr.get('to')
+            if (tail_start is None or (t is not None and t >= tail_start)) and fs in trans_matrix and ts in trans_matrix[fs]:
                 trans_matrix[fs][ts] += 1
-    else:
-        if state_history:
-            for i in range(len(state_history) - 1):
-                fs, ts = state_history[i], state_history[i + 1]
-                if fs != ts:
-                    trans_matrix[fs][ts] += 1
+    elif state_history:
+        for fs, ts in zip(state_history, state_history[1:]):
+            if fs != ts and fs in trans_matrix and ts in trans_matrix[fs]:
+                trans_matrix[fs][ts] += 1
 
     for fs in states:
         total = sum(trans_matrix[fs].values())
