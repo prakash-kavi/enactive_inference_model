@@ -17,9 +17,9 @@ from utils.config import (
     THOUGHTSEED_STATE_PRIORS,
     get_exit_transition_probs, get_policy_candidate_order,
     VI_STEPS, VI_LR,
-    Z_NOISE_STD_BY_STATE,
     STATE_BELIEF_VAR,
     DEFAULT_DT, PRECISION_TAU,
+    NOISE_LEVEL,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -143,7 +143,7 @@ class Layer2Agent(nn.Module):
         mu = self.mu_params[current_state].detach()
         z_prev = clamp_activation(z_prev.detach(), CLIP_MIN, CLIP_MAX)
         drift = -theta * (z_prev - mu)
-        noise_std = float(Z_NOISE_STD_BY_STATE.get(current_state, 0.0))
+        noise_std = float(np.sqrt(NOISE_LEVEL))
         if noise_std > 0.0:
             noise = torch.randn_like(z_prev) * noise_std * np.sqrt(dt)
         else:

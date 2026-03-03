@@ -97,13 +97,6 @@ VI_LR = 0.2
 
 STATE_BELIEF_VAR = 0.1
 
-Z_NOISE_STD_BY_STATE = {
-    "breath_focus": 0.02,
-    "mind_wandering": 0.08,
-    "meta_awareness": 0.03,
-    "redirect_attention": 0.03,
-}
-
 THOUGHTSEED_STATE_PRIORS = {
     "breath_focus": {
         "attend_breath": 0.85,
