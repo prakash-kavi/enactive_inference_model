@@ -71,13 +71,12 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     Active (L2 -> L1):
         - mu_x: Descending predictions over network activations (policy)
-        - transition_drive: L2 transition urge (u_t = 1 - q(pi=stay))
         - policy_state_probs: Optional[Dict[str,float]] policy posterior over candidate states
     """
     
     def __init__(self):
         self.allowed_sensory = {"DMN", "VAN", "DAN", "FPN", "dwell_progress"}
-        self.allowed_active = {"mu_x", "transition_drive", "policy_state_probs", "meta_precision"}
+        self.allowed_active = {"mu_x", "policy_state_probs", "meta_precision"}
         super().__init__(strict=True)
         
 

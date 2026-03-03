@@ -2,6 +2,7 @@
 plotting_utils.py
 
 Shared utilities for plotting: style settings and common constants.
+Path constants (data/, figures/) live in run_enactive_inference.py as the single source.
 """
 
 import logging
@@ -47,14 +48,6 @@ THOUGHTSEED_COLORS = {
     'pending_tasks': '#911eb4'
 }
 
-# Point to data and figures directories
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-PLOT_DIR = os.path.join(BASE_DIR, "figures")
-
-# Ensure directories exist
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(PLOT_DIR, exist_ok=True)
 
 def set_plot_style():
     """Set a consistent publication-ready style for matplotlib."""

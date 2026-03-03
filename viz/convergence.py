@@ -70,11 +70,12 @@ def _plot_single_convergence_pair(
     window: int,
     panel_title: str,
     tail_span: int,
+    highlight_spans: List[Dict] = None,
 ):
     primary, label = _extract_primary_series(results)
     states = results["state_history"]
     steps = np.arange(primary.size)
-    highlight_start = max(0, primary.size - tail_span)
+    highlight_start = max(0, primary.size - tail_span) if tail_span is not None else None
 
     ax_loss.plot(
         steps,
@@ -127,7 +128,27 @@ def _plot_single_convergence_pair(
     ax_occ.set_title(f"{panel_title}: Cumulative state occupancy", fontsize=12, fontweight="bold")
     ax_occ.legend(loc="lower right", frameon=True)
 
-    if highlight_start > 0:
+    if highlight_spans:
+        for ax in (ax_loss, ax_occ):
+            for span in highlight_spans:
+                start = max(0, int(span["start"]))
+                end = min(int(span["end"]), primary.size)
+                if end <= start:
+                    continue
+                ax.axvspan(
+                    start,
+                    end,
+                    color=span.get("color", "#d0d0d0"),
+                    alpha=span.get("alpha", 0.35),
+                    label=span.get("label"),
+                )
+            handles, labels = ax.get_legend_handles_labels()
+            dedup = {}
+            for handle, label in zip(handles, labels):
+                if label:
+                    dedup[label] = handle
+            ax.legend(list(dedup.values()), list(dedup.keys()), loc="best", frameon=True)
+    elif highlight_start is not None and highlight_start > 0:
         for ax in (ax_loss, ax_occ):
             ax.axvspan(
                 highlight_start,
@@ -142,7 +163,7 @@ def _plot_single_convergence_pair(
                 dedup[label] = handle
             ax.legend(list(dedup.values()), list(dedup.keys()), loc="best", frameon=True)
 
-    if primary.size and highlight_start < primary.size:
+    if tail_span is not None and primary.size and highlight_start < primary.size:
         tail = primary[highlight_start:]
         metric = "loss" if label == "Loss" else "F"
         level = results.get("experience_level", "unknown").title()
@@ -152,9 +173,17 @@ def _plot_single_convergence_pair(
         )
 
 
-def plot_convergence(results: Dict, save_path: str, window: int = 25):
-    """Generate a single convergence diagnostic plot (legacy)."""
-    tail_span = TAIL_STEPS
+def plot_convergence(
+    results: Dict,
+    save_path: str,
+    window: int = 25,
+    panel_title: str = "Convergence",
+    tail_span: int = None,
+    highlight_spans: List[Dict] = None,
+):
+    """Generate a single convergence diagnostic plot."""
+    if tail_span is None and not highlight_spans:
+        tail_span = TAIL_STEPS
     set_plot_style()
 
     level = results.get("experience_level", "unknown")
@@ -164,52 +193,12 @@ def plot_convergence(results: Dict, save_path: str, window: int = 25):
         axes[1],
         results,
         window,
-        panel_title="Convergence",
+        panel_title=panel_title,
         tail_span=tail_span,
+        highlight_spans=highlight_spans,
     )
 
     fig.suptitle(f"Convergence diagnostics ({level.title()})", fontsize=16, fontweight="bold")
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     save_figure(fig, Path(save_path), "Convergence")
-    plt.close(fig)
-
-
-def plot_convergence_comparison(
-    learning_results: Dict,
-    simulation_results: Dict,
-    save_path: str,
-    window: int = 25,
-):
-    """Generate combined learning vs inference-only stability diagnostics."""
-    tail_span = TAIL_STEPS
-    set_plot_style()
-
-    level = learning_results.get("experience_level", simulation_results.get("experience_level", "unknown"))
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 9), sharex="col")
-
-    _plot_single_convergence_pair(
-        axes[0, 0],
-        axes[1, 0],
-        learning_results,
-        window,
-        panel_title="Learning (E+M)",
-        tail_span=tail_span,
-    )
-    _plot_single_convergence_pair(
-        axes[0, 1],
-        axes[1, 1],
-        simulation_results,
-        window,
-        panel_title="Inference-only (E-step)",
-        tail_span=tail_span,
-    )
-
-    fig.suptitle(
-        f"Learning vs inference-only stability ({level.title()})",
-        fontsize=16,
-        fontweight="bold",
-    )
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    save_figure(fig, Path(save_path), "Convergence comparison")
     plt.close(fig)

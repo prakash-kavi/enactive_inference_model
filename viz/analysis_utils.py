@@ -1,9 +1,56 @@
 """Analysis utility functions for lean meditation model."""
 
 from typing import Dict, List
+from pathlib import Path
 import numpy as np
+import matplotlib.pyplot as plt
 
-TAIL_STEPS = 2000  # Last 2000 timesteps for converged behavior analysis
+from utils.config import TAIL_STEPS, STATES
+from viz.plotting_utils import (
+    STATE_COLORS,
+    STATE_DISPLAY_NAMES,
+    save_figure,
+    set_plot_style,
+)
+
+__all__ = [
+    "TAIL_STEPS",
+    "get_tail_window",
+    "prepare_tail_data",
+    "get_dwell_run_lengths",
+    "get_dwell_times",
+    "get_transition_matrix",
+    "plot_fe_and_dwell",
+    "plot_transitions",
+    "compute_tail_statistics",
+    "compute_network_profiles",
+    "compute_thoughtseed_means",
+]
+
+
+def prepare_tail_data(
+    results: Dict,
+    states: List[str],
+    networks: List[str],
+    thoughtseeds: List[str],
+    tail_steps: int = TAIL_STEPS,
+) -> Dict:
+    """Single entry point: prepare tail-window data with all derived stats for plotting.
+
+    Returns a dict suitable for all plot functions: tail-sliced histories plus
+    network_profiles_mean, thoughtseed_means_per_state, dwell_times, transition_matrix,
+    and tail_start.
+    """
+    tail = get_tail_window(results, tail_steps)
+    tail["tail_start"] = max(0, len(results.get("state_history", [])) - tail_steps)
+    tail["network_profiles_mean"] = compute_network_profiles(results, states, networks, tail_steps)
+    tail["thoughtseed_means_per_state"] = compute_thoughtseed_means(
+        results, states, thoughtseeds, tail_steps
+    )
+    stats = compute_tail_statistics(results, states, tail_steps)
+    tail["dwell_times"] = stats["dwell_times"]
+    tail["transition_matrix"] = stats["transition_matrix"]
+    return tail
 
 
 def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
@@ -16,6 +63,7 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'free_energy_history',
         'loss_history',
         'meta_awareness_history',
+        'state_confidence_history',
         'network_activations_history',
         'thoughtseed_activations_history',
     ]
@@ -25,6 +73,95 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         if series:
             tail_data[key] = series[-tail_steps:]
     return tail_data
+
+
+# ---------------------------------------------------------------------------
+# Dwell and transition logic (single source of truth)
+# ---------------------------------------------------------------------------
+
+def get_dwell_run_lengths(state_history: List[str], states: List[str]) -> Dict[str, List[int]]:
+    """Extract run-length sequences per state from state history.
+
+    Returns:
+        {state: [run_length_1, run_length_2, ...]} for bar plots with error bars.
+    """
+    if not state_history:
+        return {s: [] for s in states}
+    dwells = {s: [] for s in states}
+    current = state_history[0]
+    count = 1
+    for s in state_history[1:]:
+        if s == current:
+            count += 1
+        else:
+            if current in dwells:
+                dwells[current].append(count)
+            current = s
+            count = 1
+    if current in dwells:
+        dwells[current].append(count)
+    return dwells
+
+
+def _build_transition_matrix(
+    transitions: List[Dict],
+    state_history: List[str],
+    states: List[str],
+    tail_start: int = None,
+) -> Dict[str, Dict[str, float]]:
+    """Build normalized transition matrix from transitions or state history."""
+    trans_matrix = {fs: {ts: 0 for ts in states} for fs in states}
+    if transitions:
+        for tr in transitions:
+            t = tr.get("timestamp")
+            if tail_start is not None and t is not None and t < tail_start:
+                continue
+            fs, ts = tr.get('from'), tr.get('to')
+            if fs in trans_matrix and ts in trans_matrix[fs]:
+                trans_matrix[fs][ts] += 1
+    else:
+        if state_history:
+            for i in range(len(state_history) - 1):
+                fs, ts = state_history[i], state_history[i + 1]
+                if fs != ts:
+                    trans_matrix[fs][ts] += 1
+
+    for fs in states:
+        total = sum(trans_matrix[fs].values())
+        if total > 0:
+            trans_matrix[fs] = {ts: c / total for ts, c in trans_matrix[fs].items()}
+    return trans_matrix
+
+
+def get_dwell_times(stats: Dict, states: List[str] = None) -> Dict[str, List[int]]:
+    """Extract dwell run-lengths from stats dict (state_history).
+
+    Args:
+        stats: Dict with 'state_history' (e.g. tail-windowed data).
+        states: State names; if None, uses keys from empty-result template.
+
+    Returns:
+        {state: [run_length, ...]} for bar plots with std/error bars.
+    """
+    from utils.config import STATES
+    states = states or STATES
+    state_history = stats.get("state_history", [])
+    return get_dwell_run_lengths(state_history, states)
+
+
+def get_transition_matrix(stats: Dict, states: List[str] = None) -> Dict[str, Dict[str, float]]:
+    """Compute transition matrix from tail-window transitions (state changes only).
+
+    Args:
+        stats: Dict with 'state_history', 'transitions', optional 'tail_start'.
+        states: State names; if None, uses utils.config.STATES.
+    """
+    from utils.config import STATES
+    states = states or STATES
+    transitions = stats.get("transitions", [])
+    state_history = stats.get("state_history", [])
+    tail_start = stats.get("tail_start")
+    return _build_transition_matrix(transitions, state_history, states, tail_start)
 
 
 # ---------------------------------------------------------------------------
@@ -110,66 +247,224 @@ def compute_tail_statistics(results: Dict, states: List[str],
     tail_data = get_tail_window(results, tail_steps)
     state_sequence = tail_data['state_history']
 
-    # Dwell times
-    dwell_times = {state: [] for state in states}
-    if state_sequence:
-        current = state_sequence[0]
-        count = 1
-        for s in state_sequence[1:]:
-            if s == current:
-                count += 1
-            else:
-                dwell_times[current].append(count)
-                current = s
-                count = 1
-        dwell_times[current].append(count)
-
+    dwell_run_lengths = get_dwell_run_lengths(state_sequence, states)
     avg_dwell = {
         state: float(np.mean(times)) if times else 0.0
-        for state, times in dwell_times.items()
+        for state, times in dwell_run_lengths.items()
     }
 
-    # Transition matrix (actual state changes only)
-    trans_matrix = {fs: {ts: 0 for ts in states} for fs in states}
-    transitions = results.get('transitions', [])
-    if transitions:
-        start_t = max(0, len(results.get('state_history', [])) - tail_steps)
-        for tr in transitions:
-            t = tr.get('timestamp')
-            if t is not None and t < start_t:
-                continue
-            fs, ts = tr.get('from'), tr.get('to')
-            if fs in trans_matrix and ts in trans_matrix[fs]:
-                trans_matrix[fs][ts] += 1
-    else:
-        for i in range(len(state_sequence) - 1):
-            fs, ts = state_sequence[i], state_sequence[i + 1]
-            if fs != ts:
-                trans_matrix[fs][ts] += 1
-
-    for fs in states:
-        total = sum(trans_matrix[fs].values())
-        if total > 0:
-            trans_matrix[fs] = {ts: c / total for ts, c in trans_matrix[fs].items()}
+    tail_start = max(0, len(results.get('state_history', [])) - tail_steps)
+    trans_matrix = _build_transition_matrix(
+        results.get('transitions', []),
+        state_sequence,
+        states,
+        tail_start=tail_start,
+    )
 
     return {'dwell_times': avg_dwell, 'transition_matrix': trans_matrix}
 
 
-def compute_residual_scales(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
-    """Compute residual-based Gaussian scales from tail window histories.
+# ---------------------------------------------------------------------------
+# Plot helpers (centralized)
+# ---------------------------------------------------------------------------
 
-    Currently only forward-model error history is retained.
-    Returns:
-        {'sigma_x2': 0.0, 'sigma_z2': 0.0, 'sigma_fwd2': ...}
+def _calc_significance(mean1, std1, n1, mean2, std2, n2):
+    """Calculate statistical significance using Welch's t-test approximation."""
+    if n1 <= 1 or n2 <= 1 or (std1 == 0 and std2 == 0):
+        return ""
+
+    # Welch's t-test
+    se1 = (std1 ** 2) / n1
+    se2 = (std2 ** 2) / n2
+    se_diff = np.sqrt(se1 + se2)
+
+    if se_diff == 0:
+        return ""
+
+    t_stat = abs(mean1 - mean2) / se_diff
+
+    # Significance thresholds
+    if t_stat > 3.291:
+        return "***"  # p < 0.001
+    if t_stat > 2.576:
+        return "**"   # p < 0.01
+    if t_stat > 1.960:
+        return "*"    # p < 0.05
+    return ""
+
+
+def _add_significance_bracket(ax, x_start, x_end, y_start, y_end, text, color='black'):
+    """Draw a bracket connecting two bars with significance text above."""
+    if not text:
+        return 0.0
+
+    # Calculate dimensions
+    span = max(abs(y_end - y_start), max(y_start, y_end, 1.0))
+    h_bracket = 0.05 * span
+
+    y_top = max(y_start, y_end) + h_bracket * 2
+    y_text = y_top + h_bracket * 0.5
+
+    # Draw bracket line: down-across-down
+    line_x = [x_start, x_start, x_end, x_end]
+    line_y = [y_start + h_bracket, y_top, y_top, y_end + h_bracket]
+
+    ax.plot(line_x, line_y, lw=1.0, c=color)
+
+    # Add text
+    ax.text((x_start + x_end) * 0.5, y_text, text, ha='center', va='bottom',
+            color=color, fontweight='bold', fontsize=10)
+
+    return y_text + h_bracket * 2  # Return total height used
+
+
+def plot_fe_and_dwell(novice_data: dict, expert_data: dict, save_path: str):
     """
-    tail = get_tail_window(results, tail_steps)
+    Dwell time comparison with significance brackets.
+    """
+    set_plot_style()
 
-    def mean_or_zero(values: list) -> float:
-        return float(np.mean(values)) if values else 0.0
+    fig, ax2 = plt.subplots(1, 1, figsize=(10, 5), constrained_layout=True)
 
-    action_series = tail.get('action_errors_history', [])
-    return {
-        'sigma_x2': 0.0,
-        'sigma_z2': 0.0,
-        'sigma_fwd2': mean_or_zero(action_series),
-    }
+    x = np.arange(len(STATES))
+    width = 0.28
+
+    nov_dwells = get_dwell_times(novice_data, STATES)
+    exp_dwells = get_dwell_times(expert_data, STATES)
+
+    # Dwell times already measured in timesteps
+
+    # Calculate stats
+    nov_means, exp_means = [], []
+    nov_stds, exp_stds = [], []
+    nov_ns, exp_ns = [], []
+
+    for s in STATES:
+        # Novice
+        vals = nov_dwells[s]
+        nov_means.append(np.mean(vals) if vals else 0)
+        nov_stds.append(np.std(vals) if vals else 0)
+        nov_ns.append(len(vals))
+
+        # Expert
+        vals = exp_dwells[s]
+        exp_means.append(np.mean(vals) if vals else 0)
+        exp_stds.append(np.std(vals) if vals else 0)
+        exp_ns.append(len(vals))
+
+    # Plot Bars
+    ax2.bar(x - width / 2, nov_means, width, yerr=nov_stds, capsize=4, label='Novice',
+            color=[STATE_COLORS[s] for s in STATES], alpha=0.4, hatch='//',
+            edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
+    ax2.bar(x + width / 2, exp_means, width, yerr=exp_stds, capsize=4, label='Expert',
+            color=[STATE_COLORS[s] for s in STATES], alpha=0.7,
+            edgecolor='black', linewidth=1, error_kw={'alpha': 0.5})
+
+    # Add brackets
+    max_y_used = 0
+    current_max_y = max([m + s for m, s in zip(nov_means + exp_means, nov_stds + exp_stds)]) if nov_means else 1.0
+
+    for i in range(len(STATES)):
+        sig = _calc_significance(nov_means[i], nov_stds[i], nov_ns[i],
+                                 exp_means[i], exp_stds[i], exp_ns[i])
+
+        if sig:
+            # Bar tops
+            y1 = nov_means[i] + nov_stds[i]
+            y2 = exp_means[i] + exp_stds[i]
+
+            top_y = _add_significance_bracket(
+                ax2,
+                x[i] - width / 2,
+                x[i] + width / 2,
+                y1,
+                y2,
+                sig,
+            )
+            max_y_used = max(max_y_used, top_y)
+
+    # Auto-scale Y with headroom
+    top_limit = max(current_max_y, max_y_used) * 1.15
+    ax2.set_ylim(0, top_limit)
+
+    ax2.set_ylabel('Average Dwell Time (Timesteps)', fontsize=12, fontweight='bold')
+    ax2.set_title('Dwell Times', fontsize=14, fontweight='bold')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels([STATE_DISPLAY_NAMES[s] for s in STATES], fontsize=11)
+    ax2.legend()
+    ax2.grid(True, axis='y', linestyle='--', alpha=0.3)
+    ax2.set_axisbelow(True)
+
+    save_figure(fig, Path(save_path), "Fig2B_Dwell")
+    plt.close(fig)
+
+
+def plot_transitions(novice_data: dict, expert_data: dict, save_path: str):
+    """
+    Transition dynamics comparison: 2 heatmaps side-by-side (Novice | Expert)
+    """
+    set_plot_style()
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    # Get transition matrices from history
+    nov_trans = get_transition_matrix(novice_data, STATES)
+    exp_trans = get_transition_matrix(expert_data, STATES)
+
+    # Build matrix arrays
+    nov_matrix = np.zeros((len(STATES), len(STATES)))
+    exp_matrix = np.zeros((len(STATES), len(STATES)))
+
+    for i, from_state in enumerate(STATES):
+        for j, to_state in enumerate(STATES):
+            nov_matrix[i, j] = nov_trans.get(from_state, {}).get(to_state, 0.0)
+            exp_matrix[i, j] = exp_trans.get(from_state, {}).get(to_state, 0.0)
+
+    # Plot novice
+    im1 = ax1.imshow(nov_matrix, cmap='YlOrRd', aspect='auto', vmin=0, vmax=1)
+    ax1.set_xticks(range(len(STATES)))
+    ax1.set_yticks(range(len(STATES)))
+    ax1.set_xticklabels([STATE_DISPLAY_NAMES[s].replace(' ', '\n') for s in STATES], fontsize=8)
+    ax1.set_yticklabels([STATE_DISPLAY_NAMES[s] for s in STATES], fontsize=8)
+    ax1.set_xlabel('To State', fontweight='bold')
+    ax1.set_ylabel('From State', fontweight='bold')
+    ax1.set_title('Novice Transition Dynamics', fontsize=13, fontweight='bold')
+
+    # Add text annotations
+    for i in range(len(STATES)):
+        for j in range(len(STATES)):
+            value = nov_matrix[i, j]
+            if value > 0.01:  # Only show significant transitions
+                ax1.text(j, i, f'{value:.2f}',
+                         ha='center', va='center',
+                         color='white' if value > 0.5 else 'black',
+                         fontsize=8)
+
+    plt.colorbar(im1, ax=ax1, label='Probability')
+
+    # Plot expert
+    im2 = ax2.imshow(exp_matrix, cmap='YlOrRd', aspect='auto', vmin=0, vmax=1)
+    ax2.set_xticks(range(len(STATES)))
+    ax2.set_yticks(range(len(STATES)))
+    ax2.set_xticklabels([STATE_DISPLAY_NAMES[s].replace(' ', '\n') for s in STATES], fontsize=8)
+    ax2.set_yticklabels([STATE_DISPLAY_NAMES[s] for s in STATES], fontsize=8)
+    ax2.set_xlabel('To State', fontweight='bold')
+    ax2.set_ylabel('From State', fontweight='bold')
+    ax2.set_title('Expert Transition Dynamics', fontsize=13, fontweight='bold')
+
+    # Add text annotations
+    for i in range(len(STATES)):
+        for j in range(len(STATES)):
+            value = exp_matrix[i, j]
+            if value > 0.01:  # Only show significant transitions
+                ax2.text(j, i, f'{value:.2f}',
+                         ha='center', va='center',
+                         color='white' if value > 0.5 else 'black',
+                         fontsize=8)
+
+    plt.colorbar(im2, ax=ax2, label='Probability')
+
+    fig.suptitle('State Transition Dynamics', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    save_figure(fig, Path(save_path), "Transitions")
+    plt.close(fig)

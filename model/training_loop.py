@@ -16,7 +16,7 @@ from pathlib import Path
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS,
+    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS, TAIL_STEPS, PLOT_STEPS,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
@@ -27,6 +27,8 @@ from utils.math_utils import (
     networks_to_tensor,
     mse_error,
     forward_error,
+    state_confidence,
+    policy_entropy,
 )
 
 class MeditationTrainer:
@@ -60,6 +62,7 @@ class MeditationTrainer:
         self.history = {}
         self._last_x_actual = None
         self._sigma_fwd2 = None
+        self.clarity_baseline_train = None
         self._surprisal_alpha = float(
             np.clip(DEFAULT_DT / PRECISION_TAU, 0.0, 1.0)
         ) if PRECISION_TAU > 0 else 1.0
@@ -136,6 +139,7 @@ class MeditationTrainer:
             # Update L2->L3 sensory interface for policy selection
             state_belief_raw = self.agent.infer_state_belief(activations)
             state_belief = self.monitor.smooth_state_belief(state_belief_raw)
+            state_conf = state_confidence(state_belief, keys=STATES)
             policy_eval = self.agent.evaluate_policies(new_state, state_belief=state_belief)
             self.blanket_l2l3.update_sensory_states({
                 'state_belief':      state_belief,
@@ -148,7 +152,7 @@ class MeditationTrainer:
             meta_awareness = self.monitor.update_meta_awareness_from_conflict(
                 g_vals=policy_eval['g_vals'],
                 state_belief=state_belief,
-                gate_belief=state_belief_raw,
+                gate_belief=state_belief,
             )
             q_pi = self.monitor.select_policy(
                 g_vals=policy_eval['g_vals'],
@@ -173,7 +177,6 @@ class MeditationTrainer:
             selected_action_mu = prescription['selected_action_mu']
             self.blanket_l1l2.update_active_states({
                 'mu_x': prescription['mu_x'],
-                'transition_drive': prescription['transition_drive'],
                 'policy_state_probs': prescription.get('policy_state_probs'),
                 'meta_precision': meta_awareness,
             })
@@ -203,10 +206,12 @@ class MeditationTrainer:
             }
             ts_acts      = activations.cpu().numpy().tolist()
             dominant_idx = int(np.argmax(ts_acts))
-            transition_drive = float(prescription['transition_drive'])
+            policy_state_probs = prescription.get('policy_state_probs') or {}
+            p_stay = float(policy_state_probs.get(new_state, q_pi[0] if len(q_pi) > 0 else 0.0))
+            switch_prob = float(1.0 - p_stay)
             transition_floor = 1.0 / max(self.process.current_max_dwell, 1)
-            transition_prob = max(transition_drive, transition_floor)
-            policy_entropy = float(-np.sum(q_pi * np.log(np.clip(q_pi, EPS, 1.0))))
+            transition_prob = max(switch_prob, transition_floor)
+            policy_entropy_val = policy_entropy(q_pi, eps=EPS)
             metrics = {
                 'timestamp':               t,
                 'free_energy':             free_energy_val,
@@ -217,10 +222,11 @@ class MeditationTrainer:
                 'efe_epi_mean':            float(policy_eval.get('efe_epi_mean', 0.0)),
                 'state_belief':            state_belief,
                 'policy_posterior':        q_pi.tolist(),
-                'policy_entropy':          policy_entropy,
-                'transition_drive':        transition_drive,
+                'policy_entropy':          policy_entropy_val,
+                'switch_prob':            switch_prob,
                 'transition_prob':         transition_prob,
                 'precision_sensory':       precision_sensory,
+                'state_confidence':        state_conf,
                 'state_belief_ma':         float(state_belief.get('meta_awareness', 0.0)),
                 'state_belief_ra':         float(state_belief.get('redirect_attention', 0.0)),
                 'network_activations':     network_acts_serializable,
@@ -314,6 +320,7 @@ class MeditationTrainer:
             self.history['free_energy'].append(metrics['free_energy'])
             self.history['loss'].append(metrics['loss'])
             self.history['meta_awareness'].append(metrics['meta_awareness'])
+            self.history['state_confidence'].append(metrics['state_confidence'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
 
@@ -344,31 +351,37 @@ class MeditationTrainer:
         self,
         timesteps: int = 10000,
         enable_learning: bool = True,
+        train_steps: Optional[int] = None,
         reseed_rng: bool = False,
         run_seed: Optional[int] = None,
         preserve_habit_prior: bool = False,
     ) -> Dict:
-        """Run variational EM training.
+        """Run variational EM: train phase then eval+plot phases with frozen weights.
+
+        When train_steps is set (e.g. TRAIN_STEPS), learning runs only for steps
+        0..train_steps; steps train_steps..timesteps run with weights frozen (eval + plot).
 
         Each BPTT window T runs:
           1. E-step loop  - T calls to _e_step(), no parameter gradients.
-          2. M-step once  - _m_step(buffer) re-runs differentiable passes and
-                            backprops through (phi, theta, psi).
+          2. M-step once  - _m_step(buffer) only when effective_learning is True.
 
         Args:
-            timesteps:     Total simulation steps
-            enable_learning: Whether to update weights (M-step)
+            timesteps:     Total simulation steps (train + eval + plot)
+            enable_learning: Whether to update weights during the train phase
+            train_steps:   If set, learning only for t < train_steps; rest frozen
             reseed_rng:    Reinitialise random generators for reproducibility
             run_seed:      Per-run seed override (used only with reseed_rng)
 
         Returns:
-            Training results dict
+            Training results dict (full run)
         """
         self._reset_run_state(
             reseed_rng=reseed_rng,
             run_seed=run_seed,
             preserve_habit=preserve_habit_prior,
         )
+        if enable_learning:
+            self.monitor.set_clarity_baseline(None)
 
         print(f"PHENOTYPE: {self.phenotype.label} "
               f"(lr={self.phenotype.learning_rate:.4f}, "
@@ -385,8 +398,7 @@ class MeditationTrainer:
 
         # Initialise blankets
         self.blanket_l1l2.update_active_states({
-            'mu_x': None,
-            'transition_drive': 0.0
+            'mu_x': None
         })
         self.blanket_l2l3.reset()
         self.blanket_l2l3.update_sensory_states({
@@ -394,6 +406,7 @@ class MeditationTrainer:
         })
 
         bptt_steps = self.bptt_steps
+        clarity_baseline_set_for_frozen = False
 
         for t_start in range(0, timesteps, bptt_steps):
             # Window boundary: clear sensory states (hidden state carries across)
@@ -401,21 +414,58 @@ class MeditationTrainer:
             self.blanket_l2l3.sensory_states.clear()
 
             steps_to_run = min(bptt_steps, timesteps - t_start)
+            # Freeze weights after train phase: only run M-step when whole window is inside train phase
+            effective_learning = enable_learning and (
+                train_steps is None or (t_start + steps_to_run <= train_steps)
+            )
+            # Set clarity_baseline when entering frozen phase so eval/plot use it
+            if (
+                train_steps is not None
+                and t_start >= train_steps
+                and not clarity_baseline_set_for_frozen
+                and enable_learning
+            ):
+                self.clarity_baseline_train = self._compute_clarity_baseline(train_steps=train_steps)
+                if self.clarity_baseline_train is not None:
+                    self.monitor.set_clarity_baseline(self.clarity_baseline_train)
+                clarity_baseline_set_for_frozen = True
 
             # E-step loop (no gradient accumulation)
             e_step_buffer, activations, current_state = self._run_e_step_window(
                 t_start, steps_to_run, activations, current_state
             )
 
-            # M-step: gradient update over window
-            self._run_m_step_window(e_step_buffer, enable_learning)
+            # M-step: gradient update only during train phase
+            self._run_m_step_window(e_step_buffer, effective_learning)
 
             # BPTT boundary detach (activations already detached from E-step)
             with torch.no_grad():
                 self.process.x = self.process.x.detach()
                 activations = activations.detach()
 
+        if enable_learning and train_steps is not None:
+            self.clarity_baseline_train = self._compute_clarity_baseline(train_steps=train_steps)
+            if self.clarity_baseline_train is not None:
+                self.monitor.set_clarity_baseline(self.clarity_baseline_train)
+        elif enable_learning:
+            self.clarity_baseline_train = self._compute_clarity_baseline()
+            if self.clarity_baseline_train is not None:
+                self.monitor.set_clarity_baseline(self.clarity_baseline_train)
         return self._package_results()
+
+    def _compute_clarity_baseline(self, train_steps: Optional[int] = None) -> Optional[float]:
+        """Compute mean state-confidence over the training tail (for clarity_baseline)."""
+        values = self.history.get('state_confidence', [])
+        if not values:
+            return None
+        if train_steps is not None:
+            start = max(0, train_steps - PLOT_STEPS)
+            tail = values[start:train_steps]
+        else:
+            tail = values[-TAIL_STEPS:] if len(values) > TAIL_STEPS else values
+        if not tail:
+            return None
+        return float(np.mean(tail))
 
     
     def _package_results(self) -> Dict:
@@ -427,10 +477,12 @@ class MeditationTrainer:
             'free_energy_history': self.history['free_energy'],
             'loss_history': self.history['loss'],
             'meta_awareness_history': self.history['meta_awareness'],
+            'state_confidence_history': self.history['state_confidence'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
             'transitions': self.history['transitions'],
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
+            'clarity_baseline_train': self.clarity_baseline_train,
         }
     
     def _reset_run_state(
@@ -448,6 +500,7 @@ class MeditationTrainer:
             'free_energy': [],
             'loss': [],
             'meta_awareness': [],
+            'state_confidence': [],
             'transitions': [],
             'network_activations': [],
             'thoughtseed_activations': [],
@@ -484,13 +537,14 @@ class MeditationTrainer:
 def train_meditation_model(
     phenotype: PhenotypeConfig = None,
     timesteps: int = 10000,
+    train_steps: Optional[int] = None,
     seed: int = 42,
     reseed_rng: bool = False,
     run_seed: Optional[int] = None,
     save_results: bool = True,
     output_dir: str = 'data/lean_results',
 ) -> tuple[MeditationTrainer, Dict]:
-    """Train a model (learning phase) and return the trainer + results."""
+    """Train a model (train phase, then eval+plot with frozen weights) and return trainer + results."""
     trainer = MeditationTrainer(
         phenotype=phenotype,
         seed=seed,
@@ -498,6 +552,7 @@ def train_meditation_model(
     results = trainer.train(
         timesteps=timesteps,
         enable_learning=True,
+        train_steps=train_steps,
         reseed_rng=reseed_rng,
         run_seed=run_seed,
         preserve_habit_prior=False,

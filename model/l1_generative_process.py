@@ -16,7 +16,7 @@ from utils.config import (
     NETWORKS, DEFAULT_DT, CLIP_MIN, CLIP_MAX, EPS, NOISE_LEVEL,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS,
 )
-from utils.math_utils import clip_probability, to_float
+from utils.math_utils import clip_probability
 from model.phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 
 class Layer1Process(nn.Module):
@@ -54,22 +54,26 @@ class Layer1Process(nn.Module):
         self.current_max_dwell = max(1, int(dwell_seconds / self.dt))
         self.current_dwell = 0
         
-    def _check_transition(self, transition_drive: float,
-                          policy_state_probs: Optional[Dict[str, float]] = None) -> str:
-        """Check if state should transition based on dwell + transition drive."""
+    def _check_transition(
+        self,
+        policy_state_probs: Optional[Dict[str, float]] = None,
+    ) -> str:
+        """Check if state should transition based on dwell + policy posterior."""
         self.current_dwell += 1
         
         # Dwell not elapsed: stay
         if self.current_dwell < self.current_max_dwell:
             return self.current_state
         
-        # Dwell elapsed: transition probability driven by transition_drive
-        transition_drive = clip_probability(transition_drive)
+        # Dwell elapsed: transition probability driven by policy posterior
         floor = 1.0 / max(self.current_max_dwell, 1)
-        transition_prob = max(transition_drive, floor)
+        p_stay = None
+        if policy_state_probs:
+            p_stay = float(policy_state_probs.get(self.current_state, 0.0))
+            p_stay = clip_probability(p_stay)
+        transition_prob = max((1.0 - p_stay) if p_stay is not None else 0.0, floor)
         if self.rng.rand() < transition_prob:
-            # Transition: sample next state (policy-conditioned exit if provided)
-            prev_state = self.current_state
+            # Transition: sample next state (policy posterior if provided)
             probs = STATE_TRANSITION_PROBS[self.level][self.current_state]
             states = list(probs.keys())
             base_array = np.array([probs[s] for s in states], dtype=float)
@@ -81,8 +85,7 @@ class Layer1Process(nn.Module):
                     dtype=float
                 )
                 if policy_weights.sum() > 0:
-                    eta = clip_probability(transition_prob)
-                    p_array = (1.0 - eta) * base_array + eta * (base_array * policy_weights)
+                    p_array = policy_weights
             else:
                 policy_weights = None
 
@@ -167,20 +170,18 @@ class Layer1Process(nn.Module):
         
         Args:
             active_states: Control from L2 via Markov blanket
-                - transition_drive: float (0-1) transition drive
                 - mu_x: Optional[torch.Tensor] L2 descending prediction in network space
+                - policy_state_probs: Optional[Dict[str, float]] policy posterior over candidate states
         
         Returns:
             network_acts: {network_name: activation}
             current_state: str
         """
         # Extract control signals
-        transition_drive = active_states.get('transition_drive', 0.0)
-        transition_drive = to_float(transition_drive)
         policy_state_probs = active_states.get('policy_state_probs')
         
         # Check for state transition
-        self.current_state = self._check_transition(transition_drive, policy_state_probs)
+        self.current_state = self._check_transition(policy_state_probs)
         
         # Get dynamics for current state
         mu = self._get_attractor(self.current_state)
@@ -188,7 +189,7 @@ class Layer1Process(nn.Module):
         theta = self._clamp_theta(theta)
         
         # Apply precision-weighted mix of config attractor and L2 prediction.
-        # L2->L1 control signals are mu_x, transition_drive, and policy_state_probs.
+        # L2->L1 control signals are mu_x and policy_state_probs.
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
             if not isinstance(mu_x, torch.Tensor):

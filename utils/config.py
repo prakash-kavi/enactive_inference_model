@@ -14,6 +14,14 @@ THOUGHTSEEDS = ['attend_breath', 'pain_discomfort', 'pending_tasks', 'aha_moment
 
 DEFAULT_DT = 0.2  # Step size
 BPTT_STEPS = 25   # BPTT window length (steps)
+TAIL_STEPS = 2000  # Last N timesteps for converged behavior analysis (legacy; use PLOT_STEPS for plot window)
+
+# Run structure: train -> eval (frozen, settling) -> plot (frozen, final tail)
+TRAIN_STEPS = 8000   # Learning phase
+EVAL_STEPS = 2000    # Eval window: frozen weights, used for Fig S1
+PLOT_STEPS = 2000    # Plot window: final tail, used for fig3-fig5
+TOTAL_STEPS = TRAIN_STEPS + EVAL_STEPS + PLOT_STEPS  # 12000
+
 CLIP_MIN = 0.05
 CLIP_MAX = 0.9
 
@@ -85,7 +93,7 @@ DWELL_TIMES = {
     }
 }
 
-# L1 state transition: once dwell has elapsed, hazard is set by transition_drive only.
+# L1 state transition: once dwell has elapsed, hazard is set by policy posterior.
 
 # Exit transition probabilities priors (exclude self-transitions)
 STATE_TRANSITION_PROBS = {
@@ -111,7 +119,6 @@ STATE_TRANSITION_PROBS = {
 VI_STEPS = 2
 VI_LR = 0.2
 # Trigger VI refinement when latent mismatch exceeds this threshold (MSE in z-space)
-VI_MISMATCH_THRESHOLD = 0.02
 
 # State-belief likelihood variance (MSE units) for q(s|z) softmax
 STATE_BELIEF_VAR = 0.1

@@ -11,7 +11,13 @@ from typing import Optional, Dict, List
 
 from utils.config import EPS, STATES
 from .markov_blankets import MarkovBlanketL2L3
-from utils.math_utils import clip_probability, normalize_scores, policy_posterior, softmax
+from utils.math_utils import (
+    clip_probability,
+    normalize_scores,
+    normalize_belief,
+    policy_posterior,
+    softmax,
+)
 
 class Layer3Monitor(nn.Module):
     """Metacognitive monitor: policy selection + meta-awareness (L3 -> L2)."""
@@ -26,6 +32,7 @@ class Layer3Monitor(nn.Module):
         self.meta_awareness_ema = None
         self.q_pi_ema = None
         self.state_belief_ema = None
+        self.clarity_baseline = None
         self._learned_alpha: dict = {}
         self.bptt_steps = max(1, int(bptt_steps))
         self.policy_lr = 1.0 / self.bptt_steps
@@ -47,7 +54,7 @@ class Layer3Monitor(nn.Module):
         """EMA-smooth state belief for stable GNW gating."""
         if not state_belief:
             return state_belief
-        weights = self._normalize_belief(state_belief)
+        weights = normalize_belief(state_belief, keys=STATES, eps=EPS)
         if self.state_belief_ema is None:
             self.state_belief_ema = weights
         else:
@@ -56,16 +63,6 @@ class Layer3Monitor(nn.Module):
             self.state_belief_ema = np.clip(self.state_belief_ema, EPS, 1.0)
             self.state_belief_ema = self.state_belief_ema / self.state_belief_ema.sum()
         return {s: float(self.state_belief_ema[i]) for i, s in enumerate(STATES)}
-
-    def _normalize_belief(self, state_belief: Optional[dict]) -> np.ndarray:
-        """Return normalized belief weights over STATES (uniform if missing)."""
-        if not state_belief:
-            return np.full(len(STATES), 1.0 / max(len(STATES), 1), dtype=np.float64)
-        weights = np.array([float(state_belief.get(s, 0.0)) for s in STATES], dtype=np.float64)
-        total = float(np.sum(weights))
-        if total <= EPS:
-            return np.full(len(STATES), 1.0 / max(len(STATES), 1), dtype=np.float64)
-        return weights / total
 
     def _get_prior_for_state(self, current_state: str) -> np.ndarray:
         """Return log prior adjustment for current state (length 4, neutral if not learned)."""
@@ -78,7 +75,7 @@ class Layer3Monitor(nn.Module):
 
     def _habit_log_prior(self, state_belief: Optional[dict], scale: float = 1.0) -> np.ndarray:
         """Return habit log-prior adjustment weighted by state belief."""
-        weights = self._normalize_belief(state_belief)
+        weights = normalize_belief(state_belief, keys=STATES, eps=EPS)
         log_adj = np.zeros(4, dtype=np.float64)
         for weight, state in zip(weights, STATES):
             if weight <= 0.0:
@@ -86,6 +83,13 @@ class Layer3Monitor(nn.Module):
             log_adj += weight * self._get_prior_for_state(state)
         scale = float(np.clip(scale, 0.0, 1.0))
         return scale * log_adj
+
+    def set_clarity_baseline(self, baseline: Optional[float]) -> None:
+        """Set a learned clarity baseline (e.g., mean state confidence)."""
+        if baseline is None:
+            self.clarity_baseline = None
+        else:
+            self.clarity_baseline = clip_probability(baseline)
 
     def update_policy_state(self, state_belief: Optional[dict], q_pi: np.ndarray) -> None:
         """Update learned habit prior from inferred state belief (Dirichlet-like EMA).
@@ -97,7 +101,7 @@ class Layer3Monitor(nn.Module):
             return
         q = np.clip(q, 1e-6, 1.0)
         q = q / q.sum()
-        weights = self._normalize_belief(state_belief)
+        weights = normalize_belief(state_belief, keys=STATES, eps=EPS)
         for weight, state in zip(weights, STATES):
             if weight <= 0.0:
                 continue
@@ -120,16 +124,9 @@ class Layer3Monitor(nn.Module):
         log_prior = log_prior + self._habit_log_prior(state_belief, scale=habit_scale)
         g_raw = np.array(g_vals, dtype=float)
         g_array = normalize_scores(g_raw, EPS)
-        # Evidence precision from state-belief confidence (entropy-based).
-        weights = self._normalize_belief(state_belief)
-        entropy = -float(np.sum(weights * np.log(np.clip(weights, EPS, 1.0))))
-        max_entropy = float(np.log(max(len(STATES), 1)))
-        if max_entropy <= EPS:
-            confidence = 0.0
-        else:
-            confidence = 1.0 - (entropy / max_entropy)
-        confidence = float(np.clip(confidence, 0.0, 1.0))
-        gamma_eff = max(EPS, float(meta_precision) * confidence)
+        # Evidence precision from a single policy-precision signal.
+        gamma_eff = clip_probability(meta_precision)
+        gamma_eff = max(EPS, gamma_eff)
         q_pi = policy_posterior(log_prior, g_array, gamma_eff)
         return q_pi
 
@@ -156,15 +153,17 @@ class Layer3Monitor(nn.Module):
         gate_belief: Optional[dict] = None,
     ) -> float:
         """Second-order belief: policy--prior divergence gated by detection state belief."""
+        base_gate = float(self.clarity_baseline) if self.clarity_baseline is not None else 0.0
         gate = 0.0
         belief_for_gate = gate_belief if gate_belief is not None else state_belief
         if belief_for_gate:
             q_ma = float(belief_for_gate.get('meta_awareness', 0.0))
             q_ra = float(belief_for_gate.get('redirect_attention', 0.0))
-            gate = clip_probability(q_ma + q_ra)
+            gate = q_ma + q_ra
+        gate = clip_probability(gate + base_gate)
 
         if not g_vals:
-            raw = 0.0
+            raw = base_gate
         else:
             g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
             log_habit = self._habit_log_prior(state_belief, scale=1.0)
@@ -176,7 +175,7 @@ class Layer3Monitor(nn.Module):
             q_habit = q_habit / q_habit.sum()
             kl = float(np.sum(q_evid * np.log(q_evid / q_habit)))
             raw_conflict = float(1.0 - np.exp(-kl))
-            raw = max(raw_conflict * gate, 0.05)
+            raw = raw_conflict * gate
 
         raw = clip_probability(raw)
         if self.meta_awareness_ema is None:

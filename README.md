@@ -22,7 +22,7 @@
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
                | Sensory: s_t, x_t, dwell_progress d_t
-               | Active:  mu_x, transition_drive u_t, policy_state_probs
+               | Active:  mu_x, policy_state_probs
 +------------------------------v-------------------------------+
 | Layer 1: Neural Generative Process (MVOU)                    |
 | - 4 brain networks (DMN, VAN, DAN, FPN)                      |
@@ -36,7 +36,7 @@
 - States: BF, MW, MA, RA (focused attention cycle)
 - Networks: DMN, VAN, DAN, FPN
 - Thoughtseeds: attend_breath, pain_discomfort, pending_tasks, aha_moment, equanimity
-- Two-phase protocol: learning (variational EM) then inference-only simulation; figures use the last 2,000 steps
+- One run per phenotype: train (8k) → eval (2k, frozen) → plot (2k, frozen). Fig S1 uses eval window; fig3–fig5 use plot window (final 2k steps).
 
 ---
 
@@ -61,7 +61,7 @@ pip install -r requirements.txt
 python run_enactive_inference.py run
 ```
 
-This runs a **two-phase protocol** per phenotype: (1) **Learning phase**: variational EM for 10,000 timesteps to fit encoder, decoder, forward model, and habit prior; (2) **Simulation phase**: inference-only for 10,000 timesteps with frozen parameters. Results are saved to `data/` and all plots are generated in `figures/`.
+This runs **one contiguous run** per phenotype (12,000 steps total): **Train** (8,000 steps, learning on) → **Eval** (2,000 steps, frozen, used for Fig S1) → **Plot** (2,000 steps, frozen, used for fig3–fig5). Results are saved to `data/` and all plots are generated in `figures/`.
 
 ### Generate Plots from Existing Data
 
@@ -69,35 +69,33 @@ This runs a **two-phase protocol** per phenotype: (1) **Learning phase**: variat
 python run_enactive_inference.py plot
 ```
 
-Generates publication-quality figures from saved results. When available, plots use **simulation results** (inference-only) rather than training results; otherwise falls back to training results.
+Generates publication-quality figures from saved results (full run: train+eval+plot). Fig S1 uses the eval segment; fig3–fig5 use the final plot window.
 
 ---
 
 ## Output
 
 ### Results (saved to `data/`)
-- `training_results_expert_seed42.json` / `training_results_novice_seed42.json` — learning-phase trajectories
-- `simulation_results_expert_seed42.json` / `simulation_results_novice_seed42.json` — inference-only trajectories (used for figures when available)
+- `training_results_expert_seed42.json` / `training_results_novice_seed42.json` — full run (train + eval + plot) per phenotype
 
-Each contains: state/network/thoughtseed histories, free energy, meta-awareness, and transition statistics.
+Each contains: state/network/thoughtseed histories, free energy, meta-awareness, and transition statistics for all 12,000 steps.
 
 ### Plots (generated in `figures/`)
 **Convergence (FigS1):**
-- `FigS1_Convergence_Expert.pdf`, `FigS1_Convergence_Novice.pdf` — learning vs inference-only stability, cumulative state occupancy
+- `FigS1_Convergence_Expert.pdf`, `FigS1_Convergence_Novice.pdf` — convergence over the **eval** window (frozen, 2,000 steps)
 
 **Comparison (Fig 3):**
 - `fig3a.pdf` — Network activation profiles across states (Expert vs Novice)
 - `fig3b.pdf` — Dwell times per state (timesteps)
 - `fig3c.pdf` — State transition probability matrices
 
-**Hierarchy (Fig 4 & 6):**
-- `fig4a.pdf`, `fig4b.pdf` — 3-layer hierarchical dynamics (L3 meta-awareness, L2 dominant thoughtseed, L1 networks)
-- `fig6a.pdf`, `fig6b.pdf` — Same with continuous thoughtseed traces
+**Hierarchy (Fig 4):**
+- `fig4a.pdf`, `fig4b.pdf` — 3-layer hierarchical dynamics (L3 meta-awareness, L2 continuous thoughtseed trajectories, L1 networks)
 
 **State space (Fig 5):**
 - `fig5.pdf` — PCA trajectories (L2 thoughtseeds + L1 networks)
 
-**Tail window:** Plots and transition/dwell statistics use the last 2,000 steps (converged regime).
+**Plot window:** fig3–fig5 and dwell/transition statistics use the final 2,000 steps (plot window). Fig S1 uses the eval window (steps 8,000–10,000).
 
 ---
 
@@ -122,14 +120,13 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 |   +-- l3_metacognition.py       # Layer3Monitor (meta-awareness, policy selection)
 |   +-- markov_blankets.py        # Markov blanket interfaces
 +-- utils/
-|   +-- config.py              # Constants, priors, BPTT_STEPS, TAIL_STEPS, etc.
+|   +-- config.py              # Constants, priors, TRAIN_STEPS, EVAL_STEPS, PLOT_STEPS, etc.
 |   +-- math_utils.py          # Tensor/math operations
-+-- data/                      # Training and simulation results (JSON)
++-- data/                      # Run results (JSON, one file per phenotype)
 +-- figures/                   # Generated figures (PDF)
-+-- scripts/                   # Utilities (e.g. extract_results_stats.py)
 +-- viz/                       # Plotting
-    +-- analysis.py, analysis_utils.py
-    +-- attractors.py, convergence.py, diagnostics.py
+    +-- analysis_utils.py      # prepare_tail_data, dwell/transition logic
+    +-- attractors.py, convergence.py, analysis_utils.py
     +-- hierarchy.py, radar_plot.py, plotting_utils.py
 ```
 

@@ -16,7 +16,7 @@ from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
     get_exit_transition_probs, get_policy_candidate_order,
-    VI_STEPS, VI_LR, VI_MISMATCH_THRESHOLD,
+    VI_STEPS, VI_LR,
     Z_NOISE_STD_BY_STATE,
     STATE_BELIEF_VAR,
 )
@@ -31,6 +31,8 @@ from utils.math_utils import (
     clip_probability,
     to_float,
     networks_to_tensor,
+    belief_entropy,
+    normalize_belief,
 )
 
 class ThoughtseedModel(nn.Module):
@@ -193,15 +195,10 @@ class Layer2Agent(nn.Module):
         z_init = self._init_vi_state(z_prev, sensory_target, prior_target, precision_blend)
         z_var = z_init.requires_grad_(True)
 
-        # Variational optimization loop (mismatch-triggered, precision-modulated VI)
-        mismatch = float(mse_error(sensory_target, prior_target).item())
-        if mismatch > VI_MISMATCH_THRESHOLD:
-            # Fewer VI steps when predictability (precision) is high.
-            uncertainty = max(0.0, 1.0 - float(precision_blend))
-            vi_steps = int(np.ceil(float(VI_STEPS) * uncertainty))
-            vi_steps = max(0, min(int(VI_STEPS), vi_steps))
-        else:
-            vi_steps = 0
+        # Variational optimization loop (precision-modulated VI)
+        uncertainty = max(0.0, 1.0 - float(precision_blend))
+        vi_steps = int(np.ceil(float(VI_STEPS) * uncertainty))
+        vi_steps = max(0, min(int(VI_STEPS), vi_steps))
         vi_lr = float(VI_LR)
         with torch.enable_grad():
             for _ in range(vi_steps):
@@ -257,10 +254,9 @@ class Layer2Agent(nn.Module):
             var = max(float(STATE_BELIEF_VAR), EPS)
             logits = -0.5 * dist_vec / var
             probs = torch.softmax(logits, dim=0)
-            return {
-                state: float(probs[i].item())
-                for i, state in enumerate(STATES)
-            }
+            raw = {state: float(probs[i].item()) for i, state in enumerate(STATES)}
+            weights = normalize_belief(raw, keys=STATES, eps=EPS)
+            return {state: float(weights[i]) for i, state in enumerate(STATES)}
     
     # ------------------------------------------------------------------
     # Policy inference sub-steps
@@ -283,22 +279,11 @@ class Layer2Agent(nn.Module):
                 priors.append(max(EPS, hazard * exit_probs.get(s, avg_exit)))
         return priors
 
-    def _belief_entropy(self, belief: Dict[str, float]) -> float:
-        """Entropy of a discrete belief over STATES (in nats)."""
-        weights = np.array([float(belief.get(s, 0.0)) for s in STATES], dtype=float)
-        total = float(np.sum(weights))
-        if total <= EPS:
-            weights = np.full(len(STATES), 1.0 / max(len(STATES), 1), dtype=float)
-        else:
-            weights = weights / total
-        weights = np.clip(weights, EPS, 1.0)
-        return float(-np.sum(weights * np.log(weights)))
-
     def _evaluate_efe(
         self,
         x_current: torch.Tensor,
         candidates: list,
-        state_belief_current: Optional[Dict[str, float]] = None,
+        state_belief_current: Dict[str, float],
     ):
         """EFE G(pi) with pragmatic + epistemic components.
 
@@ -308,16 +293,7 @@ class Layer2Agent(nn.Module):
         """
         g_vals, mu_candidates = [], []
         g_prag_vals, i_epi_vals = [], []
-        if state_belief_current is None:
-            with torch.no_grad():
-                z_curr = self.thoughtseed_model.encode(
-                    x_current.unsqueeze(0) if x_current.dim() == 1 else x_current
-                )
-                if z_curr.dim() > 1:
-                    z_curr = z_curr.squeeze(0)
-                z_curr = clamp_activation(z_curr, CLIP_MIN, CLIP_MAX)
-                state_belief_current = self.infer_state_belief(z_curr)
-        h_current = self._belief_entropy(state_belief_current)
+        h_current = belief_entropy(state_belief_current, keys=STATES)
         with torch.no_grad():
             for s in candidates:
                 mu_c = self.mu_params[s]
@@ -333,7 +309,7 @@ class Layer2Agent(nn.Module):
                     z_pred = z_pred.squeeze(0)
                 z_pred = clamp_activation(z_pred, CLIP_MIN, CLIP_MAX)
                 belief_pred = self.infer_state_belief(z_pred)
-                h_pred = self._belief_entropy(belief_pred)
+                h_pred = belief_entropy(belief_pred, keys=STATES)
                 info_gain_val = float(h_current - h_pred)
 
                 g_prag_vals.append(g_prag_val)
@@ -387,6 +363,15 @@ class Layer2Agent(nn.Module):
             to_float(self.blanket_l1l2.sensory_states.get('dwell_progress', 0.0)) ** 2)
 
         priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # dwell prior (heuristic)
+        if state_belief is None:
+            with torch.no_grad():
+                z_curr = self.thoughtseed_model.encode(
+                    x_current.unsqueeze(0) if x_current.dim() == 1 else x_current
+                )
+                if z_curr.dim() > 1:
+                    z_curr = z_curr.squeeze(0)
+                z_curr = clamp_activation(z_curr, CLIP_MIN, CLIP_MAX)
+                state_belief = self.infer_state_belief(z_curr)
         g_vals, mu_candidates, efe_stats = self._evaluate_efe(
             x_current, candidates, state_belief_current=state_belief
         )
@@ -402,13 +387,11 @@ class Layer2Agent(nn.Module):
     def action_from_policy(self, q_pi, candidates: list, mu_candidates: list) -> Dict:
         """Compute action outputs from an externally selected policy posterior."""
         selected_mu, mu_x = self._select_attractor(q_pi, mu_candidates)
-        transition_drive = float(1.0 - q_pi[0]) if len(q_pi) > 0 else 0.0
         policy_state_probs = {
             state: float(q_pi[i]) for i, state in enumerate(candidates)
         }
         return {
             'selected_action_mu': selected_mu,
             'mu_x':               mu_x,
-            'transition_drive':   transition_drive,
             'policy_state_probs': policy_state_probs,
         }

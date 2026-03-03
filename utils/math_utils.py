@@ -1,6 +1,6 @@
 """Math utility functions for lean meditation model."""
 
-from typing import Dict, Iterable, Union
+from typing import Dict, Iterable, Optional, Union
 import numpy as np
 import torch
 
@@ -39,6 +39,91 @@ def normalize_scores(values: np.ndarray, eps: float = EPS) -> np.ndarray:
     if std <= eps:
         return values
     return (values - np.mean(values)) / (std + eps)
+
+def belief_entropy(
+    belief: Union[Dict[str, float], np.ndarray, list, tuple],
+    keys: Optional[Iterable[str]] = None,
+    eps: float = EPS,
+) -> float:
+    """Entropy of a discrete belief (in nats) with safe normalization."""
+    if isinstance(belief, dict):
+        if keys is None:
+            values = np.array(list(belief.values()), dtype=float)
+        else:
+            values = np.array([float(belief.get(k, 0.0)) for k in keys], dtype=float)
+    else:
+        values = np.array(belief, dtype=float)
+    total = float(np.sum(values))
+    if total <= eps:
+        n = max(values.size, 1)
+        values = np.full(n, 1.0 / n, dtype=float)
+    else:
+        values = values / total
+    values = np.clip(values, eps, 1.0)
+    return float(-np.sum(values * np.log(values)))
+
+def normalize_belief(
+    belief: Union[Dict[str, float], np.ndarray, list, tuple, None],
+    keys: Optional[Iterable[str]] = None,
+    eps: float = EPS,
+) -> np.ndarray:
+    """Normalize belief weights (uniform if missing or degenerate)."""
+    if belief is None:
+        n = len(keys) if keys is not None else 1
+        return np.full(max(n, 1), 1.0 / max(n, 1), dtype=float)
+    if isinstance(belief, dict):
+        if keys is None:
+            values = np.array(list(belief.values()), dtype=float)
+        else:
+            values = np.array([float(belief.get(k, 0.0)) for k in keys], dtype=float)
+    else:
+        values = np.array(belief, dtype=float)
+    total = float(np.sum(values))
+    if total <= eps:
+        n = max(values.size, 1)
+        return np.full(n, 1.0 / n, dtype=float)
+    values = values / total
+    values = np.clip(values, 0.0, 1.0)
+    return values
+
+def state_confidence(
+    belief: Union[Dict[str, float], np.ndarray, list, tuple, None],
+    keys: Optional[Iterable[str]] = None,
+    eps: float = EPS,
+) -> float:
+    """Entropy-based confidence in a discrete belief (0..1)."""
+    if belief is None:
+        return 0.0
+    entropy = belief_entropy(belief, keys=keys, eps=eps)
+    n = len(keys) if keys is not None else None
+    if n is None:
+        if isinstance(belief, dict):
+            n = max(len(belief), 1)
+        else:
+            n = max(len(np.array(belief).flatten()), 1)
+    max_entropy = float(np.log(max(n, 1)))
+    if max_entropy <= eps:
+        return 0.0
+    confidence = 1.0 - (entropy / max_entropy)
+    return float(np.clip(confidence, 0.0, 1.0))
+
+def policy_entropy(
+    probs: Union[np.ndarray, list, tuple, None],
+    eps: float = EPS,
+) -> float:
+    """Entropy of a categorical policy distribution (in nats)."""
+    if probs is None:
+        return 0.0
+    values = np.array(probs, dtype=float)
+    if values.size == 0:
+        return 0.0
+    total = float(np.sum(values))
+    if total <= eps:
+        values = np.full(values.size, 1.0 / max(values.size, 1), dtype=float)
+    else:
+        values = values / total
+    values = np.clip(values, eps, 1.0)
+    return float(-np.sum(values * np.log(values)))
 
 def clamp_activation(x: torch.Tensor, clip_min: float, clip_max: float) -> torch.Tensor:
     """Clamp activations to configured model bounds."""
