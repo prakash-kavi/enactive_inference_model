@@ -41,7 +41,6 @@ _TIME_SERIES_KEYS = [
     "free_energy_history",
     "loss_history",
     "meta_awareness_history",
-    "state_confidence_history",
     "network_activations_history",
     "thoughtseed_activations_history",
     "thoughtseed_prior_activations_history",

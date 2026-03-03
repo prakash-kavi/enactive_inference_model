@@ -57,7 +57,7 @@ NETWORK_PROFILES = {
 DWELL_TIMES = {
     'expert': {
         'breath_focus': (15, 25),
-        'mind_wandering': (12, 20),
+        'mind_wandering': (10, 18),
         'meta_awareness': (3, 6),
         'redirect_attention': (3, 6)
     },

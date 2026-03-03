@@ -16,7 +16,7 @@ from pathlib import Path
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS, PLOT_STEPS,
+    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
@@ -27,7 +27,6 @@ from utils.math_utils import (
     networks_to_tensor,
     mse_error,
     forward_error,
-    state_confidence,
     policy_entropy,
 )
 
@@ -62,7 +61,6 @@ class MeditationTrainer:
         self.history = {}
         self._last_x_actual = None
         self._sigma_fwd2 = None
-        self.clarity_baseline_train = None
         self._surprisal_alpha = float(
             np.clip(DEFAULT_DT / PRECISION_TAU, 0.0, 1.0)
         ) if PRECISION_TAU > 0 else 1.0
@@ -141,9 +139,7 @@ class MeditationTrainer:
             )
 
             # Update L2->L3 sensory interface for policy selection
-            state_belief_raw = self.agent.infer_state_belief(activations)
-            state_belief = state_belief_raw
-            state_conf = state_confidence(state_belief_raw, keys=STATES)
+            state_belief = self.agent.infer_state_belief(activations)
             policy_eval = self.agent.evaluate_policies(new_state, state_belief=state_belief)
             self.blanket_l2l3.update_sensory_states({
                 'state_belief':      state_belief,
@@ -231,7 +227,6 @@ class MeditationTrainer:
                 'switch_prob':            switch_prob,
                 'transition_prob':         transition_prob,
                 'precision_sensory':       precision_sensory,
-                'state_confidence':        state_conf,
                 'state_belief_ma':         float(state_belief.get('meta_awareness', 0.0)),
                 'state_belief_ra':         float(state_belief.get('redirect_attention', 0.0)),
                 'network_activations':     network_acts_serializable,
@@ -327,7 +322,6 @@ class MeditationTrainer:
             self.history['free_energy'].append(metrics['free_energy'])
             self.history['loss'].append(metrics['loss'])
             self.history['meta_awareness'].append(metrics['meta_awareness'])
-            self.history['state_confidence'].append(metrics['state_confidence'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
             self.history['thoughtseed_prior_activations'].append(
@@ -390,8 +384,6 @@ class MeditationTrainer:
             run_seed=run_seed,
             preserve_habit=preserve_habit_prior,
         )
-        if enable_learning:
-            self.monitor.set_clarity_baseline(None)
 
         print(f"PHENOTYPE: {self.phenotype.label} "
               f"(lr={self.phenotype.learning_rate:.4f}, "
@@ -416,8 +408,6 @@ class MeditationTrainer:
         })
 
         bptt_steps = self.bptt_steps
-        clarity_baseline_set_for_frozen = False
-
         for t_start in range(0, timesteps, bptt_steps):
             # Window boundary: clear sensory states (hidden state carries across)
             self.blanket_l1l2.sensory_states.clear()
@@ -428,18 +418,6 @@ class MeditationTrainer:
             effective_learning = enable_learning and (
                 train_steps is None or (t_start + steps_to_run <= train_steps)
             )
-            # Set clarity_baseline when entering frozen phase so eval/plot use it
-            if (
-                train_steps is not None
-                and t_start >= train_steps
-                and not clarity_baseline_set_for_frozen
-                and enable_learning
-            ):
-                self.clarity_baseline_train = self._compute_clarity_baseline(train_steps=train_steps)
-                if self.clarity_baseline_train is not None:
-                    self.monitor.set_clarity_baseline(self.clarity_baseline_train)
-                clarity_baseline_set_for_frozen = True
-
             # E-step loop (no gradient accumulation)
             e_step_buffer, activations, current_state = self._run_e_step_window(
                 t_start,
@@ -456,31 +434,8 @@ class MeditationTrainer:
                 self.process.x = self.process.x.detach()
                 activations = activations.detach()
 
-        if enable_learning and train_steps is not None:
-            self.clarity_baseline_train = self._compute_clarity_baseline(train_steps=train_steps)
-            if self.clarity_baseline_train is not None:
-                self.monitor.set_clarity_baseline(self.clarity_baseline_train)
-        elif enable_learning:
-            self.clarity_baseline_train = self._compute_clarity_baseline()
-            if self.clarity_baseline_train is not None:
-                self.monitor.set_clarity_baseline(self.clarity_baseline_train)
         return self._package_results()
 
-    def _compute_clarity_baseline(self, train_steps: Optional[int] = None) -> Optional[float]:
-        """Compute mean state-confidence over the training tail (for clarity_baseline)."""
-        values = self.history.get('state_confidence', [])
-        if not values:
-            return None
-        if train_steps is not None:
-            start = max(0, train_steps - PLOT_STEPS)
-            tail = values[start:train_steps]
-        else:
-            tail = values[-PLOT_STEPS:] if len(values) > PLOT_STEPS else values
-        if not tail:
-            return None
-        return float(np.mean(tail))
-
-    
     def _package_results(self) -> Dict:
         """Package training results for analysis."""
         return {
@@ -490,13 +445,11 @@ class MeditationTrainer:
             'free_energy_history': self.history['free_energy'],
             'loss_history': self.history['loss'],
             'meta_awareness_history': self.history['meta_awareness'],
-            'state_confidence_history': self.history['state_confidence'],
             'state_history': self.history['states'],  # Renamed for viz compatibility
             'transitions': self.history['transitions'],
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
             'thoughtseed_prior_activations_history': self.history['thoughtseed_prior_activations'],
-            'clarity_baseline_train': self.clarity_baseline_train,
         }
     
     def _reset_run_state(
@@ -514,7 +467,6 @@ class MeditationTrainer:
             'free_energy': [],
             'loss': [],
             'meta_awareness': [],
-            'state_confidence': [],
             'transitions': [],
             'network_activations': [],
             'thoughtseed_activations': [],

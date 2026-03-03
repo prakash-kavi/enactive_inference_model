@@ -39,19 +39,14 @@ def plot_hierarchy_continuous(data, save_path: str, level_name: str):
     fig = plt.figure(figsize=(14, 10))
     gs = GridSpec(3, 1, height_ratios=[1, 1.2, 1.5], figure=fig)
 
-    # 1. Level 3: Meta-awareness and clarity (state confidence)
+    # 1. Level 3: Meta-awareness
     ax1 = fig.add_subplot(gs[0])
     meta_awareness = data['meta_awareness_history']
-    ax1.plot(time_steps, meta_awareness, color='#4363d8', linewidth=2, label='Meta-awareness')
+    ax1.plot(time_steps, meta_awareness, color='#4363d8', linewidth=2)
     ax1.fill_between(time_steps, meta_awareness, alpha=0.2, color='#4363d8')
-    clarity = data.get('state_confidence_history')
-    if clarity is not None and len(clarity) == n_steps:
-        clarity_smooth = pd.Series(clarity, dtype=float).ewm(alpha=0.2, adjust=False).mean().to_numpy()
-        ax1.plot(time_steps, clarity_smooth, color='#0d7a4a', linewidth=1.2, linestyle='--', alpha=0.85, label='Clarity (state confidence)')
-    ax1.set_ylabel('Level', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('Meta-awareness', fontsize=12, fontweight='bold')
     ax1.set_title('Level 3: Metacognition', fontsize=14, fontweight='bold', loc='left')
     ax1.set_ylim(0, 1.05)
-    ax1.legend(loc='upper right', fontsize=9, frameon=False)
     ax1.grid(True, axis='y', linestyle='--', alpha=0.5)
     ax1.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
     for spine in ax1.spines.values():
