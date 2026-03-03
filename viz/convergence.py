@@ -17,8 +17,7 @@ from viz.plotting_utils import (
     STATE_COLORS,
     STATE_SHORT_NAMES
 )
-from utils.config import STATES
-from viz.analysis_utils import TAIL_STEPS
+from utils.config import STATES, PLOT_STEPS
 
 
 def rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
@@ -183,7 +182,7 @@ def plot_convergence(
 ):
     """Generate a single convergence diagnostic plot."""
     if tail_span is None and not highlight_spans:
-        tail_span = TAIL_STEPS
+        tail_span = PLOT_STEPS
     set_plot_style()
 
     level = results.get("experience_level", "unknown")

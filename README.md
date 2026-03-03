@@ -139,7 +139,7 @@ Edit `utils/config.py` to modify:
 - Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
 - Dwell ranges (DWELL_TIMES) and transition priors (STATE_TRANSITION_PROBS)
 - Learning rates (0.01 novice, 0.02 expert)
-- Process noise (NOISE_LEVEL), BPTT_STEPS (25), TAIL_STEPS (2000)
+- Process noise (NOISE_LEVEL), BPTT_STEPS (25), PLOT_STEPS (2000)
 
 ---
 

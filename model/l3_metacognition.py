@@ -9,7 +9,7 @@ import numpy as np
 import torch.nn as nn
 from typing import Optional, Dict, List
 
-from utils.config import EPS, STATES
+from utils.config import EPS, STATES, DEFAULT_DT, PRECISION_TAU
 from .markov_blankets import MarkovBlanketL2L3
 from utils.math_utils import (
     clip_probability,
@@ -29,40 +29,21 @@ class Layer3Monitor(nn.Module):
     ):
         super().__init__()
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3()
-        self.meta_awareness_ema = None
-        self.q_pi_ema = None
-        self.state_belief_ema = None
+        self.meta_awareness = None
         self.clarity_baseline = None
         self._learned_alpha: dict = {}
         self.bptt_steps = max(1, int(bptt_steps))
         self.policy_lr = 1.0 / self.bptt_steps
-        self._meta_alpha = 1.0 / self.bptt_steps
 
     def reset(self, preserve_habit: bool = False) -> None:
         """Reset monitor state for a new run.
 
         Set preserve_habit=True to keep learned habit priors across runs.
         """
-        self.meta_awareness_ema = None
-        self.q_pi_ema = None
-        self.state_belief_ema = None
+        self.meta_awareness = None
         if not preserve_habit:
             self._learned_alpha.clear()
         self.blanket_l2l3.reset()
-
-    def smooth_state_belief(self, state_belief: Optional[dict]) -> Optional[dict]:
-        """EMA-smooth state belief for stable GNW gating."""
-        if not state_belief:
-            return state_belief
-        weights = normalize_belief(state_belief, keys=STATES, eps=EPS)
-        if self.state_belief_ema is None:
-            self.state_belief_ema = weights
-        else:
-            alpha = self._meta_alpha
-            self.state_belief_ema = (1.0 - alpha) * self.state_belief_ema + alpha * weights
-            self.state_belief_ema = np.clip(self.state_belief_ema, EPS, 1.0)
-            self.state_belief_ema = self.state_belief_ema / self.state_belief_ema.sum()
-        return {s: float(self.state_belief_ema[i]) for i, s in enumerate(STATES)}
 
     def _get_prior_for_state(self, current_state: str) -> np.ndarray:
         """Return log prior adjustment for current state (length 4, neutral if not learned)."""
@@ -130,21 +111,18 @@ class Layer3Monitor(nn.Module):
         q_pi = policy_posterior(log_prior, g_array, gamma_eff)
         return q_pi
 
-    def smooth_policy(self, q_pi: np.ndarray) -> np.ndarray:
-        """EMA-smooth policy posterior (GNW-style broadcast stability)."""
-        q = np.array(q_pi, dtype=np.float64)
-        if q.size == 0:
-            return q
-        q = np.clip(q, EPS, 1.0)
-        q = q / q.sum()
-        if self.q_pi_ema is None:
-            self.q_pi_ema = q
+    def _ou_update_meta(self, target: float) -> float:
+        """Deterministic OU-style update for meta-awareness."""
+        dt = float(DEFAULT_DT)
+        tau = max(float(PRECISION_TAU), dt)
+        theta = 1.0 / tau
+        target = clip_probability(target)
+        if self.meta_awareness is None:
+            self.meta_awareness = target
         else:
-            alpha = self._meta_alpha
-            self.q_pi_ema = (1.0 - alpha) * self.q_pi_ema + alpha * q
-            self.q_pi_ema = np.clip(self.q_pi_ema, EPS, 1.0)
-            self.q_pi_ema = self.q_pi_ema / self.q_pi_ema.sum()
-        return self.q_pi_ema
+            drift = -theta * (self.meta_awareness - target)
+            self.meta_awareness = self.meta_awareness + drift * dt
+        return clip_probability(self.meta_awareness)
 
     def update_meta_awareness_from_conflict(
         self,
@@ -163,7 +141,7 @@ class Layer3Monitor(nn.Module):
         gate = clip_probability(gate + base_gate)
 
         if not g_vals:
-            raw = base_gate
+            target = base_gate
         else:
             g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
             log_habit = self._habit_log_prior(state_belief, scale=1.0)
@@ -175,14 +153,7 @@ class Layer3Monitor(nn.Module):
             q_habit = q_habit / q_habit.sum()
             kl = float(np.sum(q_evid * np.log(q_evid / q_habit)))
             raw_conflict = float(1.0 - np.exp(-kl))
-            raw = raw_conflict * gate
+            target = raw_conflict * gate
 
-        raw = clip_probability(raw)
-        if self.meta_awareness_ema is None:
-            self.meta_awareness_ema = raw
-        else:
-            alpha = self._meta_alpha
-            self.meta_awareness_ema = (1.0 - alpha) * self.meta_awareness_ema + alpha * raw
-        meta = clip_probability(self.meta_awareness_ema)
-        return meta
+        return self._ou_update_meta(target)
 

@@ -141,6 +141,7 @@ class Layer1Process(nn.Module):
                     theta[r, c] *= 1.4
                     theta[c, r] *= 1.4
         
+        theta = theta * float(self.phenotype.theta_scale)
         return theta
     
     def _clamp_theta(self, theta: torch.Tensor) -> torch.Tensor:

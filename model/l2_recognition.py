@@ -19,6 +19,7 @@ from utils.config import (
     VI_STEPS, VI_LR,
     Z_NOISE_STD_BY_STATE,
     STATE_BELIEF_VAR,
+    DEFAULT_DT, PRECISION_TAU,
 )
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -49,6 +50,7 @@ class ThoughtseedModel(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, latent_dim)
         )
+        self.encoder_norm = nn.LayerNorm(latent_dim)
         
         # Decoder: Thoughtseeds -> Networks
         self.decoder = nn.Sequential(
@@ -73,6 +75,7 @@ class ThoughtseedModel(nn.Module):
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode networks to thoughtseed activations q_phi(z|x)."""
         logits = self.encoder(x)
+        logits = self.encoder_norm(logits)
         return torch.sigmoid(logits)  # Independent strengths (no softmax)
     
     def decode(self, z: torch.Tensor) -> torch.Tensor:
@@ -119,7 +122,7 @@ class Layer2Agent(nn.Module):
             priors = THOUGHTSEED_STATE_PRIORS[state].copy()
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
-        
+
     def _precision_params(self, precision_sensory: Optional[float] = None) -> tuple[float, float]:
         """Return (precision_blend, precision_weight) from a scalar precision signal."""
         if precision_sensory is None:
@@ -128,16 +131,34 @@ class Layer2Agent(nn.Module):
         precision_weight = precision_blend
         return precision_blend, precision_weight
 
+    def _ou_step_z(
+        self,
+        current_state: str,
+        z_prev: torch.Tensor,
+    ) -> torch.Tensor:
+        """OU-like latent dynamics for thoughtseeds (slow latent causes)."""
+        dt = float(DEFAULT_DT)
+        tau = max(float(PRECISION_TAU), dt)
+        theta = 1.0 / tau
+        mu = self.mu_params[current_state].detach()
+        z_prev = clamp_activation(z_prev.detach(), CLIP_MIN, CLIP_MAX)
+        drift = -theta * (z_prev - mu)
+        noise_std = float(Z_NOISE_STD_BY_STATE.get(current_state, 0.0))
+        if noise_std > 0.0:
+            noise = torch.randn_like(z_prev) * noise_std * np.sqrt(dt)
+        else:
+            noise = torch.zeros_like(z_prev)
+        z_prior = z_prev + drift * dt + noise
+        return clamp_activation(z_prior, CLIP_MIN, CLIP_MAX)
+
     def _init_vi_state(
         self,
-        z_prev: torch.Tensor,
         z_recognition: torch.Tensor,
-        prior_target: torch.Tensor,
+        z_prior: torch.Tensor,
         precision_blend: float,
     ) -> torch.Tensor:
         """Precision-weighted initialization for VI refinement."""
-        z_init = 0.5 * z_prev + 0.5 * z_recognition
-        z_init = precision_blend * z_init + (1.0 - precision_blend) * prior_target
+        z_init = precision_blend * z_recognition + (1.0 - precision_blend) * z_prior
         return clamp_activation(z_init, CLIP_MIN, CLIP_MAX)
     
     def decode_with_state(self, z: torch.Tensor) -> torch.Tensor:
@@ -156,24 +177,26 @@ class Layer2Agent(nn.Module):
         z: torch.Tensor,
         observed_x: torch.Tensor,
         precision_sensory: Optional[float] = None,
+        prior_target: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Compute VFE: precision-weighted reconstruction + prior matching."""
+        """Compute VFE: precision-weighted reconstruction + state prior."""
         recon_x = self.decode_with_state(z)
         observed_x = observed_x.detach()
 
         _, precision_weight = self._precision_params(precision_sensory)
 
         recon_loss = precision_weight * recon_error(recon_x, observed_x)
-        prior = self.mu_params[state].detach()
-        prior_match = prior_error(z, prior)
+        if prior_target is None:
+            prior_target = self.mu_params[state].detach()
+        prior_match = prior_error(z, prior_target)
 
         return recon_loss + prior_match
     
     def update_posterior_z(
         self,
         current_state: str,
-        activations: torch.Tensor,
         z_recognition: torch.Tensor,
+        z_prior: torch.Tensor,
     ) -> torch.Tensor:
         """Posterior update q(z): fixed-step VI over thoughtseeds."""
         clip_min = CLIP_MIN
@@ -184,28 +207,28 @@ class Layer2Agent(nn.Module):
         def clamp_z(t: torch.Tensor) -> torch.Tensor:
             return clamp_activation(t, clip_min, clip_max)
 
-        z_prev = clamp_z(activations.detach())
         sensory_target = clamp_z(z_recognition.detach())
-        prior_target = clamp_z(self.mu_params[current_state].detach().clone())
+        prior_target = clamp_z(z_prior.detach())
         
         # Sensory precision (used as observation weight + blending factor)
         precision_blend, precision_weight = self._precision_params()
-        
-        # Initialization: blend previous and sensory target, then bias toward sensory when precision is high.
-        z_init = self._init_vi_state(z_prev, sensory_target, prior_target, precision_blend)
+
+        # Initialization: blend dynamical prior and sensory target, bias toward sensory when precision is high.
+        z_init = self._init_vi_state(sensory_target, prior_target, precision_blend)
         z_var = z_init.requires_grad_(True)
 
+        # State-conditioned prior for VI objective
+        state_prior = clamp_z(self.mu_params[current_state].detach())
+
         # Variational optimization loop (precision-modulated VI)
-        uncertainty = max(0.0, 1.0 - float(precision_blend))
-        vi_steps = int(np.ceil(float(VI_STEPS) * uncertainty))
-        vi_steps = max(0, min(int(VI_STEPS), vi_steps))
+        vi_steps = max(0, int(VI_STEPS))
         vi_lr = float(VI_LR)
         with torch.enable_grad():
             for _ in range(vi_steps):
                 recon_x = self.decode_with_state(z_var)
-                
+
                 recon_loss = precision_weight * recon_error(recon_x, observed_vec)
-                prior_match = prior_error(z_var, prior_target)
+                prior_match = prior_error(z_var, state_prior)
                 loss = recon_loss + prior_match
                 
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
@@ -220,28 +243,27 @@ class Layer2Agent(nn.Module):
         self,
         current_state: str,
         activations: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Infer recognition and VI-refined thoughtseeds for the current step."""
+        z_prior = self._ou_step_z(
+            current_state,
+            activations,
+        )
+
         # Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)
         network_acts = self.blanket_l1l2.sensory_states
         x = networks_to_tensor(network_acts, NETWORKS)
         z = self.thoughtseed_model.encode(x.unsqueeze(0) if x.dim() == 1 else x)
         if z.dim() > 1:
             z = z.squeeze(0)
-        z_mean = clamp_activation(z, CLIP_MIN, CLIP_MAX)
-        noise_std = float(Z_NOISE_STD_BY_STATE.get(current_state, 0.0))
-        if noise_std > 0.0:
-            z_sample = z_mean + torch.randn_like(z_mean) * noise_std
-        else:
-            z_sample = z_mean
-        z_recognition = clamp_activation(z_sample, CLIP_MIN, CLIP_MAX)
+        z_recognition = clamp_activation(z, CLIP_MIN, CLIP_MAX)
 
         z_posterior = self.update_posterior_z(
             current_state=current_state,
-            activations=activations,
             z_recognition=z_recognition,
+            z_prior=z_prior,
         )
-        return z_posterior, z_recognition
+        return z_posterior, z_recognition, z_prior
 
     def infer_state_belief(self, z: torch.Tensor) -> Dict[str, float]:
         """Infer state belief q(s|z) from thoughtseed activations."""

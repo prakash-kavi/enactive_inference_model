@@ -60,7 +60,7 @@ def plot_hierarchy_continuous(data, save_path: str, level_name: str):
 
     # 2. Level 2: Thoughtseed trajectories (continuous)
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
-    ts_history = data['thoughtseed_activations_history']
+    ts_history = data.get('thoughtseed_prior_activations_history') or data['thoughtseed_activations_history']
     ts_alpha = 0.2  # smoother thoughtseed traces (visual only)
     for i, ts in enumerate(THOUGHTSEEDS):
         ts_vals = [row[i] for row in ts_history]

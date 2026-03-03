@@ -23,18 +23,22 @@ class PhenotypeConfig:
         Whether to apply expert-specific Theta(s) adjustments in Layer 1
         (stronger self-stabilisation in BF, amplified DMN-DAN inhibition in RA,
         VAN-FPN synergy in MA).
+    theta_scale : float
+        Global scaling applied to Theta(s) (stiffness/coupling strength).
     label : str
         Human-readable label used in console output and saved result files.
     """
     level:         str
     learning_rate: float
     theta_boost:   bool
+    theta_scale:   float
     label:         str
 
 EXPERT_PHENOTYPE = PhenotypeConfig(
     level='expert',
     learning_rate=LEARNING_RATES['expert'],
     theta_boost=True,
+    theta_scale=1.1,
     label='EXPERT',
 )
 
@@ -42,6 +46,7 @@ NOVICE_PHENOTYPE = PhenotypeConfig(
     level='novice',
     learning_rate=LEARNING_RATES['novice'],
     theta_boost=False,
+    theta_scale=1.0,
     label='NOVICE',
 )
 

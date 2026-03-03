@@ -44,6 +44,7 @@ _TIME_SERIES_KEYS = [
     "state_confidence_history",
     "network_activations_history",
     "thoughtseed_activations_history",
+    "thoughtseed_prior_activations_history",
 ]
 
 

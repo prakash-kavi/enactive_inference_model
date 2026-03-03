@@ -16,7 +16,7 @@ from pathlib import Path
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
-    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS, TAIL_STEPS, PLOT_STEPS,
+    DEFAULT_DT, PRECISION_TAU, BPTT_STEPS, PLOT_STEPS,
 )
 from .l1_generative_process import Layer1Process
 from .l2_recognition import Layer2Agent
@@ -123,7 +123,7 @@ class MeditationTrainer:
             self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
 
             # ===== Layer 2: Attentional Agent =====
-            activations, _ = self.agent.infer_z_step(
+            activations, _, z_prior = self.agent.infer_z_step(
                 current_state=new_state,
                 activations=activations,
             )
@@ -132,14 +132,18 @@ class MeditationTrainer:
             # VFE as scalar metric (M-step will recompute with grad)
             free_energy_val = float(
                 self.agent.compute_vfe(
-                    new_state, activations, x_current, precision_sensory=precision_sensory
+                    new_state,
+                    activations,
+                    x_current,
+                    precision_sensory=precision_sensory,
+                    prior_target=None,
                 ).item()
             )
 
             # Update L2->L3 sensory interface for policy selection
             state_belief_raw = self.agent.infer_state_belief(activations)
-            state_belief = self.monitor.smooth_state_belief(state_belief_raw)
-            state_conf = state_confidence(state_belief, keys=STATES)
+            state_belief = state_belief_raw
+            state_conf = state_confidence(state_belief_raw, keys=STATES)
             policy_eval = self.agent.evaluate_policies(new_state, state_belief=state_belief)
             self.blanket_l2l3.update_sensory_states({
                 'state_belief':      state_belief,
@@ -160,7 +164,6 @@ class MeditationTrainer:
                 state_belief=state_belief,
                 meta_precision=meta_awareness,
             )
-            q_pi = self.monitor.smooth_policy(q_pi)
             q_pi = np.array(q_pi, dtype=float)
             if not np.all(np.isfinite(q_pi)) or q_pi.sum() <= 0.0:
                 raise ValueError(f"Invalid policy posterior at t={t}: {q_pi}")
@@ -193,6 +196,7 @@ class MeditationTrainer:
                 'action_prev': action_prev,
                 'x_curr':      x_current.detach(),
                 'z_star':      activations,          # already detached by VI
+                'z_prior':     z_prior.detach(),
                 'state':       new_state,
                 'precision_sensory': precision_sensory,
                 'state_belief': state_belief,
@@ -205,6 +209,7 @@ class MeditationTrainer:
                 for net, val in network_acts.items()
             }
             ts_acts      = activations.cpu().numpy().tolist()
+            ts_prior_acts = z_prior.cpu().numpy().tolist() if z_prior is not None else ts_acts
             dominant_idx = int(np.argmax(ts_acts))
             policy_state_probs = prescription.get('policy_state_probs') or {}
             p_stay = float(policy_state_probs.get(new_state, q_pi[0] if len(q_pi) > 0 else 0.0))
@@ -231,6 +236,7 @@ class MeditationTrainer:
                 'state_belief_ra':         float(state_belief.get('redirect_attention', 0.0)),
                 'network_activations':     network_acts_serializable,
                 'thoughtseed_activations': ts_acts,
+                'thoughtseed_prior_activations': ts_prior_acts,
                 'dominant_thoughtseed':    THOUGHTSEEDS[dominant_idx],
             }
 
@@ -262,7 +268,8 @@ class MeditationTrainer:
             # -- VFE: decoder gradient (theta) --------------------------------
             vfe = self.agent.compute_vfe(
                 entry['state'], entry['z_star'], entry['x_curr'],
-                precision_sensory=entry.get('precision_sensory')
+                precision_sensory=entry.get('precision_sensory'),
+                prior_target=None,
             )
             vfe_terms.append(vfe)
             vfe_sum += float(vfe.detach().item())
@@ -323,6 +330,9 @@ class MeditationTrainer:
             self.history['state_confidence'].append(metrics['state_confidence'])
             self.history['network_activations'].append(metrics['network_activations'])
             self.history['thoughtseed_activations'].append(metrics['thoughtseed_activations'])
+            self.history['thoughtseed_prior_activations'].append(
+                metrics.get('thoughtseed_prior_activations', metrics['thoughtseed_activations'])
+            )
 
         return e_step_buffer, activations, current_state
 
@@ -432,7 +442,10 @@ class MeditationTrainer:
 
             # E-step loop (no gradient accumulation)
             e_step_buffer, activations, current_state = self._run_e_step_window(
-                t_start, steps_to_run, activations, current_state
+                t_start,
+                steps_to_run,
+                activations,
+                current_state,
             )
 
             # M-step: gradient update only during train phase
@@ -462,7 +475,7 @@ class MeditationTrainer:
             start = max(0, train_steps - PLOT_STEPS)
             tail = values[start:train_steps]
         else:
-            tail = values[-TAIL_STEPS:] if len(values) > TAIL_STEPS else values
+            tail = values[-PLOT_STEPS:] if len(values) > PLOT_STEPS else values
         if not tail:
             return None
         return float(np.mean(tail))
@@ -482,6 +495,7 @@ class MeditationTrainer:
             'transitions': self.history['transitions'],
             'network_activations_history': self.history['network_activations'],
             'thoughtseed_activations_history': self.history['thoughtseed_activations'],
+            'thoughtseed_prior_activations_history': self.history['thoughtseed_prior_activations'],
             'clarity_baseline_train': self.clarity_baseline_train,
         }
     
@@ -504,6 +518,7 @@ class MeditationTrainer:
             'transitions': [],
             'network_activations': [],
             'thoughtseed_activations': [],
+            'thoughtseed_prior_activations': [],
         }
         self._last_x_actual = None
         self._sigma_fwd2 = None

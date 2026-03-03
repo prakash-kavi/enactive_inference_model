@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils.config import TAIL_STEPS, STATES
+from utils.config import PLOT_STEPS, STATES
 from viz.plotting_utils import (
     STATE_COLORS,
     STATE_DISPLAY_NAMES,
@@ -14,7 +14,7 @@ from viz.plotting_utils import (
 )
 
 __all__ = [
-    "TAIL_STEPS",
+    "PLOT_STEPS",
     "get_tail_window",
     "prepare_tail_data",
     "get_dwell_run_lengths",
@@ -33,7 +33,7 @@ def prepare_tail_data(
     states: List[str],
     networks: List[str],
     thoughtseeds: List[str],
-    tail_steps: int = TAIL_STEPS,
+    tail_steps: int = PLOT_STEPS,
 ) -> Dict:
     """Single entry point: prepare tail-window data with all derived stats for plotting.
 
@@ -53,7 +53,7 @@ def prepare_tail_data(
     return tail
 
 
-def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
+def get_tail_window(results: Dict, tail_steps: int = PLOT_STEPS) -> Dict:
     """Return a view of results with all time-series fields sliced to the tail window.
 
     Slices each list in-place (no deepcopy) — callers must not mutate the returned lists.
@@ -66,6 +66,7 @@ def get_tail_window(results: Dict, tail_steps: int = TAIL_STEPS) -> Dict:
         'state_confidence_history',
         'network_activations_history',
         'thoughtseed_activations_history',
+        'thoughtseed_prior_activations_history',
     ]
     tail_data = dict(results)  # shallow copy — only replaces sliced keys
     for key in time_series_keys:
@@ -203,7 +204,7 @@ def _state_conditional_means(
 # ---------------------------------------------------------------------------
 
 def compute_network_profiles(results: Dict, states: List[str], networks: List[str],
-                             tail_steps: int = TAIL_STEPS) -> Dict:
+                             tail_steps: int = PLOT_STEPS) -> Dict:
     """Compute mean network activation profiles per state from tail window.
 
     Returns:
@@ -221,7 +222,7 @@ def compute_network_profiles(results: Dict, states: List[str], networks: List[st
 
 
 def compute_thoughtseed_means(results: Dict, states: List[str], thoughtseeds: List[str],
-                              tail_steps: int = TAIL_STEPS) -> Dict:
+                              tail_steps: int = PLOT_STEPS) -> Dict:
     """Compute mean thoughtseed activation vectors per state from tail window.
 
     Returns:
@@ -238,7 +239,7 @@ def compute_thoughtseed_means(results: Dict, states: List[str], thoughtseeds: Li
 
 
 def compute_tail_statistics(results: Dict, states: List[str],
-                            tail_steps: int = TAIL_STEPS) -> Dict:
+                            tail_steps: int = PLOT_STEPS) -> Dict:
     """Compute dwell times and transition matrix from tail window.
 
     Returns:
