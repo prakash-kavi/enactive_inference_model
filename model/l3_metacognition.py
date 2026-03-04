@@ -9,7 +9,7 @@ import numpy as np
 import torch.nn as nn
 from typing import Optional, Dict, List
 
-from utils.config import EPS, STATES, DEFAULT_DT, PRECISION_TAU
+from utils.config import EPS, STATES, DEFAULT_DT, PRECISION_TAU, CLIP_MIN
 from .markov_blankets import MarkovBlanketL2L3
 from utils.math_utils import (
     clip_probability,
@@ -122,7 +122,10 @@ class Layer3Monitor(nn.Module):
         else:
             drift = -theta * (self.meta_awareness - target)
             self.meta_awareness = self.meta_awareness + drift * dt
-        return clip_probability(self.meta_awareness)
+            
+        # Enforce baseline ambient minimum (0.05) to prevent math breakdown / artificial zeros
+        self.meta_awareness = max(float(CLIP_MIN), clip_probability(self.meta_awareness))
+        return self.meta_awareness
 
     def update_meta_awareness_from_conflict(
         self,
@@ -133,11 +136,19 @@ class Layer3Monitor(nn.Module):
         """Second-order belief: policy--prior divergence gated by detection state belief."""
         base_gate = float(self.clarity_baseline) if self.clarity_baseline is not None else 0.0
         gate = 0.0
-        belief_for_gate = gate_belief if gate_belief is not None else state_belief
-        if belief_for_gate:
-            q_ma = float(belief_for_gate.get('meta_awareness', 0.0))
-            q_ra = float(belief_for_gate.get('redirect_attention', 0.0))
-            gate = q_ma + q_ra
+        ts_acts = self.blanket_l2l3.sensory_states.get('thoughtseed_activations', [])
+        
+        # Ignition Logic: Compute gate directly from Orchestrator thoughtseeds vs Distractors
+        # Index map from config.py: 1=pain_discomfort, 2=pending_tasks, 3=aha_moment, 4=equanimity
+        if len(ts_acts) >= 5:
+            aha_moment = float(ts_acts[3])
+            equanimity = float(ts_acts[4])
+            pain = float(ts_acts[1])
+            pending = float(ts_acts[2])
+            distractor = max(pain, pending)
+            ignition_gate = max(0.0, aha_moment + equanimity - distractor)
+            gate = ignition_gate
+            
         gate = clip_probability(gate + base_gate)
 
         if not g_vals:

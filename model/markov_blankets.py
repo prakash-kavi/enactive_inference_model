@@ -88,13 +88,14 @@ class MarkovBlanketL2L3(MarkovBlanket):
         - policy_candidates: list[str] policy candidate labels
         - policy_priors: list[float] dwell-aware prior weights E(pi)
         - policy_costs: list[float] policy evidence G(pi)
+        - thoughtseed_activations: list[float] inferred latent causes Z
     
     Active (L3 -> L2):
         - precision_sensory: float (0-1, sensory precision)
     """
     
     def __init__(self):
-        self.allowed_sensory = {"state_belief", "policy_candidates", "policy_priors", "policy_costs"}
+        self.allowed_sensory = {"state_belief", "policy_candidates", "policy_priors", "policy_costs", "thoughtseed_activations"}
         self.allowed_active = {"precision_sensory"}
         super().__init__(strict=True)
         self.active_states['precision_sensory'] = 0.5

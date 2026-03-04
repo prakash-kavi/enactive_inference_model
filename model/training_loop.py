@@ -146,6 +146,7 @@ class MeditationTrainer:
                 'policy_candidates': policy_eval['candidates'],
                 'policy_priors':     policy_eval['priors'],
                 'policy_costs':      policy_eval['g_vals'],
+                'thoughtseed_activations': activations.cpu().numpy().tolist()
             })
 
             # ===== Policy Selection (L3) =====

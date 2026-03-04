@@ -79,8 +79,8 @@ STATE_TRANSITION_PROBS = {
     'novice': {
         'breath_focus': {'mind_wandering': 0.80, 'meta_awareness': 0.10, 'redirect_attention': 0.10},
         'mind_wandering': {'meta_awareness': 0.60, 'redirect_attention': 0.20, 'breath_focus': 0.20},
-        'meta_awareness': {'redirect_attention': 0.60, 'breath_focus': 0.15, 'mind_wandering': 0.25},
-        'redirect_attention': {'breath_focus': 0.60, 'mind_wandering': 0.35, 'meta_awareness': 0.05}
+        'meta_awareness': {'redirect_attention': 0.60, 'breath_focus': 0.10, 'mind_wandering': 0.30},
+        'redirect_attention': {'breath_focus': 0.40, 'mind_wandering': 0.40, 'meta_awareness': 0.20}
     }
 }
 
