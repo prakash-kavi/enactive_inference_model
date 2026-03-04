@@ -152,7 +152,7 @@ class Layer3Monitor(nn.Module):
         gate = clip_probability(gate + base_gate)
 
         if not g_vals:
-            target = base_gate
+            raw_conflict = base_gate
         else:
             g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
             log_habit = self._habit_log_prior(state_belief, scale=1.0)
@@ -164,7 +164,9 @@ class Layer3Monitor(nn.Module):
             q_habit = q_habit / q_habit.sum()
             kl = float(np.sum(q_evid * np.log(q_evid / q_habit)))
             raw_conflict = float(1.0 - np.exp(-kl))
-            target = raw_conflict * gate
+            
+        ambient = float(CLIP_MIN)
+        target = ambient + (1.0 - ambient) * (raw_conflict * gate)
 
         return self._ou_update_meta(target)
 

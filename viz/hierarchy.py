@@ -44,7 +44,7 @@ def plot_hierarchy_continuous(data, save_path: str, level_name: str):
     meta_awareness = data['meta_awareness_history']
     ax1.plot(time_steps, meta_awareness, color='#4363d8', linewidth=2)
     ax1.fill_between(time_steps, meta_awareness, alpha=0.2, color='#4363d8')
-    ax1.set_ylabel('Meta-awareness', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('Meta-awareness Level', fontsize=12, fontweight='bold')
     ax1.set_title('Level 3: Metacognition', fontsize=14, fontweight='bold', loc='left')
     ax1.set_ylim(0, 1.05)
     ax1.grid(True, axis='y', linestyle='--', alpha=0.5)

@@ -24,7 +24,7 @@ THETA_BASE = {
         ('DMN', 'FPN'): -0.15, ('FPN', 'DMN'): -0.15
     },
     'meta_awareness': {
-        ('VAN', 'FPN'): -0.90, ('FPN', 'VAN'): -0.60,
+        ('VAN', 'FPN'): 0.50, ('FPN', 'VAN'): 0.50,
         ('DMN', 'DAN'): -0.25, ('DAN', 'DMN'): -0.25,
         ('DMN', 'FPN'): -0.25, ('FPN', 'DMN'): -0.25
     },
