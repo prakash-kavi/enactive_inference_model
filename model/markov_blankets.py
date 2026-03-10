@@ -76,7 +76,7 @@ class MarkovBlanketL1L2(MarkovBlanket):
     
     def __init__(self):
         self.allowed_sensory = {"DMN", "VAN", "DAN", "FPN", "dwell_progress"}
-        self.allowed_active = {"mu_x", "policy_state_probs", "meta_precision"}
+        self.allowed_active = {"mu_x", "policy_state_probs"}
         super().__init__(strict=True)
         
 

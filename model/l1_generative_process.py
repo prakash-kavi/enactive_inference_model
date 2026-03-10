@@ -189,15 +189,13 @@ class Layer1Process(nn.Module):
         theta = self._get_coupling(self.current_state)
         theta = self._clamp_theta(theta)
         
-        # Apply precision-weighted mix of config attractor and L2 prediction.
+        # Apply descending prediction μ_x if provided (blend is formed upstream in L2/L3).
         # L2->L1 control signals are mu_x and policy_state_probs.
         mu_x = active_states.get('mu_x')
         if mu_x is not None:
             if not isinstance(mu_x, torch.Tensor):
                 mu_x = torch.tensor(mu_x, dtype=torch.float32)
-            meta_precision = float(active_states.get('meta_precision', 0.0))
-            meta_precision = clip_probability(meta_precision)
-            mu = (1.0 - meta_precision) * mu + meta_precision * mu_x
+            mu = mu_x
 
         # Global process noise variance - fixed, not modulated by L2.
         sigma = np.sqrt(NOISE_LEVEL)

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
-    THOUGHTSEED_STATE_PRIORS,
+    THOUGHTSEED_STATE_PRIORS, NETWORK_PROFILES,
     DEFAULT_DT, PRECISION_TAU, BPTT_STEPS,
 )
 from .l1_generative_process import Layer1Process
@@ -34,6 +34,7 @@ from utils.math_utils import (
     mse_error,
     forward_error,
     policy_entropy,
+    clip_probability,
 )
 
 class MeditationTrainer:
@@ -181,10 +182,19 @@ class MeditationTrainer:
                 mu_candidates=policy_eval['mu_candidates'],
             )
             selected_action_mu = prescription['selected_action_mu']
+            # Blend state-conditioned attractor μ_x(s_t) with policy-weighted prediction using meta-awareness,
+            # then send a single effective μ_x down to L1 (L1 no longer reads meta-precision directly).
+            profile = NETWORK_PROFILES[new_state][self.level]
+            mu_x_state = torch.tensor(
+                [profile[net] for net in NETWORKS],
+                dtype=torch.float32,
+                device=selected_action_mu.device,
+            )
+            m_t = clip_probability(meta_awareness)
+            mu_x_for_l1 = (1.0 - m_t) * mu_x_state + m_t * prescription['mu_x'].to(mu_x_state.device)
             self.blanket_l1l2.update_active_states({
-                'mu_x': prescription['mu_x'],
+                'mu_x': mu_x_for_l1,
                 'policy_state_probs': prescription.get('policy_state_probs'),
-                'meta_precision': meta_awareness,
             })
 
             # Update rolling store for next E-step
