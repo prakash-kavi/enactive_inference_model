@@ -30,8 +30,11 @@ class Layer3Monitor(nn.Module):
         super().__init__()
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3()
         self.meta_awareness = None
+        # Per-state Dirichlet-like pseudo-counts over policies (habit prior parameters).
+        # Keys are state labels from STATES; values are length-4 vectors summing to 1.0.
         self._learned_alpha: dict = {}
         self.bptt_steps = max(1, int(bptt_steps))
+        # Habit learning rate κ = 1 / T (T = BPTT window length), shared across states.
         self.policy_lr = 1.0 / self.bptt_steps
 
     def reset(self, preserve_habit: bool = False) -> None:
@@ -67,7 +70,9 @@ class Layer3Monitor(nn.Module):
     def update_policy_state(self, state_belief: Optional[dict], q_pi: np.ndarray) -> None:
         """Update learned habit prior from inferred state belief (Dirichlet-like EMA).
 
-        This is treated as an M-step update using E-step sufficient statistics.
+        This is treated as an M-step-style update using E-step sufficient statistics: for each
+        state s, we maintain a smoothed pseudo-count vector α_s over policies, updated toward
+        the current posterior q(π_t) with rate κ · w_s, where κ = 1/T and w_s = q(s_t = s).
         """
         q = np.array(q_pi, dtype=np.float64)
         if q.size != 4:
@@ -79,6 +84,7 @@ class Layer3Monitor(nn.Module):
             if weight <= 0.0:
                 continue
             prev = self._learned_alpha.get(state, np.ones(4, dtype=np.float64))
+            # Per-state EMA toward current q(π): α_s ← (1 - κ_s) α_s + κ_s q, κ_s = policy_lr · w_s.
             kappa = float(self.policy_lr) * float(weight)
             self._learned_alpha[state] = (1.0 - kappa) * prev + kappa * q
 

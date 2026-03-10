@@ -24,10 +24,8 @@ from utils.config import (
 from .markov_blankets import MarkovBlanketL1L2, MarkovBlanketL2L3
 from .phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
 from utils.math_utils import (
-    mse_error,
     recon_error,
     prior_error,
-    forward_error,
     clamp_activation,
     clip_probability,
     to_float,
@@ -226,12 +224,13 @@ class Layer2Agent(nn.Module):
         vi_lr = float(VI_LR)
         with torch.enable_grad():
             for _ in range(vi_steps):
-                recon_x = self.decode_with_state(z_var)
-
-                recon_loss = precision * recon_error(recon_x, observed_vec)
-                prior_match = prior_error(z_var, state_prior)
-                loss = recon_loss + prior_match
-                
+                loss = self.compute_vfe(
+                    state=current_state,
+                    z=z_var,
+                    observed_x=observed_vec,
+                    precision_sensory=precision,
+                    prior_target=state_prior,
+                )
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
                 grad = torch.clamp(grad, -5.0, 5.0)
                 

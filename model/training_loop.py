@@ -120,7 +120,6 @@ class MeditationTrainer:
                     )
                 sigma_fwd2 = max(float(self._sigma_fwd2), EPS)
                 base_precision = float(np.exp(-forward_error_val / (sigma_fwd2 + EPS)))
-                self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
             # ===== L3 precision signal (π_{x,t}; used only by L2 for VFE/VI) =====
             base_precision = float(np.clip(base_precision, CLIP_MIN, CLIP_MAX))
