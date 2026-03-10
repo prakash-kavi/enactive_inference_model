@@ -364,9 +364,11 @@ class Layer2Agent(nn.Module):
         self,
         current_state: str,
         state_belief: Optional[Dict[str, float]] = None,
+        x_current: Optional[torch.Tensor] = None,
     ) -> Dict:
         """Evaluate policy evidence G(pi) and return candidates + priors."""
-        x_current  = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
+        if x_current is None:
+            x_current = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
         candidates = get_policy_candidate_order(current_state)
         exit_probs = get_exit_transition_probs(self.level, current_state)
         hazard     = clip_probability(
