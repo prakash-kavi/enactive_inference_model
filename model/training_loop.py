@@ -121,9 +121,8 @@ class MeditationTrainer:
                 sigma_fwd2 = max(float(self._sigma_fwd2), EPS)
                 base_precision = float(np.exp(-forward_error_val / (sigma_fwd2 + EPS)))
 
-            # ===== L3 precision signal (π_{x,t}; used only by L2 for VFE/VI) =====
-            base_precision = float(np.clip(base_precision, CLIP_MIN, CLIP_MAX))
-            precision_sensory = base_precision
+            # ===== L3 precision signal (pi_{x,t}; used only by L2 for VFE/VI) =====
+            precision_sensory = float(np.clip(base_precision, CLIP_MIN, CLIP_MAX))
             self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
 
             # ===== Layer 2: Attentional Agent =====
@@ -161,7 +160,7 @@ class MeditationTrainer:
                 state_belief=state_belief,
                 gate_belief=state_belief,
             )
-            # meta_awareness m_t defines a single policy precision γ_t inside select_policy.
+            # meta_awareness m_t defines a single policy precision gamma_t inside select_policy.
             q_pi = self.monitor.select_policy(
                 g_vals=policy_eval['g_vals'],
                 priors=policy_eval['priors'],
@@ -182,8 +181,8 @@ class MeditationTrainer:
                 mu_candidates=policy_eval['mu_candidates'],
             )
             selected_action_mu = prescription['selected_action_mu']
-            # Blend state-conditioned attractor μ_x(s_t) with policy-weighted prediction using meta-awareness,
-            # then send a single effective μ_x down to L1 (L1 no longer reads meta-precision directly).
+            # Blend state-conditioned attractor mu_x(s_t) with policy-weighted prediction using meta-awareness,
+            # then send a single effective mu_x down to L1 (L1 no longer reads meta-precision directly).
             profile = NETWORK_PROFILES[new_state][self.level]
             mu_x_state = torch.tensor(
                 [profile[net] for net in NETWORKS],
