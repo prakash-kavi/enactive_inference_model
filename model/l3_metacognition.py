@@ -89,17 +89,29 @@ class Layer3Monitor(nn.Module):
         state_belief: Optional[dict] = None,
         meta_precision: Optional[float] = None,
     ) -> np.ndarray:
-        """Select policy posterior q(pi) from evidence and habit priors."""
+        """Select policy posterior q(pi) from prior over policies and expected free energy.
+
+        Prior over policies is the product of dwell-aware prior p_dwell(pi) and belief-weighted
+        habit prior p_h(pi); meta-awareness enters only as an evidence precision on G~(pi).
+        """
         if meta_precision is None:
             raise ValueError("meta_precision must be provided for policy selection.")
-        log_prior = np.log(np.array(priors, dtype=float))
+
+        # --- Prior over policies: log p_prior(pi) = log p_dwell(pi) + log p_h(pi) -------------
+        log_dwell = np.log(np.array(priors, dtype=float))
         habit_scale = float(np.clip(1.0 - float(meta_precision), 0.0, 1.0))
-        log_prior = log_prior + self._habit_log_prior(state_belief, scale=habit_scale)
+        log_habit = self._habit_log_prior(state_belief, scale=habit_scale)
+        log_prior = log_dwell + log_habit
+
+        # --- Evidence term: expected free energy (z-scored) -----------------------------------
         g_raw = np.array(g_vals, dtype=float)
         g_array = normalize_scores(g_raw, EPS)
-        # Evidence precision from a single policy-precision signal.
+
+        # --- Policy precision γ_t from a single meta-precision signal -------------------------
         gamma_eff = clip_probability(meta_precision)
         gamma_eff = max(EPS, gamma_eff)
+
+        # Posterior over policies: q(pi) ∝ p_prior(pi) * exp(-γ_t G~(pi))
         q_pi = policy_posterior(log_prior, g_array, gamma_eff)
         return q_pi
 

@@ -122,7 +122,7 @@ class MeditationTrainer:
                 base_precision = float(np.exp(-forward_error_val / (sigma_fwd2 + EPS)))
                 self.blanket_l2l3.update_active_states({'precision_sensory': base_precision})
 
-            # ===== L3 precision signal (used by L2) =====
+            # ===== L3 precision signal (π_{x,t}; used only by L2 for VFE/VI) =====
             base_precision = float(np.clip(base_precision, CLIP_MIN, CLIP_MAX))
             precision_sensory = base_precision
             self.blanket_l2l3.update_active_states({'precision_sensory': precision_sensory})
@@ -162,6 +162,7 @@ class MeditationTrainer:
                 state_belief=state_belief,
                 gate_belief=state_belief,
             )
+            # meta_awareness m_t defines a single policy precision γ_t inside select_policy.
             q_pi = self.monitor.select_policy(
                 g_vals=policy_eval['g_vals'],
                 priors=policy_eval['priors'],
