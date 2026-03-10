@@ -122,12 +122,23 @@ class Layer2Agent(nn.Module):
             priors = THOUGHTSEED_STATE_PRIORS[state].copy()
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
+        self.register_buffer(
+            "mu_stack",
+            torch.stack([self.mu_params[s].detach() for s in STATES]),
+        )
 
     def _precision_sensory(self, precision_sensory: Optional[float] = None) -> float:
         """Return single precision scalar (clipped) used for VI init blend and VFE reconstruction weight."""
         if precision_sensory is None:
             precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
         return float(np.clip(precision_sensory, CLIP_MIN, CLIP_MAX))
+
+    def _encode_networks_to_z(self, x: torch.Tensor) -> torch.Tensor:
+        """Encode network activations into clamped thoughtseed activations."""
+        z = self.thoughtseed_model.encode(x.unsqueeze(0) if x.dim() == 1 else x)
+        if z.dim() > 1:
+            z = z.squeeze(0)
+        return clamp_activation(z, CLIP_MIN, CLIP_MAX)
 
     def _ou_step_z(
         self,
@@ -249,10 +260,7 @@ class Layer2Agent(nn.Module):
         # Bottom-up inference: encode networks (x) -> latent z (thoughtseeds)
         network_acts = self.blanket_l1l2.sensory_states
         x = networks_to_tensor(network_acts, NETWORKS)
-        z = self.thoughtseed_model.encode(x.unsqueeze(0) if x.dim() == 1 else x)
-        if z.dim() > 1:
-            z = z.squeeze(0)
-        z_recognition = clamp_activation(z, CLIP_MIN, CLIP_MAX)
+        z_recognition = self._encode_networks_to_z(x)
 
         z_posterior = self.update_posterior_z(
             current_state=current_state,
@@ -265,7 +273,9 @@ class Layer2Agent(nn.Module):
     def infer_state_belief(self, z: torch.Tensor) -> Dict[str, float]:
         """Infer state belief q(s|z) from thoughtseed activations."""
         with torch.no_grad():
-            mu_all = torch.stack([self.mu_params[s].detach() for s in STATES])
+            mu_all = self.mu_stack
+            if mu_all.device != z.device or mu_all.dtype != z.dtype:
+                mu_all = mu_all.to(device=z.device, dtype=z.dtype)
             dist_vec = torch.mean((mu_all - z) ** 2, dim=-1)
             var = max(float(STATE_BELIEF_VAR), EPS)
             probs = torch.softmax(-0.5 * dist_vec / var, dim=0).tolist()
@@ -315,10 +325,17 @@ class Layer2Agent(nn.Module):
 
             g_prag_vals = torch.mean((x_pred - x_pref) ** 2, dim=-1).tolist()
             z_pred = clamp_activation(self.thoughtseed_model.encode(x_pred), CLIP_MIN, CLIP_MAX)
-            
-            for i in range(len(candidates)):
-                h_pred = belief_entropy(self.infer_state_belief(z_pred[i]), keys=STATES)
-                i_epi_vals.append(float(h_current - h_pred))
+
+            mu_all = self.mu_stack
+            if mu_all.device != z_pred.device or mu_all.dtype != z_pred.dtype:
+                mu_all = mu_all.to(device=z_pred.device, dtype=z_pred.dtype)
+            diff = mu_all.unsqueeze(0) - z_pred.unsqueeze(1)
+            dist_vec = torch.mean(diff ** 2, dim=-1)
+            var = max(float(STATE_BELIEF_VAR), EPS)
+            probs = torch.softmax(-0.5 * dist_vec / var, dim=1)
+            probs_np = np.clip(probs.detach().cpu().numpy(), EPS, 1.0)
+            h_pred_vals = -np.sum(probs_np * np.log(probs_np), axis=1)
+            i_epi_vals = (h_current - h_pred_vals).tolist()
 
         # Normalize per policy set (z-score) to make terms comparable
         g_prag_norm = normalize_scores(np.array(g_prag_vals, dtype=float), EPS)
@@ -358,12 +375,7 @@ class Layer2Agent(nn.Module):
         priors                           = self._compute_dwell_prior(current_state, candidates, hazard, exit_probs)  # dwell prior (heuristic)
         if state_belief is None:
             with torch.no_grad():
-                z_curr = self.thoughtseed_model.encode(
-                    x_current.unsqueeze(0) if x_current.dim() == 1 else x_current
-                )
-                if z_curr.dim() > 1:
-                    z_curr = z_curr.squeeze(0)
-                z_curr = clamp_activation(z_curr, CLIP_MIN, CLIP_MAX)
+                z_curr = self._encode_networks_to_z(x_current)
                 state_belief = self.infer_state_belief(z_curr)
         g_vals, mu_candidates, efe_stats = self._evaluate_efe(
             x_current, candidates, state_belief_current=state_belief
