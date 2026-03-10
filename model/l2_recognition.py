@@ -193,21 +193,17 @@ class Layer2Agent(nn.Module):
         current_state: str,
         z_recognition: torch.Tensor,
         z_prior: torch.Tensor,
+        observed_x: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Posterior update q(z): fixed-step VI over thoughtseeds.
 
         The OU-evolved z_prior is used only for dynamical initialisation; the
         VI objective itself uses the state-conditioned prior mu_z(s_t).
         """
-        clip_min = CLIP_MIN
-        clip_max = CLIP_MAX
+        if observed_x is None:
+            observed_x = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
 
-        observed_vec = networks_to_tensor(self.blanket_l1l2.sensory_states, NETWORKS)
-        
-        def clamp_z(t: torch.Tensor) -> torch.Tensor:
-            return clamp_activation(t, clip_min, clip_max)
-
-        sensory_target = clamp_z(z_recognition.detach())
+        sensory_target = clamp_activation(z_recognition.detach(), CLIP_MIN, CLIP_MAX)
         
         # Sensory precision (used as observation weight + blending factor)
         precision = self._precision_sensory()
@@ -217,7 +213,7 @@ class Layer2Agent(nn.Module):
         z_var = z_init.requires_grad_(True)
 
         # State-conditioned prior for VI objective
-        state_prior = clamp_z(self.mu_params[current_state].detach())
+        state_prior = clamp_activation(self.mu_params[current_state].detach(), CLIP_MIN, CLIP_MAX)
 
         # Variational optimization loop (precision-modulated VI)
         vi_steps = max(0, int(VI_STEPS))
@@ -227,14 +223,14 @@ class Layer2Agent(nn.Module):
                 loss = self.compute_vfe(
                     state=current_state,
                     z=z_var,
-                    observed_x=observed_vec,
+                    observed_x=observed_x,
                     precision_sensory=precision,
                     prior_target=state_prior,
                 )
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
                 grad = torch.clamp(grad, -5.0, 5.0)
                 
-                z_var = clamp_z(z_var - vi_lr * grad)
+                z_var = clamp_activation(z_var - vi_lr * grad, CLIP_MIN, CLIP_MAX)
                 z_var = z_var.detach().requires_grad_(True)
         
         return z_var.detach()
@@ -262,6 +258,7 @@ class Layer2Agent(nn.Module):
             current_state=current_state,
             z_recognition=z_recognition,
             z_prior=z_prior,
+            observed_x=x,
         )
         return z_posterior, z_recognition, z_prior
 
