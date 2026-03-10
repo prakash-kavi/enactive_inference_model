@@ -1,7 +1,13 @@
 """Training orchestrator: variational EM loop for hierarchical free energy minimisation.
 
-Timescale separation (Dempster et al., 1977; Friston et al., 2019):
-- E-step (every t): perceptual inference via VI + policy selection. No parameter gradients.
+Variational EM (Dempster et al., 1977; Friston et al., 2019):
+- Latent variables (E-step): q(z_t)=delta(z_t-z*_t) at VI solution; q(pi_t) from policy softmax.
+  No parameter gradients.
+- Parameters (M-step): phi (encoder), theta (decoder), psi (forward model), plus habit pseudo-counts.
+  L1 is the generative process and is not estimated by EM.
+
+Timescale separation:
+- E-step (every t): perceptual inference via VI + policy selection.
 - M-step (every T steps): parameter update via BPTT over the accumulated buffer,
   plus habit-prior updates from E-step sufficient statistics.
 """

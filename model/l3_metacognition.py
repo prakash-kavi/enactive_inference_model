@@ -30,7 +30,6 @@ class Layer3Monitor(nn.Module):
         super().__init__()
         self.blanket_l2l3 = blanket_l2l3 or MarkovBlanketL2L3()
         self.meta_awareness = None
-        self.clarity_baseline = None
         self._learned_alpha: dict = {}
         self.bptt_steps = max(1, int(bptt_steps))
         self.policy_lr = 1.0 / self.bptt_steps
@@ -64,13 +63,6 @@ class Layer3Monitor(nn.Module):
             log_adj += weight * self._get_prior_for_state(state)
         scale = float(np.clip(scale, 0.0, 1.0))
         return scale * log_adj
-
-    def set_clarity_baseline(self, baseline: Optional[float]) -> None:
-        """Set a learned clarity baseline (e.g., mean state confidence)."""
-        if baseline is None:
-            self.clarity_baseline = None
-        else:
-            self.clarity_baseline = clip_probability(baseline)
 
     def update_policy_state(self, state_belief: Optional[dict], q_pi: np.ndarray) -> None:
         """Update learned habit prior from inferred state belief (Dirichlet-like EMA).
@@ -134,7 +126,6 @@ class Layer3Monitor(nn.Module):
         gate_belief: Optional[dict] = None,
     ) -> float:
         """Second-order belief: policy--prior divergence gated by detection state belief."""
-        base_gate = float(self.clarity_baseline) if self.clarity_baseline is not None else 0.0
         gate = 0.0
         ts_acts = self.blanket_l2l3.sensory_states.get('thoughtseed_activations', [])
         
@@ -149,10 +140,10 @@ class Layer3Monitor(nn.Module):
             ignition_gate = max(0.0, aha_moment + equanimity - distractor)
             gate = ignition_gate
             
-        gate = clip_probability(gate + base_gate)
+        gate = clip_probability(gate)
 
         if not g_vals:
-            raw_conflict = base_gate
+            raw_conflict = 0.0
         else:
             g_array = normalize_scores(np.array(g_vals, dtype=float), EPS)
             log_habit = self._habit_log_prior(state_belief, scale=1.0)

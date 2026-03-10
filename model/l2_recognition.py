@@ -125,13 +125,11 @@ class Layer2Agent(nn.Module):
             mu_vec = [priors[ts] for ts in THOUGHTSEEDS]
             self.mu_params[state] = nn.Parameter(torch.tensor(mu_vec, dtype=torch.float32), requires_grad=False)
 
-    def _precision_params(self, precision_sensory: Optional[float] = None) -> tuple[float, float]:
-        """Return (precision_blend, precision_weight) from a scalar precision signal."""
+    def _precision_sensory(self, precision_sensory: Optional[float] = None) -> float:
+        """Return single precision scalar (clipped) used for VI init blend and VFE reconstruction weight."""
         if precision_sensory is None:
             precision_sensory = to_float(self.blanket_l2l3.active_states.get('precision_sensory', 1.0))
-        precision_blend = float(np.clip(precision_sensory, CLIP_MIN, CLIP_MAX))
-        precision_weight = precision_blend
-        return precision_blend, precision_weight
+        return float(np.clip(precision_sensory, CLIP_MIN, CLIP_MAX))
 
     def _ou_step_z(
         self,
@@ -156,10 +154,10 @@ class Layer2Agent(nn.Module):
         self,
         z_recognition: torch.Tensor,
         z_prior: torch.Tensor,
-        precision_blend: float,
+        precision: float,
     ) -> torch.Tensor:
         """Precision-weighted initialization for VI refinement."""
-        z_init = precision_blend * z_recognition + (1.0 - precision_blend) * z_prior
+        z_init = precision * z_recognition + (1.0 - precision) * z_prior
         return clamp_activation(z_init, CLIP_MIN, CLIP_MAX)
     
     def decode_with_state(self, z: torch.Tensor) -> torch.Tensor:
@@ -184,9 +182,8 @@ class Layer2Agent(nn.Module):
         recon_x = self.decode_with_state(z)
         observed_x = observed_x.detach()
 
-        _, precision_weight = self._precision_params(precision_sensory)
-
-        recon_loss = precision_weight * recon_error(recon_x, observed_x)
+        precision = self._precision_sensory(precision_sensory)
+        recon_loss = precision * recon_error(recon_x, observed_x)
         if prior_target is None:
             prior_target = self.mu_params[state].detach()
         prior_match = prior_error(z, prior_target)
@@ -215,10 +212,10 @@ class Layer2Agent(nn.Module):
         sensory_target = clamp_z(z_recognition.detach())
         
         # Sensory precision (used as observation weight + blending factor)
-        precision_blend, precision_weight = self._precision_params()
+        precision = self._precision_sensory()
 
         # Initialization: blend dynamical prior and sensory target, bias toward sensory when precision is high.
-        z_init = self._init_vi_state(sensory_target, z_prior, precision_blend)
+        z_init = self._init_vi_state(sensory_target, z_prior, precision)
         z_var = z_init.requires_grad_(True)
 
         # State-conditioned prior for VI objective
@@ -231,7 +228,7 @@ class Layer2Agent(nn.Module):
             for _ in range(vi_steps):
                 recon_x = self.decode_with_state(z_var)
 
-                recon_loss = precision_weight * recon_error(recon_x, observed_vec)
+                recon_loss = precision * recon_error(recon_x, observed_vec)
                 prior_match = prior_error(z_var, state_prior)
                 loss = recon_loss + prior_match
                 

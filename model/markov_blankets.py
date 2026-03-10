@@ -1,7 +1,7 @@
 """Markov blankets: sensory/active state interfaces between hierarchical levels.
 
 Minimal nested interpretation (Russian-doll semantics):
-L1↔L2 and L2↔L3 are separate blankets, but all cross-layer exchange is
+L1<->L2 and L2<->L3 are separate blankets, but all cross-layer exchange is
 strictly adjacent (L3 never reads L1 directly; L1 never reads L3 directly).
 This enforces bottom-up emergence and top-down causation via L2.
 """
