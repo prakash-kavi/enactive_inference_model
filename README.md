@@ -102,7 +102,7 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 ## Mechanics (short)
 - Markov blankets: L2↔L3 carries state belief and policy evidence upward and sensory precision downward; policy posterior is returned directly from L3 to L2.
 - VFE: `F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2`
-- Policy posterior: `q(pi) = softmax(log E(pi) + (1-m_t) * lbar_pi - m_t * r_t * G_tilde(pi))`
+- Policy posterior: `q(pi) = softmax(log E(pi) + (1-m_t) * lbar_pi - m_t * G_tilde(pi))`
 - VI refinement: mismatch-triggered; step count scales with uncertainty `(1 - precision)` up to `VI_STEPS`
 
 ---
