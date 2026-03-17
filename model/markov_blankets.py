@@ -6,6 +6,7 @@ strictly adjacent (L3 never reads L1 directly; L1 never reads L3 directly).
 This enforces bottom-up emergence and top-down causation via L2.
 """
 
+from __future__ import annotations
 import torch
 from typing import Dict, Any
 
@@ -42,14 +43,7 @@ class MarkovBlanket:
         """Update sensory states. Numeric/Tensor: overwrite. Other (str, dict): overwrite."""
         self._validate_keys(new_states, self.allowed_sensory, "sensory")
         for key, new_val in new_states.items():
-            new_val = self._detach_value(new_val)
-            if isinstance(new_val, (str, dict, list, tuple)):
-                # Non-numeric: overwrite (e.g. labels, belief dicts, candidate lists)
-                self.sensory_states[key] = new_val
-            elif key not in self.sensory_states:
-                self.sensory_states[key] = new_val
-            else:
-                self.sensory_states[key] = new_val
+            self.sensory_states[key] = self._detach_value(new_val)
     
     def update_active_states(self, new_states: Dict[str, Any]) -> None:
         """Update active states (top-down control)."""

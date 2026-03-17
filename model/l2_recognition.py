@@ -16,7 +16,7 @@ from utils.config import (
     STATES, NETWORKS, THOUGHTSEEDS, CLIP_MIN, CLIP_MAX, EPS,
     THOUGHTSEED_STATE_PRIORS,
     get_exit_transition_probs, get_policy_candidate_order,
-    VI_STEPS, VI_LR,
+    VI_STEPS, VI_LR, GRAD_CLIP,
     STATE_BELIEF_VAR,
     DEFAULT_DT, PRECISION_TAU,
     NOISE_LEVEL,
@@ -239,7 +239,7 @@ class Layer2Agent(nn.Module):
                     prior_target=state_prior,
                 )
                 grad = torch.autograd.grad(loss, z_var, create_graph=False)[0]
-                grad = torch.clamp(grad, -5.0, 5.0)
+                grad = torch.clamp(grad, -GRAD_CLIP, GRAD_CLIP)
                 
                 z_var = clamp_activation(z_var - vi_lr * grad, CLIP_MIN, CLIP_MAX)
                 z_var = z_var.detach().requires_grad_(True)

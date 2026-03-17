@@ -9,7 +9,7 @@ import numpy as np
 import torch.nn as nn
 from typing import Optional, Dict, List
 
-from utils.config import EPS, STATES, DEFAULT_DT, PRECISION_TAU, CLIP_MIN
+from utils.config import EPS, STATES, THOUGHTSEEDS, DEFAULT_DT, PRECISION_TAU, CLIP_MIN
 from .markov_blankets import MarkovBlanketL2L3
 from utils.math_utils import (
     clip_probability,
@@ -48,10 +48,10 @@ class Layer3Monitor(nn.Module):
         self.blanket_l2l3.reset()
 
     def _get_prior_for_state(self, current_state: str) -> np.ndarray:
-        """Return log prior adjustment for current state (length 4, neutral if not learned)."""
+        """Return log prior adjustment for current state (length len(STATES), neutral if not learned)."""
         alpha = self._learned_alpha.get(current_state)
         if alpha is None:
-            alpha = np.ones(4, dtype=np.float64)
+            alpha = np.ones(len(STATES), dtype=np.float64)
         alpha = np.maximum(alpha, 1e-6)
         alpha = alpha / alpha.sum()
         return np.log(alpha)
@@ -75,7 +75,7 @@ class Layer3Monitor(nn.Module):
         the current posterior q(π_t) with rate κ · w_s, where κ = 1/T and w_s = q(s_t = s).
         """
         q = np.array(q_pi, dtype=np.float64)
-        if q.size != 4:
+        if q.size != len(STATES):
             return
         q = np.clip(q, 1e-6, 1.0)
         q = q / q.sum()
@@ -148,12 +148,13 @@ class Layer3Monitor(nn.Module):
         ts_acts = self.blanket_l2l3.sensory_states.get('thoughtseed_activations', [])
         
         # Ignition Logic: Compute gate directly from Orchestrator thoughtseeds vs Distractors
-        # Index map from config.py: 1=pain_discomfort, 2=pending_tasks, 3=aha_moment, 4=equanimity
-        if len(ts_acts) >= 5:
-            aha_moment = float(ts_acts[3])
-            equanimity = float(ts_acts[4])
-            pain = float(ts_acts[1])
-            pending = float(ts_acts[2])
+        # Index positions from THOUGHTSEEDS in config.py
+        if len(ts_acts) >= len(THOUGHTSEEDS):
+            ts_idx = {name: i for i, name in enumerate(THOUGHTSEEDS)}
+            aha_moment = float(ts_acts[ts_idx['aha_moment']])
+            equanimity = float(ts_acts[ts_idx['equanimity']])
+            pain = float(ts_acts[ts_idx['pain_discomfort']])
+            pending = float(ts_acts[ts_idx['pending_tasks']])
             distractor = max(pain, pending)
             ignition_gate = max(0.0, aha_moment + equanimity - distractor)
             gate = ignition_gate

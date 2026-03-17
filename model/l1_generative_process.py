@@ -15,6 +15,7 @@ from typing import Dict, Tuple, Optional
 from utils.config import (
     NETWORKS, DEFAULT_DT, CLIP_MIN, CLIP_MAX, EPS, NOISE_LEVEL,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS,
+    THETA_MW_DIAG, THETA_DEFAULT_DIAG, THETA_BOOST_BF, THETA_BOOST_RA, THETA_BOOST_MA,
 )
 from utils.math_utils import clip_probability
 from model.phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -96,8 +97,6 @@ class Layer1Process(nn.Module):
             next_state = self.rng.choice(states, p=p_array)
             self.current_state = next_state
             self._sample_next_dwell()
-        else:
-            pass
         
         return self.current_state
     
@@ -110,7 +109,7 @@ class Layer1Process(nn.Module):
     def _get_coupling(self, state: str) -> torch.Tensor:
         """Build Theta(s) coupling matrix for state."""
         # Start with diagonal (self-inhibition)
-        base_diag = 0.50 if state == 'mind_wandering' else 0.15
+        base_diag = THETA_MW_DIAG if state == 'mind_wandering' else THETA_DEFAULT_DIAG
         theta_np = np.eye(len(NETWORKS)) * base_diag
         
         # Add off-diagonal couplings
@@ -127,19 +126,19 @@ class Layer1Process(nn.Module):
         if self.phenotype.theta_boost:
             if state == 'breath_focus':
                 # Stronger self-stabilization
-                theta = theta + torch.eye(len(NETWORKS)) * 0.4
+                theta = theta + torch.eye(len(NETWORKS)) * THETA_BOOST_BF
             elif state == 'redirect_attention':
                 # Amplify DMN-DAN inhibition
                 r, c = self.net_idx['DMN'], self.net_idx['DAN']
                 if theta[r, c] > 0:
-                    theta[r, c] *= 1.5
-                    theta[c, r] *= 1.5
+                    theta[r, c] *= THETA_BOOST_RA
+                    theta[c, r] *= THETA_BOOST_RA
             elif state == 'meta_awareness':
                 # Amplify VAN-FPN synergy
                 r, c = self.net_idx['VAN'], self.net_idx['FPN']
                 if theta[r, c] < 0:
-                    theta[r, c] *= 1.4
-                    theta[c, r] *= 1.4
+                    theta[r, c] *= THETA_BOOST_MA
+                    theta[c, r] *= THETA_BOOST_MA
         
         theta = theta * float(self.phenotype.theta_scale)
         return theta

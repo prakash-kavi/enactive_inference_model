@@ -114,8 +114,11 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 +-- utils/
 |   +-- config.py              # Constants, priors, TRAIN_STEPS, EVAL_STEPS, PLOT_STEPS, etc.
 |   +-- math_utils.py          # Tensor/math operations
+|   +-- extract_stats.py       # print dwell/transition/network stats from saved JSON
 +-- data/                      # Run results (JSON, one file per phenotype)
 +-- figures/                   # Generated figures (PDF)
++-- tests/
+|   +-- test_invariants.py     # Probability normalization, VFE, transition matrix, numerical stability
 +-- viz/                       # Plotting
     +-- analysis_utils.py      # prepare_tail_data, dwell/transition logic
     +-- attractors.py, convergence.py, analysis_utils.py
@@ -137,7 +140,7 @@ Edit `utils/config.py` to modify:
 
 ## Reproducibility
 
-Fixed random seed (42) ensures identical results across runs. Training is stochastic (e.g., MW dominance sampling), but fully seed-controlled.
+Fixed random seed (42) ensures identical results across runs. Both `torch.manual_seed` and `np.random.seed` are set at trainer construction; L1's `RandomState` is seeded independently so process noise is isolated from network parameter updates. Training is stochastic (e.g., MW dominance sampling), but fully seed-controlled.
 
 ---
 

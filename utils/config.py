@@ -136,6 +136,14 @@ NOISE_LEVEL = 0.002
 
 VI_STEPS = 2
 VI_LR = 0.2
+GRAD_CLIP = 5.0  # gradient clamp in VI update loop
+
+# L1 coupling matrix constants
+THETA_MW_DIAG = 0.50       # self-inhibition diagonal for mind_wandering
+THETA_DEFAULT_DIAG = 0.15  # self-inhibition diagonal for all other states
+THETA_BOOST_BF = 0.4       # expert breath_focus self-stabilisation boost
+THETA_BOOST_RA = 1.5       # expert redirect_attention DMN-DAN amplification
+THETA_BOOST_MA = 1.4       # expert meta_awareness VAN-FPN amplification
 
 STATE_BELIEF_VAR = 0.1
 

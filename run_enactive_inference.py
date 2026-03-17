@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 from model.training_loop import train_meditation_model
@@ -30,6 +31,8 @@ from viz.hierarchy import plot_hierarchy_continuous
 from viz.attractors import plot_attractor_pca
 
 SEED = 42
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 CURRENT_DIR = Path(__file__).parent
 OUTPUT_DIR = CURRENT_DIR / "data"
