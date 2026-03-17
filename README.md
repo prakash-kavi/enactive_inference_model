@@ -21,7 +21,7 @@
 | - Sensory precision from forward surprisal (exp form)         |
 +------------------------------+-------------------------------+
                | Markov Blanket L1<->L2
-               | Sensory: s_t, x_t, dwell_progress d_t
+               | Sensory: x_t (DMN,VAN,DAN,FPN), dwell_progress d_t
                | Active:  mu_x, policy_state_probs
 +------------------------------v-------------------------------+
 | Layer 1: Neural Generative Process (MVOU)                    |
@@ -96,14 +96,6 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 - `fig5.pdf` — PCA trajectories (L2 thoughtseeds + L1 networks)
 
 **Plot window:** fig3–fig5 and dwell/transition statistics use the final 2,000 steps (plot window). Fig S1 spans the full run with eval (steps 8,000–10,000) and plot (steps 10,000–12,000) windows shaded.
-
----
-
-## Mechanics (short)
-- Markov blankets: L2↔L3 carries state belief and policy evidence upward and sensory precision downward; policy posterior is returned directly from L3 to L2.
-- VFE: `F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2`
-- Policy posterior: `q(pi) = softmax(log E(pi) + (1-m_t) * lbar_pi - gamma_t * G_tilde(pi))` where `gamma_t = clip(m_t)` and `G_tilde` is z-scored before use
-- VI refinement: fixed `VI_STEPS` gradient steps per timestep; initialization is precision-weighted blend of recognition and dynamical prior
 
 ---
 
