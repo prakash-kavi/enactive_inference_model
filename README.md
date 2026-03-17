@@ -82,7 +82,7 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 
 ### Plots (generated in `figures/`)
 **Convergence (FigS1):**
-- `FigS1_Convergence_Expert.pdf`, `FigS1_Convergence_Novice.pdf` — convergence over the **eval** window (frozen, 2,000 steps)
+- `FigS1_Convergence_Expert.pdf`, `FigS1_Convergence_Novice.pdf` — full 12,000-step run; eval and plot windows are shaded for reference
 
 **Comparison (Fig 3):**
 - `fig3a.pdf` — Network activation profiles across states (Expert vs Novice)
@@ -95,15 +95,15 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 **State space (Fig 5):**
 - `fig5.pdf` — PCA trajectories (L2 thoughtseeds + L1 networks)
 
-**Plot window:** fig3–fig5 and dwell/transition statistics use the final 2,000 steps (plot window). Fig S1 uses the eval window (steps 8,000–10,000).
+**Plot window:** fig3–fig5 and dwell/transition statistics use the final 2,000 steps (plot window). Fig S1 spans the full run with eval (steps 8,000–10,000) and plot (steps 10,000–12,000) windows shaded.
 
 ---
 
 ## Mechanics (short)
 - Markov blankets: L2↔L3 carries state belief and policy evidence upward and sensory precision downward; policy posterior is returned directly from L3 to L2.
 - VFE: `F(z) = pi_x * ||x - decode(z)||^2 + ||z - mu_z(s)||^2`
-- Policy posterior: `q(pi) = softmax(log E(pi) + (1-m_t) * lbar_pi - m_t * G_tilde(pi))`
-- VI refinement: mismatch-triggered; step count scales with uncertainty `(1 - precision)` up to `VI_STEPS`
+- Policy posterior: `q(pi) = softmax(log E(pi) + (1-m_t) * lbar_pi - gamma_t * G_tilde(pi))` where `gamma_t = clip(m_t)` and `G_tilde` is z-scored before use
+- VI refinement: fixed `VI_STEPS` gradient steps per timestep; initialization is precision-weighted blend of recognition and dynamical prior
 
 ---
 
