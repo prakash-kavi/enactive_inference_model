@@ -1,128 +1,137 @@
 # Enactive Inference Model
 
----
+This repository implements a three-layer active-inference model of focused-attention meditation. It simulates expert and novice phenotypes across the canonical cycle of breath focus, mind wandering, meta-awareness, and redirecting attention, then produces publication figures and saved JSON results for analysis.
 
-## Architecture
-![Meditative Cycle](figures/fig1.jpg) ![Thoughtseeds Framework](figures/fig2.jpg)
-```
-+--------------------------------------------------------------+
-| Layer 3: Metacognitive Monitor                               |
-| - Meta-awareness: gated divergence (policy evidence vs habit) |
-| - Selects policy posterior q(pi); modulates policy precision  |
-+------------------------------+-------------------------------+
-               | Markov Blanket L2<->L3
-               | Sensory: policy evidence G(pi), state belief
-               | Active:  sensory precision pi_x
-+------------------------------v-------------------------------+
-| Layer 2: Attentional Agent (Thoughtseeds)                    |
-| - Compresses neural dynamics into 5 thoughtseeds             |
-| - Encoder/decoder + forward model f(x,z)                     |
-| - Evaluates expected free energy G(pi); passes evidence to L3 |
-| - Sensory precision from forward surprisal (exp form)         |
-+------------------------------+-------------------------------+
-               | Markov Blanket L1<->L2
-               | Sensory: x_t (DMN,VAN,DAN,FPN), dwell_progress d_t
-               | Active:  mu_x, policy_state_probs
-+------------------------------v-------------------------------+
-| Layer 1: Neural Generative Process (MVOU)                    |
-| - 4 brain networks (DMN, VAN, DAN, FPN)                      |
-| - 4 meditation states (BF, MW, MA, RA)                       |
-| - Multivariate Ornstein-Uhlenbeck dynamics                   |
-| - Attractor mixing: mu <- (1-m_t)mu + m_t mu_x               |
-+--------------------------------------------------------------+
-```
+The model couples:
+- Layer 1 neural-network dynamics over DMN, VAN, DAN, and FPN
+- Layer 2 latent thoughtseed inference and policy evaluation
+- Layer 3 metacognitive monitoring, habit priors, and meta-awareness
 
-## Summary
-- States: BF, MW, MA, RA (focused attention cycle)
-- Networks: DMN, VAN, DAN, FPN
-- Thoughtseeds: attend_breath, pain_discomfort, pending_tasks, aha_moment, equanimity
-- One run per phenotype: train (8k) → eval (2k, frozen) → plot (2k, frozen). Fig S1 uses eval window; fig3–fig5 use plot window (final 2k steps).
+One run per phenotype consists of 12,000 contiguous timesteps:
+- Train: 8,000 steps with learning enabled
+- Eval: 2,000 frozen steps
+- Plot: 2,000 frozen steps used for Fig. 3-Fig. 5 analyses
+
+Fig. S1 is generated from the full run with eval and plot windows shaded.
 
 ---
 
-## Installation
+## Quick Start
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Requirements:**
-- Python 3.9+
-- See `requirements.txt`
-- Runs on CPU only; no GPU required or used.
-
----
-
-## Usage
-
-### Run Full Pipeline (Learning + Simulation + Plots)
+Run the full pipeline:
 
 ```bash
-python run_enactive_inference.py run
+python -m run_enactive_inference run
 ```
 
-This runs **one contiguous run** per phenotype (12,000 steps total): **Train** (8,000 steps, learning on) → **Eval** (2,000 steps, frozen, used for Fig S1) → **Plot** (2,000 steps, frozen, used for fig3–fig5). Results are saved to `data/` and all plots are generated in `figures/`.
-
-### Generate Plots from Existing Data
+Generate plots from existing saved results:
 
 ```bash
-python run_enactive_inference.py plot
+python -m run_enactive_inference plot
 ```
 
-Generates publication-quality figures from saved results (full run: train+eval+plot). Fig S1 uses the eval segment; fig3–fig5 use the final plot window.
+This project runs on CPU only; no GPU support is required or used.
 
 ---
 
-## Output
+## Architecture
 
-### Results (saved to `data/`)
-- `training_results_expert_seed42.json` / `training_results_novice_seed42.json` — full run (train + eval + plot) per phenotype
+![Meditative Cycle](figures/fig1.jpg) ![Thoughtseeds Framework](figures/fig2.jpg)
 
-Each contains: state/network/thoughtseed histories, free energy, meta-awareness, and transition statistics for all 12,000 steps.
+- Layer 1 is a neural generative process over four large-scale networks (DMN, VAN, DAN, FPN) with four meditation regimes (BF, MW, MA, RA) and multivariate Ornstein-Uhlenbeck dynamics.
+- Layer 2 compresses network dynamics into five thoughtseeds, performs encoder/decoder inference, and evaluates expected free energy over stay/switch policy candidates.
+- Layer 3 computes meta-awareness as gated divergence between policy evidence and habit, then selects the policy posterior that regulates action selection.
+- L1 and L2 interact through a Markov blanket carrying network activity and dwell progress upward, and descending network predictions plus policy-state probabilities downward.
+- L2 and L3 interact through a Markov blanket carrying state belief, policy evidence, and thoughtseed activations upward, and sensory precision downward.
 
-### Plots (generated in `figures/`)
-**Convergence (FigS1):**
-- `FigS1_Convergence_Expert.pdf`, `FigS1_Convergence_Novice.pdf` — full 12,000-step run; eval and plot windows are shaded for reference
+### Model Summary
 
-**Comparison (Fig 3):**
-- `fig3a.pdf` — Network activation profiles across states (Expert vs Novice)
-- `fig3b.pdf` — Dwell times per state (timesteps)
-- `fig3c.pdf` — State transition probability matrices
-
-**Hierarchy (Fig 4):**
-- `fig4a.pdf`, `fig4b.pdf` — 3-layer hierarchical dynamics (L3 meta-awareness, L2 continuous thoughtseed trajectories, L1 networks)
-
-**State space (Fig 5):**
-- `fig5.pdf` — PCA trajectories (L2 thoughtseeds + L1 networks)
-
-**Plot window:** fig3–fig5 and dwell/transition statistics use the final 2,000 steps (plot window). Fig S1 spans the full run with eval (steps 8,000–10,000) and plot (steps 10,000–12,000) windows shaded.
+- States: BF, MW, MA, RA
+- Networks: DMN, VAN, DAN, FPN
+- Thoughtseeds: attend_breath, pain_discomfort, pending_tasks, aha_moment, equanimity
 
 ---
 
-## File Structure
+## Outputs
 
-```
+### Saved Results
+
+Running the full pipeline writes one JSON file per phenotype to `data/`:
+
+- `training_results_expert_seed42.json`
+- `training_results_novice_seed42.json`
+
+Each file contains the full 12,000-step run:
+- state history
+- network activation history
+- thoughtseed activation history
+- thoughtseed prior activation history
+- free-energy history
+- loss history
+- meta-awareness history
+- raw transition events
+
+### Generated Figures
+
+Plots are written to `figures/`.
+
+**Fig. S1: Convergence diagnostics**
+- `FigS1_Convergence_Expert.pdf`
+- `FigS1_Convergence_Novice.pdf`
+- Full-run diagnostics with eval and plot windows shaded
+
+**Fig. 3: Expert vs novice comparison**
+- `fig3a.pdf`: state-conditional network activation profiles
+- `fig3b.pdf`: dwell-time comparisons by state
+- `fig3c.pdf`: transition probability matrices from the plot window
+
+**Fig. 4: Hierarchical dynamics**
+- `fig4a.pdf`: novice hierarchical traces
+- `fig4b.pdf`: expert hierarchical traces
+- Shows L3 meta-awareness, L2 thoughtseed trajectories, and L1 network dynamics
+
+**Fig. 5: State-space geometry**
+- `fig5.pdf`: pooled PCA projections of L2 thoughtseed and L1 network trajectories
+
+**Plot window convention**
+- Fig. 3-Fig. 5 and dwell/transition summaries use the final 2,000-step plot window.
+- Fig. S1 spans the full run with eval (steps 8,000-10,000) and plot (steps 10,000-12,000) windows highlighted.
+
+---
+
+## Repository Layout
+
+```text
 .
-+-- run_enactive_inference.py  # Main entry point (run | plot)
-+-- model/                     # Core logic
-|   +-- training_loop.py       # MeditationTrainer (EM, BPTT, simulate)
-|   +-- phenotype.py           # Expert/novice phenotype definitions
-|   +-- l1_generative_process.py  # Layer1Process (MVOU dynamics)
-|   +-- l2_recognition.py         # Layer2Agent (encoder/decoder/forward model)
-|   +-- l3_metacognition.py       # Layer3Monitor (meta-awareness, policy selection)
-|   +-- markov_blankets.py        # Markov blanket interfaces
++-- run_enactive_inference.py      # Main entry point (run | plot)
++-- model/
+|   +-- training_loop.py           # Variational EM loop and result packaging
+|   +-- phenotype.py               # Expert/novice phenotype definitions
+|   +-- l1_generative_process.py   # Layer 1 MVOU dynamics
+|   +-- l2_recognition.py          # Layer 2 inference, decoder, forward model, EFE
+|   +-- l3_metacognition.py        # Layer 3 meta-awareness and policy selection
+|   +-- markov_blankets.py         # Markov blanket interfaces
 +-- utils/
-|   +-- config.py              # Constants, priors, TRAIN_STEPS, EVAL_STEPS, PLOT_STEPS, etc.
-|   +-- math_utils.py          # Tensor/math operations
-|   +-- extract_stats.py       # print dwell/transition/network stats from saved JSON
-+-- data/                      # Run results (JSON, one file per phenotype)
-+-- figures/                   # Generated figures (PDF)
+|   +-- config.py                  # Core constants and phenotype tables
+|   +-- math_utils.py              # Shared tensor/math helpers
+|   +-- extract_stats.py           # CLI stats summary from saved JSON
++-- viz/
+|   +-- analysis_utils.py          # Tail-window statistics and aggregation
+|   +-- convergence.py             # Fig. S1
+|   +-- radar_plot.py              # Fig. 3A
+|   +-- hierarchy.py               # Fig. 4
+|   +-- attractors.py              # Fig. 5
+|   +-- plotting_utils.py          # Shared plotting style/helpers
++-- data/                          # Saved run outputs
++-- figures/                       # Generated and manuscript figure assets
 +-- tests/
-|   +-- test_invariants.py     # Probability normalization, VFE, transition matrix, numerical stability
-+-- viz/                       # Plotting
-    +-- analysis_utils.py      # prepare_tail_data, dwell/transition logic
-    +-- attractors.py, convergence.py, analysis_utils.py
-    +-- hierarchy.py, radar_plot.py, plotting_utils.py
+    +-- test_invariants.py         # Core invariants and numerical checks
 ```
 
 ---
@@ -130,17 +139,23 @@ Each contains: state/network/thoughtseed histories, free energy, meta-awareness,
 ## Configuration
 
 Edit `utils/config.py` to modify:
-- Network/state parameters (Theta matrices, mu attractors)
-- Thoughtseed priors (THOUGHTSEED_STATE_PRIORS)
-- Dwell ranges (DWELL_TIMES) and transition priors (STATE_TRANSITION_PROBS)
-- Learning rates (0.01 novice, 0.02 expert)
-- Process noise (NOISE_LEVEL), BPTT_STEPS (25), PLOT_STEPS (2000)
+
+- network/state parameters (`THETA_BASE`, network attractors)
+- thoughtseed priors (`THOUGHTSEED_STATE_PRIORS`)
+- dwell ranges (`DWELL_TIMES`)
+- transition priors (`STATE_TRANSITION_PROBS`)
+- learning rates (`LEARNING_RATES`)
+- numerical settings such as `NOISE_LEVEL`, `BPTT_STEPS`, `TRAIN_STEPS`, `EVAL_STEPS`, and `PLOT_STEPS`
 
 ---
 
 ## Reproducibility
 
-Fixed random seed (42) ensures identical results across runs. Both `torch.manual_seed` and `np.random.seed` are set at trainer construction; L1's `RandomState` is seeded independently so process noise is isolated from network parameter updates. Training is stochastic (e.g., MW dominance sampling), but fully seed-controlled.
+The default seed is fixed at 42.
+
+- `torch.manual_seed` and `np.random.seed` are set in the trainer
+- Layer 1 uses its own seeded `RandomState`
+- stochastic transitions and process noise are therefore reproducible under the same configuration and dependency environment
 
 ---
 
@@ -148,7 +163,7 @@ Fixed random seed (42) ensures identical results across runs. Both `torch.manual
 
 If you use this model in your research:
 
-```
+```bibtex
 @article{enactive_inference_thoughtseeds_2026,
   author = {Kavi, P. C. and Friedman, D. A. and Patow, G.},
   title = {Thoughtseeds as Latent Causes: A Computational Phenomenology of Focused-Attention Meditation},
@@ -156,10 +171,9 @@ If you use this model in your research:
   year = {2026}
 }
 ```
-This repository is a significant step forward in enhancing the Thoughtseeds Framework for Enactive Inference. It builds upon the foundational work of the Thoughtseeds Framework, adapting code snippets from below:
 
-  https://github.com/prakash-kavi/thoughtseeds_vipassana 
-  
-  https://github.com/prakash-kavi/viapssana_ts2  
-  
-  https://github.com/prakash-kavi/aif_iwai2025_thoughtseeds
+This repository builds on earlier Thoughtseeds-related codebases, including:
+
+- https://github.com/prakash-kavi/thoughtseeds_vipassana
+- https://github.com/prakash-kavi/viapssana_ts2
+- https://github.com/prakash-kavi/aif_iwai2025_thoughtseeds
