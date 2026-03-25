@@ -20,9 +20,8 @@ class PhenotypeConfig:
     learning_rate : float
         Adam optimiser step size for L2 recognition/decoder parameters.
     theta_boost : bool
-        Whether to apply expert-specific Theta(s) adjustments in Layer 1
-        (stronger self-stabilisation in BF, amplified DMN-DAN inhibition in RA,
-        VAN-FPN synergy in MA).
+        Whether to apply the expert-specific Layer 1 breath-focus
+        self-stabilisation boost.
     theta_scale : float
         Global scaling applied to Theta(s) (stiffness/coupling strength).
     label : str

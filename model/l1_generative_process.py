@@ -15,7 +15,7 @@ from typing import Dict, Tuple, Optional
 from utils.config import (
     NETWORKS, DEFAULT_DT, CLIP_MIN, CLIP_MAX, EPS, NOISE_LEVEL,
     THETA_BASE, NETWORK_PROFILES, DWELL_TIMES, STATE_TRANSITION_PROBS,
-    THETA_MW_DIAG, THETA_DEFAULT_DIAG, THETA_BOOST_BF, THETA_BOOST_RA, THETA_BOOST_MA,
+    THETA_MW_DIAG, THETA_DEFAULT_DIAG, THETA_BOOST_BF,
 )
 from utils.math_utils import clip_probability
 from model.phenotype import PhenotypeConfig, EXPERT_PHENOTYPE
@@ -121,24 +121,12 @@ class Layer1Process(nn.Module):
         
         theta = torch.tensor(theta_np, dtype=torch.float32)
 
-        # Phenotype-specific adjustments to Theta(s): experts have stronger
-        # self-stabilisation and inter-network coupling. (theta_boost flag)
+        # Phenotype-specific adjustment to Theta(s): experts get stronger
+        # self-stabilisation in breath_focus, plus a global theta_scale.
         if self.phenotype.theta_boost:
             if state == 'breath_focus':
                 # Stronger self-stabilization
                 theta = theta + torch.eye(len(NETWORKS)) * THETA_BOOST_BF
-            elif state == 'redirect_attention':
-                # Amplify DMN-DAN inhibition
-                r, c = self.net_idx['DMN'], self.net_idx['DAN']
-                if theta[r, c] > 0:
-                    theta[r, c] *= THETA_BOOST_RA
-                    theta[c, r] *= THETA_BOOST_RA
-            elif state == 'meta_awareness':
-                # Amplify VAN-FPN synergy
-                r, c = self.net_idx['VAN'], self.net_idx['FPN']
-                if theta[r, c] < 0:
-                    theta[r, c] *= THETA_BOOST_MA
-                    theta[c, r] *= THETA_BOOST_MA
         
         theta = theta * float(self.phenotype.theta_scale)
         return theta
